@@ -282,7 +282,7 @@ impl Scenario {
             &expected["events"],
             &format!("{path}/events"),
         );
-        Ok(graph.finish(&expected["functions"], &format!("{path}/functions")))
+        Ok(graph.finish(Some(&expected["functions"]), &format!("{path}/functions")))
     }
 }
 

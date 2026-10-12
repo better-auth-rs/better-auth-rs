@@ -90,7 +90,22 @@ fn expiry(state: &Arc<State>) -> AuthResult<FieldValue> {
 }
 
 fn attempts(state: &Arc<State>) -> FieldValue {
+    if let Some(counter) = state.scenario["counterText"].as_str() {
+        return counter.into();
+    }
     match text(state, "attempts") {
+        "string-object" | "string-error" => {
+            let root = Root::new("object");
+            root.data("marker", "attempts".into());
+            method(&root, "toString", state, |state, _| {
+                if text(state, "attempts") == "string-error" {
+                    state.fail("throw:attempt-conversion")
+                } else {
+                    Ok("  +2tail".into())
+                }
+            });
+            keep(state, root)
+        }
         "object" | "conversion-error" => {
             let root = Root::new("object");
             root.data("marker", "attempts".into());
@@ -171,6 +186,8 @@ fn value(state: &Arc<State>) -> FieldValue {
                 }
                 let raw = attempts(state);
                 Ok(match text(state, "splitShape") {
+                    "null" => FieldValue::Null,
+                    "undefined" => FieldValue::Undefined,
                     "string" => "12".into(),
                     "array-like" => FieldMap::from([
                         ("0".into(), "123456".into()),

@@ -26,9 +26,7 @@ use serde_cbor_2::Value as Cbor;
 use serde_json::json;
 use webauthn_rs_core::{
     WebauthnCore,
-    proto::{
-        AuthenticatorTransport, COSEAlgorithm, PublicKeyCredential, RegisterPublicKeyCredential,
-    },
+    proto::{COSEAlgorithm, PublicKeyCredential, RegisterPublicKeyCredential},
 };
 
 use super::{
@@ -240,13 +238,9 @@ fn standard_columns_and_legacy_envelope_authenticate_registered_key() -> TestRes
                 let stored =
                     WebAuthnCredential::from_record(&row, storage, row.credential_id.typed()?)?;
                 assert_eq!(stored.cred.cred_id, registered.cred.cred_id);
-                let expected_transports = match (storage, transports) {
-                    (PasskeyStorage::Native, Some(_)) => Some(vec![
-                        AuthenticatorTransport::Internal,
-                        AuthenticatorTransport::Hybrid,
-                    ]),
-                    (PasskeyStorage::Native, None) => Some(vec![AuthenticatorTransport::Unknown]),
-                    (PasskeyStorage::Legacy, _) => registered.cred.transports.clone(),
+                let expected_transports = match storage {
+                    PasskeyStorage::Native => None,
+                    PasskeyStorage::Legacy => registered.cred.transports.clone(),
                 };
                 assert_eq!(stored.cred.transports, expected_transports);
                 let builder = webauthn

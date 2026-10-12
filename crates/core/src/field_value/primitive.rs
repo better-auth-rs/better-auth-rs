@@ -41,9 +41,10 @@ impl FieldValue {
             }
             _ => match self.model_property("toLowerCase")? {
                 Self::Function(method) => method.call_with(self, &[]),
-                _ => Err(AuthError::type_error(format!(
-                    "{expression}.toLowerCase is not a function. (In '{expression}.toLowerCase()', '{expression}.toLowerCase' is undefined)"
-                ))),
+                method => Err(method.not_callable(
+                    &format!("{expression}.toLowerCase"),
+                    &format!("{expression}.toLowerCase()"),
+                )),
             },
         }
     }
@@ -176,12 +177,13 @@ impl FieldValue {
                     callback.call_with(&Self::Undefined, &[value, index.into(), self.clone()])
                 })?
                 .into()),
-            (_, method) => Err(AuthError::type_error(match (method, argument_expression) {
-                (None | Some(Self::Undefined), Some(argument)) => format!(
-                    "{expression}.map is not a function. (In '{expression}.map({argument})', '{expression}.map' is undefined)"
+            (_, method) => Err(match argument_expression {
+                Some(argument) => method.unwrap_or_default().not_callable(
+                    &format!("{expression}.map"),
+                    &format!("{expression}.map({argument})"),
                 ),
-                _ => format!("{expression}.map is not a function"),
-            })),
+                None => AuthError::type_error(format!("{expression}.map is not a function")),
+            }),
         }
     }
 

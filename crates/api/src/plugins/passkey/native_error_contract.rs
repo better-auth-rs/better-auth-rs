@@ -446,3 +446,6 @@ async fn native_error_fixture_preserves_frozen_inputs_errors_and_complete_storag
     failures.finish();
     Ok(())
 }
+
+#[path = "transport_contract.rs"]
+mod transport_contract;

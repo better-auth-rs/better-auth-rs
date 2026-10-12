@@ -33,6 +33,10 @@ use crate::plugins::test_helpers::native_observation::{NativeObservation, assert
 use crate::plugins::test_helpers::native_source as source;
 use source::source_value;
 
+#[path = "usage_tests/rate_limit.rs"]
+mod rate_limit;
+#[path = "usage_tests/rate_limit_contract.rs"]
+mod rate_limit_contract;
 #[path = "usage_tests/success.rs"]
 mod success;
 

@@ -1,8 +1,9 @@
-use better_auth_core::store::{ConsumeApiKeyResult, SecondaryStorage};
+use better_auth_core::store::{ApiKeyRateLimitDecision, ConsumeApiKeyResult, SecondaryStorage};
 use better_auth_core::{
-    ApiKey, AuthContext, AuthRecordFields, AuthResult, FieldDate, FieldValue, SchemaValue,
+    ApiKey, AuthContext, AuthRecordFields, AuthResult, FieldDate, FieldMap, FieldValue,
+    SchemaValue,
     background::BackgroundFuture,
-    query::{field_add, field_compare, field_date, field_number},
+    query::{field_add, field_date, field_number},
 };
 use std::sync::Arc;
 
@@ -12,6 +13,39 @@ use crate::plugins::api_key::{ApiKeyErrorCode, api_key_error};
 #[cfg(test)]
 #[path = "usage_tests.rs"]
 mod tests;
+
+enum RateLimitSnapshot {
+    Changes(FieldMap),
+    RateLimited { try_again_in: f64 },
+}
+
+fn apply_rate_limit_to_snapshot(
+    key: &ApiKey,
+    enabled: bool,
+    now: chrono::DateTime<chrono::Utc>,
+) -> AuthResult<RateLimitSnapshot> {
+    let changes = match ApiKeyRateLimitDecision::evaluate(key, enabled, now)? {
+        ApiKeyRateLimitDecision::Skip(None) => FieldMap::new(),
+        ApiKeyRateLimitDecision::Skip(Some(at)) => {
+            FieldMap::from([("lastRequest".into(), at.into())])
+        }
+        ApiKeyRateLimitDecision::Deny { try_again_in } => {
+            return Ok(RateLimitSnapshot::RateLimited { try_again_in });
+        }
+        ApiKeyRateLimitDecision::Start { at, .. } => FieldMap::from([
+            ("lastRequest".into(), at.into()),
+            ("requestCount".into(), 1.0.into()),
+        ]),
+        ApiKeyRateLimitDecision::Increment { at, .. } => FieldMap::from([
+            ("lastRequest".into(), at.into()),
+            (
+                "requestCount".into(),
+                field_add(&key.request_count.field_value(), &1.0.into())?,
+            ),
+        ]),
+    };
+    Ok(RateLimitSnapshot::Changes(changes))
+}
 
 async fn merge_usage(
     storage: Arc<dyn SecondaryStorage>,
@@ -86,44 +120,20 @@ pub(in crate::plugins::api_key) async fn consume(
         }
         snapshot.remaining = Some(field_number(&remaining)? - 1.0).into();
     }
-    let mut changed_rate = false;
-    let mut changed_count = false;
-    let current: FieldDate = ctx.now().into();
-    let milliseconds = current.milliseconds();
-    let window = key.rate_limit_time_window.field_value();
-    let maximum = key.rate_limit_max.field_value();
-    if !config.rate_limit.enabled
-        || key
-            .rate_limit_enabled
-            .field_value()
-            .strict_equals(&false.into())
-    {
-        snapshot.last_request = Some(current.clone()).into();
-        changed_rate = true;
-    } else if !window.is_null() && !maximum.is_null() {
-        let last = key.last_request.field_value();
-        let elapsed = milliseconds - field_date(&last)?.milliseconds();
-        let window = field_number(&window)?;
-        let start = last.is_null() || elapsed > window;
-        if !start
-            && matches!(
-                field_compare(&key.request_count.field_value(), &maximum)?,
-                Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater)
-            )
-        {
+    let changes = match apply_rate_limit_to_snapshot(key, config.rate_limit.enabled, ctx.now())? {
+        RateLimitSnapshot::Changes(changes) => changes,
+        RateLimitSnapshot::RateLimited { try_again_in } => {
             // Secondary storage rejects before the quota write; database consumption writes quota first.
-            return Ok(ConsumeApiKeyResult::RateLimited {
-                try_again_in: (window - elapsed).ceil(),
-            });
+            return Ok(ConsumeApiKeyResult::RateLimited { try_again_in });
         }
-        snapshot.request_count = SchemaValue::from_field(if start {
-            1.0.into()
-        } else {
-            field_add(&key.request_count.field_value(), &1.0.into())?
-        });
-        snapshot.last_request = Some(current.clone()).into();
-        changed_rate = true;
-        changed_count = true;
+    };
+    let changed_rate = changes.contains_key("lastRequest");
+    let changed_count = changes.contains_key("requestCount");
+    if let Some(value) = changes.get("lastRequest") {
+        snapshot.last_request = SchemaValue::from_field(value.clone());
+    }
+    if let Some(value) = changes.get("requestCount") {
+        snapshot.request_count = SchemaValue::from_field(value.clone());
     }
     snapshot.updated_at = FieldDate::from(ctx.now()).into();
     let storage = required_backend(config, ctx)?.clone();

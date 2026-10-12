@@ -21,6 +21,8 @@ mod credential_tests;
 mod native_error_contract;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod transport_method_fixture;
 
 use handlers::*;
 use types::*;

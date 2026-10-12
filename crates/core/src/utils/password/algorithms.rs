@@ -48,7 +48,7 @@ impl PasswordHasher for ScryptPasswordHasher {
 
     async fn verify_native(&self, hash: &FieldValue, password: &str) -> AuthResult<FieldValue> {
         let [salt, key] = hash
-            .split_method(&":".into(), "hash")?
+            .split_method(&":".into(), "hash", "hash.split(\":\")")?
             .destructure::<2>("hash.split(\":\")")?;
         if !salt.is_truthy() || !key.is_truthy() {
             return Err(AuthError::internal("Invalid password hash"));

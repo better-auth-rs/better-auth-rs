@@ -1,0 +1,4357 @@
+{
+  "contract": "native-method-diagnostics",
+  "version": "1.7.6",
+  "runtime": {
+    "bun": "1.4.2"
+  },
+  "cases": [
+    {
+      "name": "undefined",
+      "member": "receiver.split",
+      "source": "receiver.split(\":\")",
+      "input": {
+        "type": "undefined"
+      },
+      "error": {
+        "name": "TypeError",
+        "message": "receiver.split is not a function. (In 'receiver.split(\":\")', 'receiver.split' is undefined)",
+        "properties": {
+          "originalLine": 29,
+          "originalColumn": 95,
+          "line": 15,
+          "column": 88,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": {
+        "type": "undefined"
+      },
+      "functions": []
+    },
+    {
+      "name": "null",
+      "member": "receiver.split",
+      "source": "receiver.split(\":\")",
+      "input": null,
+      "error": {
+        "name": "TypeError",
+        "message": "receiver.split is not a function. (In 'receiver.split(\":\")', 'receiver.split' is null)",
+        "properties": {
+          "originalLine": 29,
+          "originalColumn": 95,
+          "line": 15,
+          "column": 88,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": null,
+      "functions": []
+    },
+    {
+      "name": "false",
+      "member": "receiver.split",
+      "source": "receiver.split(\":\")",
+      "input": false,
+      "error": {
+        "name": "TypeError",
+        "message": "receiver.split is not a function. (In 'receiver.split(\":\")', 'receiver.split' is false)",
+        "properties": {
+          "originalLine": 29,
+          "originalColumn": 95,
+          "line": 15,
+          "column": 88,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": false,
+      "functions": []
+    },
+    {
+      "name": "true",
+      "member": "receiver.split",
+      "source": "receiver.split(\":\")",
+      "input": true,
+      "error": {
+        "name": "TypeError",
+        "message": "receiver.split is not a function. (In 'receiver.split(\":\")', 'receiver.split' is true)",
+        "properties": {
+          "originalLine": 29,
+          "originalColumn": 95,
+          "line": 15,
+          "column": 88,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": true,
+      "functions": []
+    },
+    {
+      "name": "zero",
+      "member": "receiver.split",
+      "source": "receiver.split(\":\")",
+      "input": 0,
+      "error": {
+        "name": "TypeError",
+        "message": "receiver.split is not a function. (In 'receiver.split(\":\")', 'receiver.split' is 0)",
+        "properties": {
+          "originalLine": 29,
+          "originalColumn": 95,
+          "line": 15,
+          "column": 88,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": 0,
+      "functions": []
+    },
+    {
+      "name": "negative-zero",
+      "member": "receiver.split",
+      "source": "receiver.split(\":\")",
+      "input": 0,
+      "error": {
+        "name": "TypeError",
+        "message": "receiver.split is not a function. (In 'receiver.split(\":\")', 'receiver.split' is 0)",
+        "properties": {
+          "originalLine": 29,
+          "originalColumn": 95,
+          "line": 15,
+          "column": 88,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": 0,
+      "functions": []
+    },
+    {
+      "name": "number",
+      "member": "receiver.split",
+      "source": "receiver.split(\":\")",
+      "input": 17,
+      "error": {
+        "name": "TypeError",
+        "message": "receiver.split is not a function. (In 'receiver.split(\":\")', 'receiver.split' is 17)",
+        "properties": {
+          "originalLine": 29,
+          "originalColumn": 95,
+          "line": 15,
+          "column": 88,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": 17,
+      "functions": []
+    },
+    {
+      "name": "nan",
+      "member": "receiver.split",
+      "source": "receiver.split(\":\")",
+      "input": {
+        "type": "number",
+        "value": "NaN"
+      },
+      "error": {
+        "name": "TypeError",
+        "message": "receiver.split is not a function. (In 'receiver.split(\":\")', 'receiver.split' is NaN)",
+        "properties": {
+          "originalLine": 29,
+          "originalColumn": 95,
+          "line": 15,
+          "column": 88,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": {
+        "type": "number",
+        "value": "NaN"
+      },
+      "functions": []
+    },
+    {
+      "name": "infinity",
+      "member": "receiver.split",
+      "source": "receiver.split(\":\")",
+      "input": {
+        "type": "number",
+        "value": "Infinity"
+      },
+      "error": {
+        "name": "TypeError",
+        "message": "receiver.split is not a function. (In 'receiver.split(\":\")', 'receiver.split' is Infinity)",
+        "properties": {
+          "originalLine": 29,
+          "originalColumn": 95,
+          "line": 15,
+          "column": 88,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": {
+        "type": "number",
+        "value": "Infinity"
+      },
+      "functions": []
+    },
+    {
+      "name": "negative-infinity",
+      "member": "receiver.split",
+      "source": "receiver.split(\":\")",
+      "input": {
+        "type": "number",
+        "value": "-Infinity"
+      },
+      "error": {
+        "name": "TypeError",
+        "message": "receiver.split is not a function. (In 'receiver.split(\":\")', 'receiver.split' is -Infinity)",
+        "properties": {
+          "originalLine": 29,
+          "originalColumn": 95,
+          "line": 15,
+          "column": 88,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": {
+        "type": "number",
+        "value": "-Infinity"
+      },
+      "functions": []
+    },
+    {
+      "name": "string",
+      "member": "receiver.split",
+      "source": "receiver.split(\":\")",
+      "input": "text",
+      "error": {
+        "name": "TypeError",
+        "message": "receiver.split is not a function. (In 'receiver.split(\":\")', 'receiver.split' is \"text\")",
+        "properties": {
+          "originalLine": 29,
+          "originalColumn": 95,
+          "line": 15,
+          "column": 88,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": "text",
+      "functions": []
+    },
+    {
+      "name": "empty-string",
+      "member": "receiver.split",
+      "source": "receiver.split(\":\")",
+      "input": "",
+      "error": {
+        "name": "TypeError",
+        "message": "receiver.split is not a function. (In 'receiver.split(\":\")', 'receiver.split' is \"\")",
+        "properties": {
+          "originalLine": 29,
+          "originalColumn": 95,
+          "line": 15,
+          "column": 88,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": "",
+      "functions": []
+    },
+    {
+      "name": "escaped-string",
+      "member": "receiver.split",
+      "source": "receiver.split(\":\")",
+      "input": "quote\"\nline",
+      "error": {
+        "name": "TypeError",
+        "message": "receiver.split is not a function. (In 'receiver.split(\":\")', 'receiver.split' is \"quote\"\nline\")",
+        "properties": {
+          "originalLine": 29,
+          "originalColumn": 95,
+          "line": 15,
+          "column": 88,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": "quote\"\nline",
+      "functions": []
+    },
+    {
+      "name": "object",
+      "member": "receiver.split",
+      "source": "receiver.split(\":\")",
+      "input": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "marker",
+          "toString",
+          "valueOf",
+          "toJSON",
+          {
+            "type": "symbol",
+            "value": "Symbol(Symbol.toPrimitive)"
+          }
+        ],
+        "properties": [
+          [
+            "marker",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": "object"
+            }
+          ],
+          [
+            "toString",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-2",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-1"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "valueOf",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-3",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-2"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "toJSON",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-4",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-3"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            {
+              "type": "symbol",
+              "value": "Symbol(Symbol.toPrimitive)"
+            },
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-5",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-4"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ]
+        ]
+      },
+      "error": {
+        "name": "TypeError",
+        "message": "receiver.split is not a function. (In 'receiver.split(\":\")', 'receiver.split' is an instance of Object)",
+        "properties": {
+          "originalLine": 29,
+          "originalColumn": 95,
+          "line": 15,
+          "column": 88,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "marker",
+          "toString",
+          "valueOf",
+          "toJSON",
+          {
+            "type": "symbol",
+            "value": "Symbol(Symbol.toPrimitive)"
+          }
+        ],
+        "properties": [
+          [
+            "marker",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": "object"
+            }
+          ],
+          [
+            "toString",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-2",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-1"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "valueOf",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-3",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-2"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "toJSON",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-4",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-3"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            {
+              "type": "symbol",
+              "value": "Symbol(Symbol.toPrimitive)"
+            },
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-5",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-4"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ]
+        ]
+      },
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-2",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-3",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-4",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "array",
+      "member": "receiver.split",
+      "source": "receiver.split(\":\")",
+      "input": {
+        "identity": "object-1",
+        "type": "array",
+        "ownKeys": [
+          "0",
+          "1",
+          "length",
+          "toString",
+          "valueOf",
+          "toJSON",
+          {
+            "type": "symbol",
+            "value": "Symbol(Symbol.toPrimitive)"
+          }
+        ],
+        "properties": [
+          [
+            "0",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": 1
+            }
+          ],
+          [
+            "1",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": 2
+            }
+          ],
+          [
+            "length",
+            {
+              "enumerable": false,
+              "configurable": false,
+              "writable": true,
+              "value": 2
+            }
+          ],
+          [
+            "toString",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-2",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-1"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "valueOf",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-3",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-2"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "toJSON",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-4",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-3"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            {
+              "type": "symbol",
+              "value": "Symbol(Symbol.toPrimitive)"
+            },
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-5",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-4"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ]
+        ]
+      },
+      "error": {
+        "name": "TypeError",
+        "message": "receiver.split is not a function. (In 'receiver.split(\":\")', 'receiver.split' is an instance of Array)",
+        "properties": {
+          "originalLine": 29,
+          "originalColumn": 95,
+          "line": 15,
+          "column": 88,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": {
+        "identity": "object-1",
+        "type": "array",
+        "ownKeys": [
+          "0",
+          "1",
+          "length",
+          "toString",
+          "valueOf",
+          "toJSON",
+          {
+            "type": "symbol",
+            "value": "Symbol(Symbol.toPrimitive)"
+          }
+        ],
+        "properties": [
+          [
+            "0",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": 1
+            }
+          ],
+          [
+            "1",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": 2
+            }
+          ],
+          [
+            "length",
+            {
+              "enumerable": false,
+              "configurable": false,
+              "writable": true,
+              "value": 2
+            }
+          ],
+          [
+            "toString",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-2",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-1"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "valueOf",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-3",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-2"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "toJSON",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-4",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-3"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            {
+              "type": "symbol",
+              "value": "Symbol(Symbol.toPrimitive)"
+            },
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-5",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-4"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ]
+        ]
+      },
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-2",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-3",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-4",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "date",
+      "member": "receiver.split",
+      "source": "receiver.split(\":\")",
+      "input": {
+        "identity": "object-1",
+        "type": "date",
+        "ownKeys": [
+          "toString",
+          "valueOf",
+          "toJSON",
+          {
+            "type": "symbol",
+            "value": "Symbol(Symbol.toPrimitive)"
+          }
+        ],
+        "properties": [
+          [
+            "toString",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-2",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-1"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "valueOf",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-3",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-2"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "toJSON",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-4",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-3"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            {
+              "type": "symbol",
+              "value": "Symbol(Symbol.toPrimitive)"
+            },
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-5",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-4"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ]
+        ],
+        "value": "2033-05-18T03:33:20.000Z"
+      },
+      "error": {
+        "name": "TypeError",
+        "message": "receiver.split is not a function. (In 'receiver.split(\":\")', 'receiver.split' is an instance of Date)",
+        "properties": {
+          "originalLine": 29,
+          "originalColumn": 95,
+          "line": 15,
+          "column": 88,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": {
+        "identity": "object-1",
+        "type": "date",
+        "ownKeys": [
+          "toString",
+          "valueOf",
+          "toJSON",
+          {
+            "type": "symbol",
+            "value": "Symbol(Symbol.toPrimitive)"
+          }
+        ],
+        "properties": [
+          [
+            "toString",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-2",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-1"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "valueOf",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-3",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-2"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "toJSON",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-4",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-3"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            {
+              "type": "symbol",
+              "value": "Symbol(Symbol.toPrimitive)"
+            },
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-5",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-4"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ]
+        ],
+        "value": "2033-05-18T03:33:20.000Z"
+      },
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-2",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-3",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-4",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "invalid-date",
+      "member": "receiver.split",
+      "source": "receiver.split(\":\")",
+      "input": {
+        "identity": "object-1",
+        "type": "date",
+        "ownKeys": [
+          "toString",
+          "valueOf",
+          "toJSON",
+          {
+            "type": "symbol",
+            "value": "Symbol(Symbol.toPrimitive)"
+          }
+        ],
+        "properties": [
+          [
+            "toString",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-2",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-1"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "valueOf",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-3",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-2"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "toJSON",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-4",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-3"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            {
+              "type": "symbol",
+              "value": "Symbol(Symbol.toPrimitive)"
+            },
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-5",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-4"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ]
+        ],
+        "value": "Invalid Date"
+      },
+      "error": {
+        "name": "TypeError",
+        "message": "receiver.split is not a function. (In 'receiver.split(\":\")', 'receiver.split' is an instance of Date)",
+        "properties": {
+          "originalLine": 29,
+          "originalColumn": 95,
+          "line": 15,
+          "column": 88,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": {
+        "identity": "object-1",
+        "type": "date",
+        "ownKeys": [
+          "toString",
+          "valueOf",
+          "toJSON",
+          {
+            "type": "symbol",
+            "value": "Symbol(Symbol.toPrimitive)"
+          }
+        ],
+        "properties": [
+          [
+            "toString",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-2",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-1"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "valueOf",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-3",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-2"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "toJSON",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-4",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-3"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            {
+              "type": "symbol",
+              "value": "Symbol(Symbol.toPrimitive)"
+            },
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-5",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-4"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ]
+        ],
+        "value": "Invalid Date"
+      },
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-2",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-3",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-4",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "undefined",
+      "member": "receiver?.split",
+      "source": "receiver?.split(\",\")",
+      "input": {
+        "type": "undefined"
+      },
+      "error": {
+        "name": "TypeError",
+        "message": "receiver?.split is not a function. (In 'receiver?.split(\",\")', 'receiver?.split' is undefined)",
+        "properties": {
+          "originalLine": 30,
+          "originalColumn": 98,
+          "line": 16,
+          "column": 91,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": {
+        "type": "undefined"
+      },
+      "functions": []
+    },
+    {
+      "name": "null",
+      "member": "receiver?.split",
+      "source": "receiver?.split(\",\")",
+      "input": null,
+      "error": {
+        "name": "TypeError",
+        "message": "receiver?.split is not a function. (In 'receiver?.split(\",\")', 'receiver?.split' is null)",
+        "properties": {
+          "originalLine": 30,
+          "originalColumn": 98,
+          "line": 16,
+          "column": 91,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": null,
+      "functions": []
+    },
+    {
+      "name": "false",
+      "member": "receiver?.split",
+      "source": "receiver?.split(\",\")",
+      "input": false,
+      "error": {
+        "name": "TypeError",
+        "message": "receiver?.split is not a function. (In 'receiver?.split(\",\")', 'receiver?.split' is false)",
+        "properties": {
+          "originalLine": 30,
+          "originalColumn": 98,
+          "line": 16,
+          "column": 91,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": false,
+      "functions": []
+    },
+    {
+      "name": "true",
+      "member": "receiver?.split",
+      "source": "receiver?.split(\",\")",
+      "input": true,
+      "error": {
+        "name": "TypeError",
+        "message": "receiver?.split is not a function. (In 'receiver?.split(\",\")', 'receiver?.split' is true)",
+        "properties": {
+          "originalLine": 30,
+          "originalColumn": 98,
+          "line": 16,
+          "column": 91,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": true,
+      "functions": []
+    },
+    {
+      "name": "zero",
+      "member": "receiver?.split",
+      "source": "receiver?.split(\",\")",
+      "input": 0,
+      "error": {
+        "name": "TypeError",
+        "message": "receiver?.split is not a function. (In 'receiver?.split(\",\")', 'receiver?.split' is 0)",
+        "properties": {
+          "originalLine": 30,
+          "originalColumn": 98,
+          "line": 16,
+          "column": 91,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": 0,
+      "functions": []
+    },
+    {
+      "name": "negative-zero",
+      "member": "receiver?.split",
+      "source": "receiver?.split(\",\")",
+      "input": 0,
+      "error": {
+        "name": "TypeError",
+        "message": "receiver?.split is not a function. (In 'receiver?.split(\",\")', 'receiver?.split' is 0)",
+        "properties": {
+          "originalLine": 30,
+          "originalColumn": 98,
+          "line": 16,
+          "column": 91,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": 0,
+      "functions": []
+    },
+    {
+      "name": "number",
+      "member": "receiver?.split",
+      "source": "receiver?.split(\",\")",
+      "input": 17,
+      "error": {
+        "name": "TypeError",
+        "message": "receiver?.split is not a function. (In 'receiver?.split(\",\")', 'receiver?.split' is 17)",
+        "properties": {
+          "originalLine": 30,
+          "originalColumn": 98,
+          "line": 16,
+          "column": 91,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": 17,
+      "functions": []
+    },
+    {
+      "name": "nan",
+      "member": "receiver?.split",
+      "source": "receiver?.split(\",\")",
+      "input": {
+        "type": "number",
+        "value": "NaN"
+      },
+      "error": {
+        "name": "TypeError",
+        "message": "receiver?.split is not a function. (In 'receiver?.split(\",\")', 'receiver?.split' is NaN)",
+        "properties": {
+          "originalLine": 30,
+          "originalColumn": 98,
+          "line": 16,
+          "column": 91,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": {
+        "type": "number",
+        "value": "NaN"
+      },
+      "functions": []
+    },
+    {
+      "name": "infinity",
+      "member": "receiver?.split",
+      "source": "receiver?.split(\",\")",
+      "input": {
+        "type": "number",
+        "value": "Infinity"
+      },
+      "error": {
+        "name": "TypeError",
+        "message": "receiver?.split is not a function. (In 'receiver?.split(\",\")', 'receiver?.split' is Infinity)",
+        "properties": {
+          "originalLine": 30,
+          "originalColumn": 98,
+          "line": 16,
+          "column": 91,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": {
+        "type": "number",
+        "value": "Infinity"
+      },
+      "functions": []
+    },
+    {
+      "name": "negative-infinity",
+      "member": "receiver?.split",
+      "source": "receiver?.split(\",\")",
+      "input": {
+        "type": "number",
+        "value": "-Infinity"
+      },
+      "error": {
+        "name": "TypeError",
+        "message": "receiver?.split is not a function. (In 'receiver?.split(\",\")', 'receiver?.split' is -Infinity)",
+        "properties": {
+          "originalLine": 30,
+          "originalColumn": 98,
+          "line": 16,
+          "column": 91,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": {
+        "type": "number",
+        "value": "-Infinity"
+      },
+      "functions": []
+    },
+    {
+      "name": "string",
+      "member": "receiver?.split",
+      "source": "receiver?.split(\",\")",
+      "input": "text",
+      "error": {
+        "name": "TypeError",
+        "message": "receiver?.split is not a function. (In 'receiver?.split(\",\")', 'receiver?.split' is \"text\")",
+        "properties": {
+          "originalLine": 30,
+          "originalColumn": 98,
+          "line": 16,
+          "column": 91,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": "text",
+      "functions": []
+    },
+    {
+      "name": "empty-string",
+      "member": "receiver?.split",
+      "source": "receiver?.split(\",\")",
+      "input": "",
+      "error": {
+        "name": "TypeError",
+        "message": "receiver?.split is not a function. (In 'receiver?.split(\",\")', 'receiver?.split' is \"\")",
+        "properties": {
+          "originalLine": 30,
+          "originalColumn": 98,
+          "line": 16,
+          "column": 91,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": "",
+      "functions": []
+    },
+    {
+      "name": "escaped-string",
+      "member": "receiver?.split",
+      "source": "receiver?.split(\",\")",
+      "input": "quote\"\nline",
+      "error": {
+        "name": "TypeError",
+        "message": "receiver?.split is not a function. (In 'receiver?.split(\",\")', 'receiver?.split' is \"quote\"\nline\")",
+        "properties": {
+          "originalLine": 30,
+          "originalColumn": 98,
+          "line": 16,
+          "column": 91,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": "quote\"\nline",
+      "functions": []
+    },
+    {
+      "name": "object",
+      "member": "receiver?.split",
+      "source": "receiver?.split(\",\")",
+      "input": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "marker",
+          "toString",
+          "valueOf",
+          "toJSON",
+          {
+            "type": "symbol",
+            "value": "Symbol(Symbol.toPrimitive)"
+          }
+        ],
+        "properties": [
+          [
+            "marker",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": "object"
+            }
+          ],
+          [
+            "toString",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-2",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-1"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "valueOf",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-3",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-2"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "toJSON",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-4",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-3"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            {
+              "type": "symbol",
+              "value": "Symbol(Symbol.toPrimitive)"
+            },
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-5",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-4"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ]
+        ]
+      },
+      "error": {
+        "name": "TypeError",
+        "message": "receiver?.split is not a function. (In 'receiver?.split(\",\")', 'receiver?.split' is an instance of Object)",
+        "properties": {
+          "originalLine": 30,
+          "originalColumn": 98,
+          "line": 16,
+          "column": 91,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "marker",
+          "toString",
+          "valueOf",
+          "toJSON",
+          {
+            "type": "symbol",
+            "value": "Symbol(Symbol.toPrimitive)"
+          }
+        ],
+        "properties": [
+          [
+            "marker",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": "object"
+            }
+          ],
+          [
+            "toString",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-2",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-1"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "valueOf",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-3",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-2"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "toJSON",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-4",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-3"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            {
+              "type": "symbol",
+              "value": "Symbol(Symbol.toPrimitive)"
+            },
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-5",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-4"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ]
+        ]
+      },
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-2",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-3",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-4",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "array",
+      "member": "receiver?.split",
+      "source": "receiver?.split(\",\")",
+      "input": {
+        "identity": "object-1",
+        "type": "array",
+        "ownKeys": [
+          "0",
+          "1",
+          "length",
+          "toString",
+          "valueOf",
+          "toJSON",
+          {
+            "type": "symbol",
+            "value": "Symbol(Symbol.toPrimitive)"
+          }
+        ],
+        "properties": [
+          [
+            "0",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": 1
+            }
+          ],
+          [
+            "1",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": 2
+            }
+          ],
+          [
+            "length",
+            {
+              "enumerable": false,
+              "configurable": false,
+              "writable": true,
+              "value": 2
+            }
+          ],
+          [
+            "toString",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-2",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-1"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "valueOf",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-3",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-2"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "toJSON",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-4",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-3"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            {
+              "type": "symbol",
+              "value": "Symbol(Symbol.toPrimitive)"
+            },
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-5",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-4"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ]
+        ]
+      },
+      "error": {
+        "name": "TypeError",
+        "message": "receiver?.split is not a function. (In 'receiver?.split(\",\")', 'receiver?.split' is an instance of Array)",
+        "properties": {
+          "originalLine": 30,
+          "originalColumn": 98,
+          "line": 16,
+          "column": 91,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": {
+        "identity": "object-1",
+        "type": "array",
+        "ownKeys": [
+          "0",
+          "1",
+          "length",
+          "toString",
+          "valueOf",
+          "toJSON",
+          {
+            "type": "symbol",
+            "value": "Symbol(Symbol.toPrimitive)"
+          }
+        ],
+        "properties": [
+          [
+            "0",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": 1
+            }
+          ],
+          [
+            "1",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": 2
+            }
+          ],
+          [
+            "length",
+            {
+              "enumerable": false,
+              "configurable": false,
+              "writable": true,
+              "value": 2
+            }
+          ],
+          [
+            "toString",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-2",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-1"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "valueOf",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-3",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-2"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "toJSON",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-4",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-3"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            {
+              "type": "symbol",
+              "value": "Symbol(Symbol.toPrimitive)"
+            },
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-5",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-4"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ]
+        ]
+      },
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-2",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-3",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-4",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "date",
+      "member": "receiver?.split",
+      "source": "receiver?.split(\",\")",
+      "input": {
+        "identity": "object-1",
+        "type": "date",
+        "ownKeys": [
+          "toString",
+          "valueOf",
+          "toJSON",
+          {
+            "type": "symbol",
+            "value": "Symbol(Symbol.toPrimitive)"
+          }
+        ],
+        "properties": [
+          [
+            "toString",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-2",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-1"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "valueOf",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-3",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-2"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "toJSON",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-4",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-3"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            {
+              "type": "symbol",
+              "value": "Symbol(Symbol.toPrimitive)"
+            },
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-5",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-4"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ]
+        ],
+        "value": "2033-05-18T03:33:20.000Z"
+      },
+      "error": {
+        "name": "TypeError",
+        "message": "receiver?.split is not a function. (In 'receiver?.split(\",\")', 'receiver?.split' is an instance of Date)",
+        "properties": {
+          "originalLine": 30,
+          "originalColumn": 98,
+          "line": 16,
+          "column": 91,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": {
+        "identity": "object-1",
+        "type": "date",
+        "ownKeys": [
+          "toString",
+          "valueOf",
+          "toJSON",
+          {
+            "type": "symbol",
+            "value": "Symbol(Symbol.toPrimitive)"
+          }
+        ],
+        "properties": [
+          [
+            "toString",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-2",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-1"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "valueOf",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-3",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-2"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "toJSON",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-4",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-3"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            {
+              "type": "symbol",
+              "value": "Symbol(Symbol.toPrimitive)"
+            },
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-5",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-4"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ]
+        ],
+        "value": "2033-05-18T03:33:20.000Z"
+      },
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-2",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-3",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-4",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "invalid-date",
+      "member": "receiver?.split",
+      "source": "receiver?.split(\",\")",
+      "input": {
+        "identity": "object-1",
+        "type": "date",
+        "ownKeys": [
+          "toString",
+          "valueOf",
+          "toJSON",
+          {
+            "type": "symbol",
+            "value": "Symbol(Symbol.toPrimitive)"
+          }
+        ],
+        "properties": [
+          [
+            "toString",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-2",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-1"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "valueOf",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-3",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-2"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "toJSON",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-4",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-3"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            {
+              "type": "symbol",
+              "value": "Symbol(Symbol.toPrimitive)"
+            },
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-5",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-4"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ]
+        ],
+        "value": "Invalid Date"
+      },
+      "error": {
+        "name": "TypeError",
+        "message": "receiver?.split is not a function. (In 'receiver?.split(\",\")', 'receiver?.split' is an instance of Date)",
+        "properties": {
+          "originalLine": 30,
+          "originalColumn": 98,
+          "line": 16,
+          "column": 91,
+          "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/native-method-diagnostics-capture.mjs"
+        }
+      },
+      "events": [
+        {
+          "phase": "get:split"
+        }
+      ],
+      "after": {
+        "identity": "object-1",
+        "type": "date",
+        "ownKeys": [
+          "toString",
+          "valueOf",
+          "toJSON",
+          {
+            "type": "symbol",
+            "value": "Symbol(Symbol.toPrimitive)"
+          }
+        ],
+        "properties": [
+          [
+            "toString",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-2",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-1"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "valueOf",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-3",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-2"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            "toJSON",
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-4",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-3"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ],
+          [
+            {
+              "type": "symbol",
+              "value": "Symbol(Symbol.toPrimitive)"
+            },
+            {
+              "enumerable": false,
+              "configurable": true,
+              "get": {
+                "identity": "object-5",
+                "type": "function",
+                "ownKeys": [
+                  "length",
+                  "name"
+                ],
+                "properties": [
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": 0
+                    }
+                  ],
+                  [
+                    "name",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "writable": false,
+                      "value": "get"
+                    }
+                  ]
+                ],
+                "value": {
+                  "type": "function",
+                  "identity": "function-4"
+                }
+              },
+              "set": {
+                "type": "undefined"
+              }
+            }
+          ]
+        ],
+        "value": "Invalid Date"
+      },
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-2",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-3",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-4",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "string": "get() {\n            events.push({ phase: \"unexpected-coercion\", key: typeof key === \"symbol\" ? \"Symbol.toPrimitive\" : key });\n            throw Error(\"Diagnostic construction consumed a coercion getter\");\n          }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        }
+      ]
+    }
+  ]
+}

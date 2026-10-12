@@ -1,0 +1,1040 @@
+{
+  "version": "1.7.6",
+  "contract": "api-key-rate-limit-public",
+  "cases": [
+    {
+      "name": "secondary-deny",
+      "before": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "database",
+          "cache"
+        ],
+        "properties": [
+          [
+            "database",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "object",
+                "ownKeys": [
+                  "user",
+                  "session",
+                  "account",
+                  "verification",
+                  "apikey"
+                ],
+                "properties": [
+                  [
+                    "user",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "identity": "object-3",
+                        "type": "array",
+                        "ownKeys": [
+                          "length"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": false,
+                              "writable": true,
+                              "value": 0
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ],
+                  [
+                    "session",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "identity": "object-4",
+                        "type": "array",
+                        "ownKeys": [
+                          "length"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": false,
+                              "writable": true,
+                              "value": 0
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ],
+                  [
+                    "account",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "identity": "object-5",
+                        "type": "array",
+                        "ownKeys": [
+                          "length"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": false,
+                              "writable": true,
+                              "value": 0
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ],
+                  [
+                    "verification",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "identity": "object-6",
+                        "type": "array",
+                        "ownKeys": [
+                          "length"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": false,
+                              "writable": true,
+                              "value": 0
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ],
+                  [
+                    "apikey",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "identity": "object-7",
+                        "type": "array",
+                        "ownKeys": [
+                          "length"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": false,
+                              "writable": true,
+                              "value": 0
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "cache",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-8",
+                "type": "array",
+                "ownKeys": [
+                  "0",
+                  "1",
+                  "2",
+                  "length"
+                ],
+                "properties": [
+                  [
+                    "0",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "identity": "object-9",
+                        "type": "array",
+                        "ownKeys": [
+                          "0",
+                          "1",
+                          "length"
+                        ],
+                        "properties": [
+                          [
+                            "0",
+                            {
+                              "enumerable": true,
+                              "configurable": true,
+                              "writable": true,
+                              "value": "api-key:usage-secret"
+                            }
+                          ],
+                          [
+                            "1",
+                            {
+                              "enumerable": true,
+                              "configurable": true,
+                              "writable": true,
+                              "value": "{\"id\":\"usage-key\",\"name\":\"Usage key\",\"start\":null,\"prefix\":null,\"key\":\"usage-secret\",\"referenceId\":\"owner\",\"configId\":\"default\",\"refillInterval\":null,\"refillAmount\":null,\"lastRefillAt\":null,\"enabled\":true,\"rateLimitEnabled\":true,\"rateLimitTimeWindow\":2000,\"rateLimitMax\":3,\"requestCount\":3,\"remaining\":3,\"lastRequest\":\"2033-05-18T03:33:19.000Z\",\"expiresAt\":null,\"createdAt\":\"2033-05-18T03:32:20.000Z\",\"updatedAt\":\"2033-05-18T03:32:20.000Z\",\"permissions\":null,\"metadata\":null}"
+                            }
+                          ],
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": false,
+                              "writable": true,
+                              "value": 2
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ],
+                  [
+                    "1",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "identity": "object-10",
+                        "type": "array",
+                        "ownKeys": [
+                          "0",
+                          "1",
+                          "length"
+                        ],
+                        "properties": [
+                          [
+                            "0",
+                            {
+                              "enumerable": true,
+                              "configurable": true,
+                              "writable": true,
+                              "value": "api-key:by-id:usage-key"
+                            }
+                          ],
+                          [
+                            "1",
+                            {
+                              "enumerable": true,
+                              "configurable": true,
+                              "writable": true,
+                              "value": "{\"id\":\"usage-key\",\"name\":\"Usage key\",\"start\":null,\"prefix\":null,\"key\":\"usage-secret\",\"referenceId\":\"owner\",\"configId\":\"default\",\"refillInterval\":null,\"refillAmount\":null,\"lastRefillAt\":null,\"enabled\":true,\"rateLimitEnabled\":true,\"rateLimitTimeWindow\":2000,\"rateLimitMax\":3,\"requestCount\":3,\"remaining\":3,\"lastRequest\":\"2033-05-18T03:33:19.000Z\",\"expiresAt\":null,\"createdAt\":\"2033-05-18T03:32:20.000Z\",\"updatedAt\":\"2033-05-18T03:32:20.000Z\",\"permissions\":null,\"metadata\":null}"
+                            }
+                          ],
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": false,
+                              "writable": true,
+                              "value": 2
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ],
+                  [
+                    "2",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "identity": "object-11",
+                        "type": "array",
+                        "ownKeys": [
+                          "0",
+                          "1",
+                          "length"
+                        ],
+                        "properties": [
+                          [
+                            "0",
+                            {
+                              "enumerable": true,
+                              "configurable": true,
+                              "writable": true,
+                              "value": "api-key:by-ref:owner"
+                            }
+                          ],
+                          [
+                            "1",
+                            {
+                              "enumerable": true,
+                              "configurable": true,
+                              "writable": true,
+                              "value": "[\"usage-key\"]"
+                            }
+                          ],
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": false,
+                              "writable": true,
+                              "value": 2
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ],
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": false,
+                      "writable": true,
+                      "value": 3
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      },
+      "result": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "valid",
+          "error",
+          "key"
+        ],
+        "properties": [
+          [
+            "valid",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": false
+            }
+          ],
+          [
+            "error",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "object",
+                "ownKeys": [
+                  "message",
+                  "code",
+                  "details"
+                ],
+                "properties": [
+                  [
+                    "message",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "Rate limit exceeded."
+                    }
+                  ],
+                  [
+                    "code",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "RATE_LIMITED"
+                    }
+                  ],
+                  [
+                    "details",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "identity": "object-3",
+                        "type": "object",
+                        "ownKeys": [
+                          "tryAgainIn"
+                        ],
+                        "properties": [
+                          [
+                            "tryAgainIn",
+                            {
+                              "enumerable": true,
+                              "configurable": true,
+                              "writable": true,
+                              "value": 1000
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "key",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": null
+            }
+          ]
+        ]
+      },
+      "after": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "database",
+          "cache"
+        ],
+        "properties": [
+          [
+            "database",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "object",
+                "ownKeys": [
+                  "user",
+                  "session",
+                  "account",
+                  "verification",
+                  "apikey"
+                ],
+                "properties": [
+                  [
+                    "user",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "identity": "object-3",
+                        "type": "array",
+                        "ownKeys": [
+                          "length"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": false,
+                              "writable": true,
+                              "value": 0
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ],
+                  [
+                    "session",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "identity": "object-4",
+                        "type": "array",
+                        "ownKeys": [
+                          "length"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": false,
+                              "writable": true,
+                              "value": 0
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ],
+                  [
+                    "account",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "identity": "object-5",
+                        "type": "array",
+                        "ownKeys": [
+                          "length"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": false,
+                              "writable": true,
+                              "value": 0
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ],
+                  [
+                    "verification",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "identity": "object-6",
+                        "type": "array",
+                        "ownKeys": [
+                          "length"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": false,
+                              "writable": true,
+                              "value": 0
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ],
+                  [
+                    "apikey",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "identity": "object-7",
+                        "type": "array",
+                        "ownKeys": [
+                          "length"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": false,
+                              "writable": true,
+                              "value": 0
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "cache",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-8",
+                "type": "array",
+                "ownKeys": [
+                  "0",
+                  "1",
+                  "2",
+                  "length"
+                ],
+                "properties": [
+                  [
+                    "0",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "identity": "object-9",
+                        "type": "array",
+                        "ownKeys": [
+                          "0",
+                          "1",
+                          "length"
+                        ],
+                        "properties": [
+                          [
+                            "0",
+                            {
+                              "enumerable": true,
+                              "configurable": true,
+                              "writable": true,
+                              "value": "api-key:usage-secret"
+                            }
+                          ],
+                          [
+                            "1",
+                            {
+                              "enumerable": true,
+                              "configurable": true,
+                              "writable": true,
+                              "value": "{\"id\":\"usage-key\",\"name\":\"Usage key\",\"start\":null,\"prefix\":null,\"key\":\"usage-secret\",\"referenceId\":\"owner\",\"configId\":\"default\",\"refillInterval\":null,\"refillAmount\":null,\"lastRefillAt\":null,\"enabled\":true,\"rateLimitEnabled\":true,\"rateLimitTimeWindow\":2000,\"rateLimitMax\":3,\"requestCount\":3,\"remaining\":3,\"lastRequest\":\"2033-05-18T03:33:19.000Z\",\"expiresAt\":null,\"createdAt\":\"2033-05-18T03:32:20.000Z\",\"updatedAt\":\"2033-05-18T03:32:20.000Z\",\"permissions\":null,\"metadata\":null}"
+                            }
+                          ],
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": false,
+                              "writable": true,
+                              "value": 2
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ],
+                  [
+                    "1",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "identity": "object-10",
+                        "type": "array",
+                        "ownKeys": [
+                          "0",
+                          "1",
+                          "length"
+                        ],
+                        "properties": [
+                          [
+                            "0",
+                            {
+                              "enumerable": true,
+                              "configurable": true,
+                              "writable": true,
+                              "value": "api-key:by-id:usage-key"
+                            }
+                          ],
+                          [
+                            "1",
+                            {
+                              "enumerable": true,
+                              "configurable": true,
+                              "writable": true,
+                              "value": "{\"id\":\"usage-key\",\"name\":\"Usage key\",\"start\":null,\"prefix\":null,\"key\":\"usage-secret\",\"referenceId\":\"owner\",\"configId\":\"default\",\"refillInterval\":null,\"refillAmount\":null,\"lastRefillAt\":null,\"enabled\":true,\"rateLimitEnabled\":true,\"rateLimitTimeWindow\":2000,\"rateLimitMax\":3,\"requestCount\":3,\"remaining\":3,\"lastRequest\":\"2033-05-18T03:33:19.000Z\",\"expiresAt\":null,\"createdAt\":\"2033-05-18T03:32:20.000Z\",\"updatedAt\":\"2033-05-18T03:32:20.000Z\",\"permissions\":null,\"metadata\":null}"
+                            }
+                          ],
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": false,
+                              "writable": true,
+                              "value": 2
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ],
+                  [
+                    "2",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "identity": "object-11",
+                        "type": "array",
+                        "ownKeys": [
+                          "0",
+                          "1",
+                          "length"
+                        ],
+                        "properties": [
+                          [
+                            "0",
+                            {
+                              "enumerable": true,
+                              "configurable": true,
+                              "writable": true,
+                              "value": "api-key:by-ref:owner"
+                            }
+                          ],
+                          [
+                            "1",
+                            {
+                              "enumerable": true,
+                              "configurable": true,
+                              "writable": true,
+                              "value": "[\"usage-key\"]"
+                            }
+                          ],
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": false,
+                              "writable": true,
+                              "value": 2
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ],
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": false,
+                      "writable": true,
+                      "value": 3
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      },
+      "storageEvents": {
+        "identity": "object-1",
+        "type": "array",
+        "ownKeys": [
+          "0",
+          "length"
+        ],
+        "properties": [
+          [
+            "0",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "array",
+                "ownKeys": [
+                  "0",
+                  "1",
+                  "length"
+                ],
+                "properties": [
+                  [
+                    "0",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "get"
+                    }
+                  ],
+                  [
+                    "1",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "api-key:usage-secret"
+                    }
+                  ],
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": false,
+                      "writable": true,
+                      "value": 2
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "length",
+            {
+              "enumerable": false,
+              "configurable": false,
+              "writable": true,
+              "value": 1
+            }
+          ]
+        ]
+      },
+      "logs": {
+        "identity": "object-1",
+        "type": "array",
+        "ownKeys": [
+          "0",
+          "length"
+        ],
+        "properties": [
+          [
+            "0",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "object",
+                "ownKeys": [
+                  "level",
+                  "message",
+                  "arguments"
+                ],
+                "properties": [
+                  [
+                    "level",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "error"
+                    }
+                  ],
+                  [
+                    "message",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "Failed to validate API key:"
+                    }
+                  ],
+                  [
+                    "arguments",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "identity": "object-3",
+                        "type": "array",
+                        "ownKeys": [
+                          "0",
+                          "length"
+                        ],
+                        "properties": [
+                          [
+                            "0",
+                            {
+                              "enumerable": true,
+                              "configurable": true,
+                              "writable": true,
+                              "value": {
+                                "identity": "object-4",
+                                "type": "object",
+                                "ownKeys": [
+                                  "message",
+                                  "status",
+                                  "body",
+                                  "headers",
+                                  "statusCode",
+                                  "name"
+                                ],
+                                "properties": [
+                                  [
+                                    "message",
+                                    {
+                                      "enumerable": false,
+                                      "configurable": true,
+                                      "writable": true,
+                                      "value": "Rate limit exceeded."
+                                    }
+                                  ],
+                                  [
+                                    "status",
+                                    {
+                                      "enumerable": true,
+                                      "configurable": true,
+                                      "writable": true,
+                                      "value": "TOO_MANY_REQUESTS"
+                                    }
+                                  ],
+                                  [
+                                    "body",
+                                    {
+                                      "enumerable": true,
+                                      "configurable": true,
+                                      "writable": true,
+                                      "value": {
+                                        "identity": "object-5",
+                                        "type": "object",
+                                        "ownKeys": [
+                                          "message",
+                                          "code",
+                                          "details"
+                                        ],
+                                        "properties": [
+                                          [
+                                            "message",
+                                            {
+                                              "enumerable": true,
+                                              "configurable": true,
+                                              "writable": true,
+                                              "value": "Rate limit exceeded."
+                                            }
+                                          ],
+                                          [
+                                            "code",
+                                            {
+                                              "enumerable": true,
+                                              "configurable": true,
+                                              "writable": true,
+                                              "value": "RATE_LIMITED"
+                                            }
+                                          ],
+                                          [
+                                            "details",
+                                            {
+                                              "enumerable": true,
+                                              "configurable": true,
+                                              "writable": true,
+                                              "value": {
+                                                "identity": "object-6",
+                                                "type": "object",
+                                                "ownKeys": [
+                                                  "tryAgainIn"
+                                                ],
+                                                "properties": [
+                                                  [
+                                                    "tryAgainIn",
+                                                    {
+                                                      "enumerable": true,
+                                                      "configurable": true,
+                                                      "writable": true,
+                                                      "value": 1000
+                                                    }
+                                                  ]
+                                                ]
+                                              }
+                                            }
+                                          ]
+                                        ]
+                                      }
+                                    }
+                                  ],
+                                  [
+                                    "headers",
+                                    {
+                                      "enumerable": true,
+                                      "configurable": true,
+                                      "writable": true,
+                                      "value": {
+                                        "identity": "object-7",
+                                        "type": "object",
+                                        "ownKeys": [],
+                                        "properties": []
+                                      }
+                                    }
+                                  ],
+                                  [
+                                    "statusCode",
+                                    {
+                                      "enumerable": true,
+                                      "configurable": true,
+                                      "writable": true,
+                                      "value": 429
+                                    }
+                                  ],
+                                  [
+                                    "name",
+                                    {
+                                      "enumerable": true,
+                                      "configurable": true,
+                                      "writable": true,
+                                      "value": "APIError"
+                                    }
+                                  ]
+                                ]
+                              }
+                            }
+                          ],
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": false,
+                              "writable": true,
+                              "value": 1
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "length",
+            {
+              "enumerable": false,
+              "configurable": false,
+              "writable": true,
+              "value": 1
+            }
+          ]
+        ]
+      }
+    }
+  ]
+}

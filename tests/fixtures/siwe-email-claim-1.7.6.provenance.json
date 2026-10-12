@@ -1,0 +1,1013 @@
+{
+  "source_run": "38295382448",
+  "cases": [
+    {
+      "index": 8,
+      "name": "retry-query-error"
+    },
+    {
+      "index": 9,
+      "name": "initial-query-error"
+    }
+  ],
+  "property_key_analysis": [
+    {
+      "path": "/cases/8/raw/error",
+      "descriptor_changes": [
+        {
+          "key": "originalColumn",
+          "capture": null,
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 17
+          }
+        },
+        {
+          "key": "originalLine",
+          "capture": null,
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 45
+          }
+        },
+        {
+          "key": "stack",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "Error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (unknown:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          },
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "APIError: Original lookup error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (native:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          }
+        }
+      ],
+      "capture_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "line",
+        "column",
+        "sourceURL",
+        "stack",
+        {
+          "type": "symbol",
+          "value": "Symbol(better-call:api-error-headers)"
+        }
+      ],
+      "replay_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "originalLine",
+        "originalColumn",
+        "line",
+        "column",
+        "sourceURL",
+        "stack",
+        {
+          "type": "symbol",
+          "value": "Symbol(better-call:api-error-headers)"
+        }
+      ]
+    },
+    {
+      "path": "/cases/8/raw/originals/properties/0/1/value",
+      "descriptor_changes": [
+        {
+          "key": "originalColumn",
+          "capture": null,
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 17
+          }
+        },
+        {
+          "key": "originalLine",
+          "capture": null,
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 45
+          }
+        },
+        {
+          "key": "stack",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "Error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (unknown:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          },
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "APIError: Original reserve error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (native:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          }
+        }
+      ],
+      "capture_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ],
+      "replay_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "originalLine",
+        "originalColumn",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ]
+    },
+    {
+      "path": "/cases/8/raw/originals/properties/1/1/value",
+      "descriptor_changes": [
+        {
+          "key": "originalColumn",
+          "capture": null,
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 17
+          }
+        },
+        {
+          "key": "originalLine",
+          "capture": null,
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 45
+          }
+        },
+        {
+          "key": "stack",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "Error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (unknown:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          },
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "APIError: Original cleanup error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (native:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          }
+        }
+      ],
+      "capture_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ],
+      "replay_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "originalLine",
+        "originalColumn",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ]
+    },
+    {
+      "path": "/cases/8/raw/originals/properties/2/1/value",
+      "descriptor_changes": [
+        {
+          "key": "originalColumn",
+          "capture": null,
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 17
+          }
+        },
+        {
+          "key": "originalLine",
+          "capture": null,
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 45
+          }
+        },
+        {
+          "key": "stack",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "Error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (unknown:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          },
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "APIError: Original create error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (native:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          }
+        }
+      ],
+      "capture_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ],
+      "replay_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "originalLine",
+        "originalColumn",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ]
+    },
+    {
+      "path": "/cases/8/raw/originals/properties/3/1/value",
+      "descriptor_changes": [
+        {
+          "key": "originalColumn",
+          "capture": null,
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 17
+          }
+        },
+        {
+          "key": "originalLine",
+          "capture": null,
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 45
+          }
+        },
+        {
+          "key": "stack",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "Error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (unknown:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          },
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "APIError: Original lookup error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (native:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          }
+        }
+      ],
+      "capture_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "line",
+        "column",
+        "sourceURL",
+        "stack",
+        {
+          "type": "symbol",
+          "value": "Symbol(better-call:api-error-headers)"
+        }
+      ],
+      "replay_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "originalLine",
+        "originalColumn",
+        "line",
+        "column",
+        "sourceURL",
+        "stack",
+        {
+          "type": "symbol",
+          "value": "Symbol(better-call:api-error-headers)"
+        }
+      ]
+    },
+    {
+      "path": "/cases/8/raw/originals/properties/4/1/value",
+      "descriptor_changes": [
+        {
+          "key": "originalColumn",
+          "capture": null,
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 17
+          }
+        },
+        {
+          "key": "originalLine",
+          "capture": null,
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 45
+          }
+        },
+        {
+          "key": "stack",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "Error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (unknown:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          },
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "APIError: Original ens error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (native:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          }
+        }
+      ],
+      "capture_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ],
+      "replay_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "originalLine",
+        "originalColumn",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ]
+    },
+    {
+      "path": "/cases/8/raw/originals/properties/5/1/value",
+      "descriptor_changes": [
+        {
+          "key": "originalColumn",
+          "capture": null,
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 17
+          }
+        },
+        {
+          "key": "originalLine",
+          "capture": null,
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 45
+          }
+        },
+        {
+          "key": "stack",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "Error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (unknown:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          },
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "APIError: Original logger error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (native:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          }
+        }
+      ],
+      "capture_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ],
+      "replay_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "originalLine",
+        "originalColumn",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ]
+    },
+    {
+      "path": "/cases/9/raw/error",
+      "descriptor_changes": [
+        {
+          "key": "originalColumn",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 17
+          },
+          "replay": null
+        },
+        {
+          "key": "originalLine",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 45
+          },
+          "replay": null
+        },
+        {
+          "key": "stack",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "APIError: Original lookup error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (native:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          },
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "Error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (unknown:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          }
+        }
+      ],
+      "capture_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "originalLine",
+        "originalColumn",
+        "line",
+        "column",
+        "sourceURL",
+        "stack",
+        {
+          "type": "symbol",
+          "value": "Symbol(better-call:api-error-headers)"
+        }
+      ],
+      "replay_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "line",
+        "column",
+        "sourceURL",
+        "stack",
+        {
+          "type": "symbol",
+          "value": "Symbol(better-call:api-error-headers)"
+        }
+      ]
+    },
+    {
+      "path": "/cases/9/raw/originals/properties/0/1/value",
+      "descriptor_changes": [
+        {
+          "key": "originalColumn",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 17
+          },
+          "replay": null
+        },
+        {
+          "key": "originalLine",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 45
+          },
+          "replay": null
+        },
+        {
+          "key": "stack",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "APIError: Original reserve error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (native:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          },
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "Error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (unknown:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          }
+        }
+      ],
+      "capture_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "originalLine",
+        "originalColumn",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ],
+      "replay_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ]
+    },
+    {
+      "path": "/cases/9/raw/originals/properties/1/1/value",
+      "descriptor_changes": [
+        {
+          "key": "originalColumn",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 17
+          },
+          "replay": null
+        },
+        {
+          "key": "originalLine",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 45
+          },
+          "replay": null
+        },
+        {
+          "key": "stack",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "APIError: Original cleanup error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (native:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          },
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "Error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (unknown:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          }
+        }
+      ],
+      "capture_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "originalLine",
+        "originalColumn",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ],
+      "replay_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ]
+    },
+    {
+      "path": "/cases/9/raw/originals/properties/2/1/value",
+      "descriptor_changes": [
+        {
+          "key": "originalColumn",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 17
+          },
+          "replay": null
+        },
+        {
+          "key": "originalLine",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 45
+          },
+          "replay": null
+        },
+        {
+          "key": "stack",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "APIError: Original create error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (native:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          },
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "Error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (unknown:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          }
+        }
+      ],
+      "capture_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "originalLine",
+        "originalColumn",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ],
+      "replay_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ]
+    },
+    {
+      "path": "/cases/9/raw/originals/properties/3/1/value",
+      "descriptor_changes": [
+        {
+          "key": "originalColumn",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 17
+          },
+          "replay": null
+        },
+        {
+          "key": "originalLine",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 45
+          },
+          "replay": null
+        },
+        {
+          "key": "stack",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "APIError: Original lookup error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (native:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          },
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "Error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (unknown:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          }
+        }
+      ],
+      "capture_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "originalLine",
+        "originalColumn",
+        "line",
+        "column",
+        "sourceURL",
+        "stack",
+        {
+          "type": "symbol",
+          "value": "Symbol(better-call:api-error-headers)"
+        }
+      ],
+      "replay_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "line",
+        "column",
+        "sourceURL",
+        "stack",
+        {
+          "type": "symbol",
+          "value": "Symbol(better-call:api-error-headers)"
+        }
+      ]
+    },
+    {
+      "path": "/cases/9/raw/originals/properties/4/1/value",
+      "descriptor_changes": [
+        {
+          "key": "originalColumn",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 17
+          },
+          "replay": null
+        },
+        {
+          "key": "originalLine",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 45
+          },
+          "replay": null
+        },
+        {
+          "key": "stack",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "APIError: Original ens error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (native:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          },
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "Error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (unknown:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          }
+        }
+      ],
+      "capture_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "originalLine",
+        "originalColumn",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ],
+      "replay_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ]
+    },
+    {
+      "path": "/cases/9/raw/originals/properties/5/1/value",
+      "descriptor_changes": [
+        {
+          "key": "originalColumn",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 17
+          },
+          "replay": null
+        },
+        {
+          "key": "originalLine",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": 45
+          },
+          "replay": null
+        },
+        {
+          "key": "stack",
+          "capture": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "APIError: Original logger error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (native:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          },
+          "replay": {
+            "enumerable": false,
+            "configurable": true,
+            "writable": true,
+            "value": "Error\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:36:9)\n    at map (unknown:1:11)\n    at captureCase (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:35:97)\n    at <anonymous> (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/siwe-email-claim-capture.mjs:180:64)\n    at async withRestoredSchema (/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/schema-isolation.mjs:6:18)"
+          }
+        }
+      ],
+      "capture_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "originalLine",
+        "originalColumn",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ],
+      "replay_own_keys": [
+        "message",
+        "status",
+        "body",
+        "headers",
+        "statusCode",
+        "name",
+        "line",
+        "column",
+        "sourceURL",
+        "stack"
+      ]
+    }
+  ],
+  "runtime_metadata_changes": [
+    {
+      "path": "/cases/8/runtime/outcome/error/properties/originalLine",
+      "capturePresent": false,
+      "replayPresent": true,
+      "capture": null,
+      "replay": 45
+    },
+    {
+      "path": "/cases/8/runtime/outcome/error/properties/originalColumn",
+      "capturePresent": false,
+      "replayPresent": true,
+      "capture": null,
+      "replay": 17
+    },
+    {
+      "path": "/cases/9/runtime/outcome/error/properties/originalLine",
+      "capturePresent": true,
+      "replayPresent": false,
+      "capture": 45,
+      "replay": null
+    },
+    {
+      "path": "/cases/9/runtime/outcome/error/properties/originalColumn",
+      "capturePresent": true,
+      "replayPresent": false,
+      "capture": 17,
+      "replay": null
+    }
+  ],
+  "source_sha": "13c0927d2bbd5c7fd43fa8a435945956b76a3d74",
+  "observations": [
+    {
+      "file": "siwe-email-claim-1.7.6.first.json",
+      "sha256": "9a2e2bbacb619eccfa2223253fcad87830c21259828b8b8f886251e8ae4d24aa"
+    },
+    {
+      "file": "siwe-email-claim-1.7.6.repeat.json",
+      "sha256": "fe9a588723da47e8cf2d9a7e2e142c6672082b116d855c8269a32103d60d7b60"
+    }
+  ],
+  "acceptance": "Both runs passed all twelve source behavior assertions. Whole-file byte comparison failed; host error metadata is unpaired. These files preserve both original observations and are not a normalized golden."
+}

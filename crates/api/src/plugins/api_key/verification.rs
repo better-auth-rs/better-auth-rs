@@ -3,7 +3,6 @@ use better_auth_core::wire::{ApiKeyView, SessionView};
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, BeforeRequestAction, FieldValue,
 };
-use serde::Serialize;
 
 use super::request::{CapturedInput, VerifyKeyRequest};
 use super::{ApiKeyEndpoint, ApiKeyErrorCode, ApiKeyPlugin, ApiKeyReferences, config_id_matches};
@@ -22,162 +21,11 @@ pub struct VerifyApiKey<'a> {
     pub permissions: Option<&'a serde_json::Value>,
 }
 
-/// Additional information returned when a key reaches its rate limit.
-#[derive(Debug, Serialize)]
-pub struct ApiKeyErrorDetails {
-    /// Milliseconds until the key's rate-limit window elapses.
-    #[serde(rename = "tryAgainIn")]
-    pub try_again_in: f64,
-}
-
-/// An API key rejection with the upstream error code and response fields.
-#[derive(Debug, Serialize)]
-#[serde(untagged)]
-pub enum ApiKeyErrorMessage {
-    /// A public error message.
-    Text(String),
-    /// Upstream returns its complete error constant on selected verification failures.
-    Code {
-        code: ApiKeyErrorCode,
-        message: String,
-    },
-}
-
-impl std::fmt::Display for ApiKeyErrorMessage {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Text(message) | Self::Code { message, .. } => formatter.write_str(message),
-        }
-    }
-}
-
-/// An API key rejection with the upstream error code and response fields.
-#[derive(Debug, Serialize)]
-pub struct ApiKeyValidationError {
-    /// Stable upstream API key error code.
-    pub code: ApiKeyErrorCode,
-    /// Upstream error message.
-    pub message: ApiKeyErrorMessage,
-    /// Rate-limit timing, when the rejection is a rate limit.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub details: Option<ApiKeyErrorDetails>,
-}
-
-impl ApiKeyValidationError {
-    fn new(code: ApiKeyErrorCode) -> Self {
-        Self {
-            code,
-            message: ApiKeyErrorMessage::Text(code.message().to_owned()),
-            details: None,
-        }
-    }
-
-    fn invalid_constant(code: ApiKeyErrorCode) -> Self {
-        Self {
-            code,
-            message: ApiKeyErrorMessage::Code {
-                code: ApiKeyErrorCode::InvalidApiKey,
-                message: ApiKeyErrorCode::InvalidApiKey.message().to_owned(),
-            },
-            details: None,
-        }
-    }
-
-    fn status(&self) -> u16 {
-        match self.code {
-            ApiKeyErrorCode::NoDefaultConfiguration => 400,
-            ApiKeyErrorCode::RateLimited | ApiKeyErrorCode::UsageExceeded => 429,
-            _ => 401,
-        }
-    }
-
-    fn response(&self) -> AuthResult<AuthResponse> {
-        AuthResponse::json(self.status(), self)
-    }
-}
-
-/// Distinguishes a rejected credential from a storage or infrastructure failure.
-#[derive(Debug)]
-pub enum ApiKeyVerificationError {
-    /// The credential or its permissions, quota, or configuration was rejected.
-    Validation(ApiKeyValidationError),
-    /// An application API error caught by unscoped verification, including its complete response body.
-    Rejected(AuthError),
-    /// An internal operation failed. The original typed error is preserved.
-    Internal(AuthError),
-    /// An endpoint hook or scoped validator failed before the verification catch boundary.
-    Endpoint(AuthError),
-}
-
-impl std::fmt::Display for ApiKeyVerificationError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Validation(error) => write!(formatter, "{}", error.message),
-            Self::Internal(error) | Self::Endpoint(error) | Self::Rejected(error) => {
-                write!(formatter, "API key verification failed: {error}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for ApiKeyVerificationError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Internal(error) | Self::Endpoint(error) | Self::Rejected(error) => Some(error),
-            Self::Validation(_) => None,
-        }
-    }
-}
-
-impl ApiKeyVerificationError {
-    /// Render the server-only endpoint's upstream response while retaining typed errors until this boundary.
-    pub fn into_response(self) -> AuthResult<AuthResponse> {
-        let error = match self {
-            Self::Endpoint(error) => return Err(error),
-            Self::Rejected(error) => {
-                let mut body = error.body_value()?.enumerable_fields()?;
-                for name in ["message", "code"] {
-                    let value = error.body_value()?;
-                    let value = if value.is_null() || value.is_undefined() {
-                        better_auth_core::FieldValue::Undefined
-                    } else {
-                        value.model_property(name)?
-                    };
-                    let _ = body.insert(name.into(), value);
-                }
-                return Ok(AuthResponse::json_value(
-                    None,
-                    better_auth_core::FieldMap::from([
-                        ("valid".into(), false.into()),
-                        ("error".into(), body.into()),
-                        ("key".into(), better_auth_core::FieldValue::Null),
-                    ])
-                    .into(),
-                ));
-            }
-            Self::Validation(error) => error,
-            Self::Internal(_) => {
-                ApiKeyValidationError::invalid_constant(ApiKeyErrorCode::InvalidApiKey)
-            }
-        };
-        AuthResponse::json(
-            None,
-            &serde_json::json!({"valid":false,"error":error,"key":null}),
-        )
-    }
-}
-
-impl From<AuthError> for ApiKeyVerificationError {
-    fn from(error: AuthError) -> Self {
-        Self::Internal(error)
-    }
-}
-
-impl From<ApiKeyErrorCode> for ApiKeyVerificationError {
-    fn from(code: ApiKeyErrorCode) -> Self {
-        Self::Validation(ApiKeyValidationError::new(code))
-    }
-}
+#[path = "verification_error.rs"]
+mod error;
+pub use error::{
+    ApiKeyErrorDetails, ApiKeyErrorMessage, ApiKeyValidationError, ApiKeyVerificationError,
+};
 
 impl ApiKeyPlugin {
     /// Verify a machine credential without a user session or public HTTP endpoint.
@@ -247,12 +95,12 @@ impl ApiKeyPlugin {
         .await;
         let key = match result {
             Ok(key) => key,
-            Err(error) => {
-                let cause: &(dyn std::error::Error + Send + Sync + 'static) = match &error {
+            Err(mut error) => {
+                let cause: &(dyn std::error::Error + Send + Sync + 'static) = match &mut error {
                     ApiKeyVerificationError::Rejected(error)
                     | ApiKeyVerificationError::Internal(error)
                     | ApiKeyVerificationError::Endpoint(error) => error,
-                    ApiKeyVerificationError::Validation(_) => &error,
+                    ApiKeyVerificationError::Validation(error) => error.capture_native(),
                 };
                 ctx.logger()
                     .error(

@@ -54,6 +54,8 @@ mod enrollment_tests;
 #[cfg(test)]
 mod native_tests;
 #[cfg(test)]
+mod otp_native_contract;
+#[cfg(test)]
 mod security_tests;
 #[cfg(test)]
 mod tests;

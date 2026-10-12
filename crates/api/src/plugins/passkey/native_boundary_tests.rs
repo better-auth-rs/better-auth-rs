@@ -353,3 +353,6 @@ mod credential_id_authentication_tests;
 
 #[path = "update_boundary_tests.rs"]
 mod update_boundary_tests;
+
+#[path = "transport_method_tests.rs"]
+mod transport_method_tests;

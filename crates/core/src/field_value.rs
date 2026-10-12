@@ -35,6 +35,9 @@ pub use structured_clone::StructuredCloneContext;
 pub(crate) use structured_clone::{ArrayCloneSeed, prepare_clone};
 mod json;
 pub(crate) use json::{project_input_json, stringify_http};
+mod method_error;
+#[cfg(test)]
+mod method_error_tests;
 mod primitive;
 mod property;
 mod string_methods;

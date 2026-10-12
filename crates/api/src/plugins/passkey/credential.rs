@@ -11,7 +11,7 @@ use webauthn_rs_core::proto::{
     AttestationFormat, COSEKey, Credential, ParsedAttestation, RegisteredExtensions,
 };
 
-use super::webauthn::{VERIFICATION_POLICY, decode_credential_id, parse_transports_csv};
+use super::webauthn::{VERIFICATION_POLICY, decode_credential_id, split_transports};
 
 // The serialized form remains the Legacy credential envelope.
 #[derive(Serialize)]
@@ -78,10 +78,7 @@ impl WebAuthnCredential {
 
 pub(super) enum PreparedCredential {
     Legacy(Box<WebAuthnCredential>),
-    Native {
-        public_key: Vec<u8>,
-        transports: Option<Vec<Utf16String>>,
-    },
+    Native { public_key: Vec<u8> },
 }
 
 impl PreparedCredential {
@@ -101,10 +98,11 @@ impl PreparedCredential {
                     storage,
                 })))
             }
-            PasskeyStorage::Native => Ok(Self::Native {
-                public_key: decode_public_key(passkey.public_key())?,
-                transports: parse_transports_csv(passkey.transports())?,
-            }),
+            PasskeyStorage::Native => {
+                let public_key = decode_public_key(passkey.public_key())?;
+                let _ = split_transports(passkey.transports())?;
+                Ok(Self::Native { public_key })
+            }
         }
     }
 
@@ -115,10 +113,7 @@ impl PreparedCredential {
     ) -> AuthResult<WebAuthnCredential> {
         match self {
             Self::Legacy(credential) => Ok(*credential),
-            Self::Native {
-                public_key,
-                transports,
-            } => {
+            Self::Native { public_key } => {
                 let public_key: serde_cbor_2::Value = serde_cbor_2::from_slice(&public_key)
                     .map_err(|error| {
                         AuthError::internal(format!("Invalid passkey public key CBOR: {error}"))
@@ -142,15 +137,8 @@ impl PreparedCredential {
                         }
                         _ => 0,
                     },
-                    transports: transports
-                        .map(|values| values.into_iter().map(|value| {
-                            // Transports are hints; unknown UTF-16 values do not affect signature verification.
-                            match value.to_utf8() {
-                                Ok(value) => serde_json::from_value(serde_json::Value::String(value)),
-                                Err(_) => Ok(webauthn_rs_core::proto::AuthenticatorTransport::Unknown),
-                            }
-                        }).collect::<Result<Vec<_>, serde_json::Error>>())
-                        .transpose()?,
+                    // SimpleWebAuthn evaluates split but does not consume transport hints during verification.
+                    transports: None,
                     // Native storage has no historical UV or attestation metadata. Authentication
                     // uses the same explicit policy as Legacy and verifies the current assertion.
                     user_verified: false,

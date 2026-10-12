@@ -101,14 +101,20 @@ async fn native_scrypt_invokes_split_and_retains_its_values_until_kdf_comparison
             ),
         }
     }
-    for hash in [
-        FieldValue::from(17),
-        FieldMap::new().into(),
-        FieldMap::from([("split".into(), false.into())]).into(),
+    for (hash, description) in [
+        (FieldValue::from(17), "undefined"),
+        (FieldMap::new().into(), "undefined"),
+        (
+            FieldMap::from([("split".into(), false.into())]).into(),
+            "false",
+        ),
     ] {
+        let expected = format!(
+            "hash.split is not a function. (In 'hash.split(\":\")', 'hash.split' is {description})"
+        );
         assert!(
             matches!(ScryptPasswordHasher.verify_native(&hash, "Password123!").await,
-            Err(AuthError::TypeError(message)) if message == "hash.split is not a function")
+            Err(AuthError::TypeError(message)) if message == expected)
         );
     }
     let key = super::algorithms::ScryptPasswordHasher

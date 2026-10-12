@@ -2,16 +2,14 @@ use base64::{
     Engine,
     engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig},
 };
-use better_auth_core::{
-    AuthError, AuthPasskey, AuthResult, FieldMap, FieldValue, SchemaValue, Utf16String,
-};
+use better_auth_core::{AuthError, AuthPasskey, AuthResult, FieldMap, FieldValue, SchemaValue};
 use webauthn_rs_core::proto::CredentialID;
 
-use super::webauthn::parse_transports_csv;
+use super::webauthn::split_transports;
 
 pub(super) struct CredentialDescriptor {
     id: String,
-    transports: Option<Vec<Utf16String>>,
+    transports: FieldValue,
 }
 
 impl CredentialDescriptor {
@@ -37,16 +35,7 @@ impl CredentialDescriptor {
     pub(super) fn into_value(self) -> FieldValue {
         FieldMap::from([
             ("id".into(), self.id.into()),
-            (
-                "transports".into(),
-                self.transports.map_or(FieldValue::Undefined, |values| {
-                    values
-                        .into_iter()
-                        .map(FieldValue::from)
-                        .collect::<Vec<_>>()
-                        .into()
-                }),
-            ),
+            ("transports".into(), self.transports),
             ("type".into(), "public-key".into()),
         ])
         .into()
@@ -63,7 +52,7 @@ pub(super) fn credential_descriptors(
         .map(|passkey| {
             Ok((
                 passkey.credential_id().field_value(),
-                parse_transports_csv(passkey.transports())?,
+                split_transports(passkey.transports())?,
             ))
         })
         .collect::<AuthResult<Vec<_>>>()?;

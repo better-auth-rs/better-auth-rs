@@ -9,8 +9,8 @@
     reason = "Frozen graphs define complete descriptors, native aliases, and callback identities."
 )]
 
-use crate::native_test_observation::{NativeObservation, assert_replay};
-use crate::{AuthResult, FieldProperty, FieldValue};
+use super::native_test_observation::{NativeObservation, assert_replay};
+use super::{AuthResult, FieldProperty, FieldValue};
 use serde_json::{Value as Json, json};
 
 #[derive(Default)]
@@ -147,7 +147,10 @@ impl PropertyGraph {
         Ok(())
     }
 
-    pub(crate) fn finish(mut self, functions: &Json, path: &str) -> Vec<String> {
+    pub(crate) fn finish(mut self, functions: Option<&Json>, path: &str) -> Vec<String> {
+        let Some(functions) = functions else {
+            return self.unpaired;
+        };
         let functions = functions.as_array().unwrap();
         assert_eq!(
             self.observer.function_ids(),

@@ -482,3 +482,6 @@ async fn native_and_http_siwe_errors_preserve_api_errors_and_nonce_consumption()
     }
     Ok(())
 }
+
+#[path = "email_claim_tests.rs"]
+mod email_claim_tests;

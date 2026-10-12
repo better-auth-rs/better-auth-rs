@@ -6,6 +6,78 @@ use crate::{
     query::{field_compare, field_date, field_number},
 };
 
+#[cfg(test)]
+#[path = "api_key_usage/rate_limit_tests.rs"]
+mod rate_limit_tests;
+
+/// A rate-limit decision before database guards or cache mutations execute.
+#[doc(hidden)]
+#[derive(Debug, Clone)]
+pub enum ApiKeyRateLimitDecision {
+    Skip(Option<DateTime<Utc>>),
+    Deny {
+        try_again_in: f64,
+    },
+    Start {
+        previous_before: Option<FieldDate>,
+        at: DateTime<Utc>,
+    },
+    Increment {
+        previous_after: FieldDate,
+        maximum: FieldValue,
+        at: DateTime<Utc>,
+    },
+}
+
+impl ApiKeyRateLimitDecision {
+    /// Evaluate without writes, preserving upstream primitive conversion order.
+    pub fn evaluate(row: &ApiKey, rate_enabled: bool, now: DateTime<Utc>) -> AuthResult<Self> {
+        let last_request = row.last_request.field_value();
+        let window = row.rate_limit_time_window.field_value();
+        let maximum = row.rate_limit_max.field_value();
+        if !rate_enabled
+            || row
+                .rate_limit_enabled
+                .field_value()
+                .strict_equals(&false.into())
+        {
+            return Ok(Self::Skip(Some(now)));
+        }
+        if window.is_null() || maximum.is_null() {
+            return Ok(Self::Skip(None));
+        }
+        if last_request.is_null() {
+            return Ok(Self::Start {
+                previous_before: None,
+                at: now,
+            });
+        }
+        let milliseconds = now.timestamp_millis() as f64;
+        let elapsed = milliseconds - field_date(&last_request)?.milliseconds();
+        if field_compare(&elapsed.into(), &window)? == Some(std::cmp::Ordering::Greater) {
+            return Ok(Self::Start {
+                previous_before: Some(FieldDate::from_milliseconds(
+                    milliseconds - field_number(&window)?,
+                )),
+                at: now,
+            });
+        }
+        if matches!(
+            field_compare(&row.request_count.field_value(), &maximum)?,
+            Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater)
+        ) {
+            return Ok(Self::Deny {
+                try_again_in: (field_number(&window)? - elapsed).ceil(),
+            });
+        }
+        Ok(Self::Increment {
+            previous_after: FieldDate::from_milliseconds(milliseconds - field_number(&window)?),
+            maximum,
+            at: now,
+        })
+    }
+}
+
 /// A single guarded counter write or timestamp update for API key verification.
 #[derive(Debug, Clone)]
 pub enum ApiKeyUsageWrite {
@@ -113,55 +185,36 @@ pub(super) async fn consume(
     }
 
     loop {
-        let now = Utc::now();
-        if !rate_enabled
-            || row
-                .rate_limit_enabled
-                .field_value()
-                .strict_equals(&false.into())
-        {
-            if let Some(updated) = store
-                .write_api_key_usage(&row.id, ApiKeyUsageWrite::LastRequest(now))
-                .await?
-            {
-                row = updated;
-            }
-            break;
-        }
-        let window = row.rate_limit_time_window.field_value();
-        let maximum = row.rate_limit_max.field_value();
-        if window.is_null() || maximum.is_null() {
-            break;
-        }
-        let last_request = row.last_request.field_value();
-        let mutation = if last_request.is_null() {
-            ApiKeyUsageWrite::StartWindow {
-                previous_before: None,
-                at: now,
-            }
-        } else {
-            let elapsed = now.timestamp_millis() as f64 - field_date(&last_request)?.milliseconds();
-            let window = field_number(&window)?;
-            let cutoff = FieldDate::from_milliseconds(now.timestamp_millis() as f64 - window);
-            if elapsed > window {
-                ApiKeyUsageWrite::StartWindow {
-                    previous_before: Some(cutoff),
-                    at: now,
+        let mutation = match ApiKeyRateLimitDecision::evaluate(&row, rate_enabled, Utc::now())? {
+            ApiKeyRateLimitDecision::Skip(last_request) => {
+                if let Some(at) = last_request
+                    && let Some(updated) = store
+                        .write_api_key_usage(&row.id, ApiKeyUsageWrite::LastRequest(at))
+                        .await?
+                {
+                    row = updated;
                 }
-            } else if matches!(
-                field_compare(&row.request_count.field_value(), &maximum)?,
-                Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater)
-            ) {
-                return Ok(ConsumeApiKeyResult::RateLimited {
-                    try_again_in: (window - elapsed).ceil(),
-                });
-            } else {
-                ApiKeyUsageWrite::IncrementWindow {
-                    previous_after: cutoff,
-                    maximum,
-                    at: now,
-                }
+                break;
             }
+            ApiKeyRateLimitDecision::Deny { try_again_in } => {
+                return Ok(ConsumeApiKeyResult::RateLimited { try_again_in });
+            }
+            ApiKeyRateLimitDecision::Start {
+                previous_before,
+                at,
+            } => ApiKeyUsageWrite::StartWindow {
+                previous_before,
+                at,
+            },
+            ApiKeyRateLimitDecision::Increment {
+                previous_after,
+                maximum,
+                at,
+            } => ApiKeyUsageWrite::IncrementWindow {
+                previous_after,
+                maximum,
+                at,
+            },
         };
         if let Some(updated) = store.write_api_key_usage(&row.id, mutation).await? {
             row = updated;

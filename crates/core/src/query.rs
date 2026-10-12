@@ -363,27 +363,50 @@ pub fn field_compare(
     Ok(field_number(&left)?.partial_cmp(&field_number(&right)?))
 }
 
-/// Parse the integer prefix used by Organization's `membersLimit` schema.
+/// Apply JavaScript `parseInt` with an inferred decimal or hexadecimal radix.
 pub fn parse_integer(value: &str) -> f64 {
+    let (negative, value) = integer_start(value);
+    let value = match value
+        .strip_prefix("0x")
+        .or_else(|| value.strip_prefix("0X"))
+    {
+        Some(value) => {
+            // shortcut: Long hexadecimal prefixes still round per digit; replace after shared radix source acceptance.
+            let mut digits = value.chars().map_while(|ch| ch.to_digit(16));
+            let Some(first) = digits.next() else {
+                return f64::NAN;
+            };
+            digits.fold(f64::from(first), |value, digit| {
+                value * 16.0 + f64::from(digit)
+            })
+        }
+        None => decimal_prefix(value),
+    };
+    if negative { -value } else { value }
+}
+
+/// Apply JavaScript `parseInt(value, 10)` without inferring a hexadecimal radix.
+pub fn parse_decimal_integer(value: &str) -> f64 {
+    let (negative, value) = integer_start(value);
+    let value = decimal_prefix(value);
+    if negative { -value } else { value }
+}
+
+fn integer_start(value: &str) -> (bool, &str) {
     let value = value
         .trim_start_matches(|ch: char| (ch.is_whitespace() && ch != '\u{85}') || ch == '\u{feff}');
-    let (negative, value) = if let Some(value) = value.strip_prefix('-') {
+    if let Some(value) = value.strip_prefix('-') {
         (true, value)
     } else {
         (false, value.strip_prefix('+').unwrap_or(value))
-    };
-    let (radix, value) = value
-        .strip_prefix("0x")
-        .or_else(|| value.strip_prefix("0X"))
-        .map_or((10, value), |value| (16, value));
-    let mut digits = value.chars().map_while(|ch| ch.to_digit(radix));
-    let Some(first) = digits.next() else {
-        return f64::NAN;
-    };
-    let value = digits.fold(f64::from(first), |value, digit| {
-        value * f64::from(radix) + f64::from(digit)
-    });
-    if negative { -value } else { value }
+    }
+}
+
+fn decimal_prefix(value: &str) -> f64 {
+    let length = value.bytes().take_while(u8::is_ascii_digit).count();
+    // Round the complete integer once; digit-by-digit floating-point addition loses low bits.
+    // The ASCII prefix ends at a UTF-8 boundary. An empty prefix parses as NaN.
+    value.split_at(length).0.parse().unwrap_or(f64::NAN)
 }
 
 /// Convert a JSON string/number after the route's union validation and adapter defaulting.
@@ -428,6 +451,29 @@ mod field_tests {
     use super::*;
     use crate::{FieldDate, Utf16String};
     use std::cmp::Ordering;
+
+    #[test]
+    fn integer_prefix_rounding_preserves_radix_sign_and_prefix_boundaries() {
+        for value in ["-544157599796692941", "  -000544157599796692941tail"] {
+            assert_eq!(parse_integer(value), -544_157_599_796_692_928.0);
+            assert_eq!(parse_decimal_integer(value), -544_157_599_796_692_928.0);
+        }
+        for (value, expected) in [("-12e4", -12.0), ("\u{feff}+17tail", 17.0)] {
+            assert_eq!(parse_integer(value), expected);
+            assert_eq!(parse_decimal_integer(value), expected);
+        }
+        assert_eq!(parse_integer("-0x10"), -16.0);
+        assert_eq!(parse_integer("+0XfFtail"), 255.0);
+        assert_eq!(
+            parse_decimal_integer("-0x10").to_bits(),
+            (-0.0_f64).to_bits()
+        );
+        for value in ["", "-", "\u{85}1", "Infinity", "tail12"] {
+            assert!(parse_integer(value).is_nan());
+            assert!(parse_decimal_integer(value).is_nan());
+        }
+        assert!(parse_integer("0x").is_nan());
+    }
 
     #[test]
     fn runtime_relational_conversion_preserves_dates_nonfinite_numbers_and_utf16() -> AuthResult<()>

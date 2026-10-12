@@ -267,17 +267,8 @@ impl SiwePlugin {
                         expires_at: (Utc::now() + Duration::minutes(1)).into(),
                         ..Default::default()
                     })
-                    .await;
-                let reserved = match reserved {
-                    Ok(reserved) => reserved,
-                    Err(cause) => {
-                        better_auth_core::observability::logger::current().warn(
-                            "SIWE email reservation failed; using wallet placeholder email",
-                            &[better_auth_core::observability::LogArgument::Error(&cause)],
-                        )?;
-                        false
-                    }
-                };
+                    .await
+                    .unwrap_or(false);
                 if reserved {
                     email_claim = Some(identifier);
                     if ctx.database.get_user_by_email(email).await?.is_none() {
@@ -299,30 +290,30 @@ impl SiwePlugin {
                 req.input_field_value()?,
                 ctx,
             );
-            let created =
-                super::user_admission::create_user_optional(create.clone(), "siwe", &endpoint)
-                    .await;
-            let created = match created {
-                Err(error) if supplied_email.as_deref() == Some(user_email.as_str()) => {
-                    if ctx.database.get_user_by_email(&user_email).await?.is_some() {
-                        create.email = Some(wallet_email);
-                        super::user_admission::create_user_optional(create, "siwe", &endpoint).await
-                    } else {
-                        Err(error)
+            let created = async {
+                let created =
+                    super::user_admission::create_user_optional(create.clone(), "siwe", &endpoint)
+                        .await;
+                match created {
+                    Err(error) if supplied_email.as_deref() == Some(user_email.as_str()) => {
+                        if ctx.database.get_user_by_email(&user_email).await?.is_some() {
+                            create.email = Some(wallet_email);
+                            super::user_admission::create_user_optional(create, "siwe", &endpoint)
+                                .await
+                        } else {
+                            Err(error)
+                        }
                     }
+                    result => result,
                 }
-                result => result,
-            };
-            if let Some(identifier) = email_claim
-                && let Err(cause) = ctx
+            }
+            .await;
+            if let Some(identifier) = email_claim {
+                // Upstream suppresses cleanup errors after both creation and the conflict-retry lookup.
+                let _ = ctx
                     .database
                     .consume_verification_by_identifier(&identifier)
-                    .await
-            {
-                better_auth_core::observability::logger::current().warn(
-                    "SIWE email reservation cleanup failed",
-                    &[better_auth_core::observability::LogArgument::Error(&cause)],
-                )?;
+                    .await;
             }
             created?.ok_or_else(|| {
                 AuthError::internal("Cannot read properties of null (reading 'id')")

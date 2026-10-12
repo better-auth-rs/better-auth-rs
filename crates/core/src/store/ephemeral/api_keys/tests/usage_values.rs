@@ -281,3 +281,73 @@ async fn atomic_usage_finishes_guard_evaluation_before_any_write() -> AuthResult
     assert_eq!(store.plugin_storage_rows(EntityRole::ApiKey)?, before);
     Ok(())
 }
+
+#[tokio::test]
+async fn rate_window_conversion_failure_preserves_the_prior_quota_write() -> AuthResult<()> {
+    let mut store = EphemeralStore::default();
+    let key = store.create_api_key(input()).await?;
+    let _ = store
+        .update_api_key_record(
+            &key.id,
+            [(
+                "lastRequest".into(),
+                FieldDate::from_milliseconds(0.0).into(),
+            )]
+            .into(),
+        )
+        .await?;
+    let original = FieldValue::from(FieldMap::from([("cause".into(), "window".into())]));
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let window = FieldValue::from(FieldMap::from([(
+        "valueOf".into(),
+        crate::FieldFunction::contextual({
+            let calls = calls.clone();
+            let original = original.clone();
+            move |_, _| {
+                if calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                    Ok(f64::INFINITY.into())
+                } else {
+                    Err(AuthError::from_thrown(original.clone()))
+                }
+            }
+        })
+        .into(),
+    )]));
+    store.model_fields.register(
+        EntityRole::ApiKey,
+        UserConfig {
+            additional_fields: Some(
+                [(
+                    "rateLimitTimeWindow".into(),
+                    UserFieldConfig {
+                        field_type: UserFieldType::Number,
+                        transform: Some(FieldTransforms {
+                            output: Some(UserFieldTransform::new(move |_| Ok(window.clone()))),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    },
+                )]
+                .into(),
+            ),
+        },
+    );
+    let mut expected = only_row(&store)?;
+    let error = match consume(&store, &key.id, true).await {
+        Err(error) => error,
+        Ok(_) => {
+            return Err(AuthError::internal(
+                "The second window conversion must fail",
+            ));
+        }
+    };
+    assert!(
+        error
+            .raw_value()
+            .is_some_and(|value| value.strict_equals(&original))
+    );
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+    let _ = expected.insert("remaining".into(), 2.0.into());
+    assert_eq!(only_row(&store)?, expected);
+    Ok(())
+}

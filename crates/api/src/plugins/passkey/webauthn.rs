@@ -348,26 +348,18 @@ pub(super) fn extract_registration_metadata(
     })
 }
 
-pub(super) fn parse_transports_csv(
+pub(super) fn split_transports(
     transports: &better_auth_core::SchemaValue<Option<String>>,
-) -> AuthResult<Option<Vec<better_auth_core::Utf16String>>> {
+) -> AuthResult<better_auth_core::FieldValue> {
     let value = transports.field_value();
-    match value {
-        better_auth_core::FieldValue::Null | better_auth_core::FieldValue::Undefined => Ok(None),
-        better_auth_core::FieldValue::String(value) => Ok(Some(
-            value
-                .split(',')
-                .map(better_auth_core::Utf16String::from)
-                .collect(),
-        )),
-        better_auth_core::FieldValue::Utf16String(value) => Ok(Some(
-            value
-                .as_utf16()
-                .split(|unit| *unit == u16::from(b','))
-                .map(|units| better_auth_core::Utf16String::from_units(units.to_vec()))
-                .collect(),
-        )),
-        _ => Err(AuthError::internal("transports.split is not a function")),
+    if value.is_null() || value.is_undefined() {
+        Ok(better_auth_core::FieldValue::Undefined)
+    } else {
+        value.split_method(
+            &",".into(),
+            "passkey.transports?",
+            "passkey.transports?.split(\",\")",
+        )
     }
 }
 

@@ -129,7 +129,13 @@ impl FieldValue {
     }
 
     /// Invoke `split(separator)` without narrowing a custom method's return value.
-    pub fn split_method(&self, separator: &Self, expression: &str) -> AuthResult<Self> {
+    /// `call_source` supplies the source expression without converting the separator for diagnostics.
+    pub fn split_method(
+        &self,
+        separator: &Self,
+        expression: &str,
+        call_source: &str,
+    ) -> AuthResult<Self> {
         match (self, self.method_property("split")?) {
             (_, Some(Self::Function(method))) => {
                 method.call_with(self, std::slice::from_ref(separator))
@@ -174,9 +180,9 @@ impl FieldValue {
                 );
                 Ok(Self::from(parts))
             }
-            _ => Err(AuthError::type_error(format!(
-                "{expression}.split is not a function"
-            ))),
+            (_, method) => Err(method
+                .unwrap_or_default()
+                .not_callable(&format!("{expression}.split"), call_source)),
         }
     }
 }
@@ -260,7 +266,7 @@ mod tests {
             Utf16String::from_units(vec![58, 0xdc00, 58]).into()
         );
         assert_eq!(
-            text.split_method(&":".into(), "input")?
+            text.split_method(&":".into(), "input", "input.split(\":\")")?
                 .model_property("0")?,
             Utf16String::from_units(vec![0xd800]).into()
         );
@@ -306,7 +312,7 @@ mod tests {
             let actual = match name {
                 "lastIndexOf" => input.last_index_of_method(&":".into(), "input")?,
                 "slice" => input.slice_method(&0.into(), None, "input")?,
-                _ => input.split_method(&":".into(), "input")?,
+                _ => input.split_method(&":".into(), "input", "input.split(\":\")")?,
             };
             assert!(actual.strict_equals(&result));
         }

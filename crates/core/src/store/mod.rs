@@ -1,5 +1,5 @@
 mod api_key_usage;
-pub use api_key_usage::ApiKeyUsageWrite;
+pub use api_key_usage::{ApiKeyRateLimitDecision, ApiKeyUsageWrite};
 
 use async_trait::async_trait;
 use std::any::Any;

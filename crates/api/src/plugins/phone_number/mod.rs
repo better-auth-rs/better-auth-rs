@@ -235,9 +235,11 @@ impl PhoneNumberPlugin {
                 "OTP expired",
             ));
         }
-        let parts = existing
-            .model_property("value")?
-            .split_method(&":".into(), "existing.value")?;
+        let parts = existing.model_property("value")?.split_method(
+            &":".into(),
+            "existing.value",
+            "existing.value.split(\":\")",
+        )?;
         if attempts(&parts.model_property("1")?)? >= self.allowed_attempts as f64 {
             native::delete_verification(endpoint, identifier).await?;
             return Err(AuthError::from_code(
@@ -262,7 +264,7 @@ impl PhoneNumberPlugin {
         let consumed = FieldValue::from(consumed.fields()?);
         let [expected, raw_attempts] = consumed
             .model_property("value")?
-            .split_method(&":".into(), "consumed.value")?
+            .split_method(&":".into(), "consumed.value", "consumed.value.split(\":\")")?
             .destructure("consumed.value.split(\":\")")?;
         let count = attempts(&raw_attempts)?;
         if count >= self.allowed_attempts as f64 {

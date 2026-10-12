@@ -180,24 +180,25 @@ pub(super) fn split_otp_record(value: &FieldValue) -> AuthResult<(FieldValue, f6
     if value.is_null() || value.is_undefined() {
         return Ok((FieldValue::Undefined, 0.0));
     }
-    let units = better_auth_core::query::field_string_units(value)
-        .ok_or_else(|| AuthError::internal("consumed.value?.split is not a function"))?;
-    let mut parts = units.split(|unit| *unit == u16::from(b':'));
-    let otp =
-        better_auth_core::Utf16String::from_units(parts.next().unwrap_or_default().to_vec()).into();
-    let counter = String::from_utf16_lossy(parts.next().unwrap_or_default());
-    let counter = counter
-        .trim_start_matches(|ch: char| (ch.is_whitespace() && ch != '\u{85}') || ch == '\u{feff}');
-    let (sign, counter) = if let Some(counter) = counter.strip_prefix('-') {
-        (-1.0, counter)
-    } else {
-        (1.0, counter.strip_prefix('+').unwrap_or(counter))
-    };
-    let count = counter
-        .bytes()
-        .take_while(u8::is_ascii_digit)
-        .fold(0.0, |count, byte| count * 10.0 + f64::from(byte - b'0'));
-    Ok((otp, sign * count))
+    let parts = value.split_method(
+        &":".into(),
+        "consumed.value?",
+        "consumed.value?.split(\":\")",
+    )?;
+    if parts.is_null() || parts.is_undefined() {
+        return Ok((FieldValue::Undefined, 0.0));
+    }
+    let [otp, counter] = parts.destructure("consumed.value?.split(\":\")")?;
+    let counter = String::from_utf16_lossy(counter.display_utf16()?.as_utf16());
+    let counter = better_auth_core::query::parse_decimal_integer(&counter);
+    Ok((
+        otp,
+        if counter.is_nan() || counter == 0.0 {
+            0.0
+        } else {
+            counter
+        },
+    ))
 }
 
 pub(super) fn two_factor_cookie_max_age(

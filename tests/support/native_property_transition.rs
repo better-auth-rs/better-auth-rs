@@ -61,7 +61,7 @@ impl<'a> Transition<'a> {
             &format!("{}/events", self.path),
         );
         self.graph.finish(
-            &self.expected["functions"],
+            Some(&self.expected["functions"]),
             &format!("{}/functions", self.path),
         )
     }
