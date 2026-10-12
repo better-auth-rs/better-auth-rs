@@ -109,7 +109,7 @@ async function captureCase(mode) {
   });
   let result;
   let caught;
-  try { result = await auth.api.verifySiweMessage({ request, body }); }
+  try { result = await auth.api.verifySiweMessage({ request, body, asResponse: false }); }
   catch (error) {
     if (error instanceof assert.AssertionError) throw error;
     caught = error;
