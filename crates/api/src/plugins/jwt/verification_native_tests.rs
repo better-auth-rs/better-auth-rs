@@ -1,4 +1,8 @@
 #![expect(
+    clippy::indexing_slicing,
+    reason = "Fixture indexing must fail when an expected record or property is missing."
+)]
+#![expect(
     clippy::unwrap_used,
     clippy::panic_in_result_fn,
     reason = "JWT consumer contracts assert complete access order, receiver identity, and original logged errors."

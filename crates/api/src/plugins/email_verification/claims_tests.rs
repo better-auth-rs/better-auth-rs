@@ -1,4 +1,8 @@
 #![expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+#![expect(
     clippy::expect_used,
     reason = "The paired JWT contract fails immediately when captured cases or signed claims are incomplete"
 )]

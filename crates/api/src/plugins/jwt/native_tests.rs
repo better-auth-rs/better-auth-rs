@@ -1,3 +1,7 @@
+#![expect(
+    clippy::indexing_slicing,
+    reason = "Fixture indexing must fail when an expected record or property is missing."
+)]
 #![allow(
     clippy::expect_used,
     reason = "Fixture setup and response assertions require successful fallible construction."

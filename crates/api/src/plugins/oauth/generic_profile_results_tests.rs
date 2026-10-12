@@ -1,3 +1,7 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
 #![allow(
     clippy::expect_used,
     reason = "Fixture setup and response assertions require successful fallible construction."

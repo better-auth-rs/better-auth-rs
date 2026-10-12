@@ -1,6 +1,6 @@
 #![expect(
-    clippy::panic_in_result_fn,
-    reason = "Contract assertions identify callback order and transaction rollback regressions."
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
 )]
 
 use super::invitation::accept_invitation_core;

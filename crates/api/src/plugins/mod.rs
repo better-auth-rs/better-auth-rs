@@ -42,6 +42,11 @@ pub(crate) struct StatusResponse {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
 pub(crate) mod test_helpers {
     use better_auth_core as __private_core;
     #[path = "../../../../../tests/support/secondary_native_observation.rs"]

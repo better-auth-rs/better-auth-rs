@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
+
 use super::{
     OAuthProvider, OAuthTokenSet, OAuthUserInfoRequest,
     authorization::{AuthorizationRequest, build_authorization_url},

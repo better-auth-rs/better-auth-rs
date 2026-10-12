@@ -1,3 +1,8 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+
 use super::*;
 use crate::plugins::test_helpers::native_sort_contract::{
     Harness, assert_case, cases, getter_cases,

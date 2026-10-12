@@ -1,4 +1,8 @@
 #![expect(
+    clippy::panic,
+    reason = "Unexpected fixture variants and deliberate callback panics must fail or exercise the recorded unwind path."
+)]
+#![expect(
     clippy::unwrap_used,
     clippy::indexing_slicing,
     reason = "Contract tests fail immediately when a captured fixture or provider result changes."

@@ -223,6 +223,10 @@ impl<S: AuthSchema> AuthPlugin<S> for CustomSessionPlugin<S> {
 mod runtime_tests;
 
 #[cfg(test)]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
 mod tests {
     use super::*;
     use better_auth_core::{FieldDate, FieldMap};

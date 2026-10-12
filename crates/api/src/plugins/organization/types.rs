@@ -411,6 +411,10 @@ impl MemberResponse {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
 mod tests {
     use super::{
         CreateOrganizationRequest, GetFullOrganizationQuery, NullableStringField,

@@ -1,4 +1,9 @@
 #![expect(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    reason = "Required fixture operations must succeed before comparing the contract. Fixture indexing must fail when an expected record or property is missing."
+)]
+#![expect(
     clippy::unwrap_used,
     clippy::panic_in_result_fn,
     reason = "The native verification regressions assert complete callback, storage, and read-order results"

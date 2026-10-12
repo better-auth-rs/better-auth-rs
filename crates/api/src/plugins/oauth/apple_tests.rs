@@ -1,3 +1,8 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+
 use super::google_test_support::GoogleFixture;
 use super::*;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};

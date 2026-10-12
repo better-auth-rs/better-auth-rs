@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
+
 use super::*;
 use crate::plugins::organization::OrganizationPlugin;
 use crate::plugins::test_helpers::{

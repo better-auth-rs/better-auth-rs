@@ -1,3 +1,10 @@
+#![expect(
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract. Fixture indexing must fail when an expected record or property is missing. Unexpected fixture variants and deliberate callback panics must fail or exercise the recorded unwind path."
+)]
+
 use josekit::{jwk::Jwk, jws::JwsHeader};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};

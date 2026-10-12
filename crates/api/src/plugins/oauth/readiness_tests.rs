@@ -1,3 +1,7 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
 #![allow(
     clippy::expect_used,
     reason = "Fixture setup and response assertions require successful fallible construction."

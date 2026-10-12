@@ -1,4 +1,8 @@
 #![expect(
+    clippy::expect_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
+#![expect(
     clippy::unwrap_used,
     clippy::panic_in_result_fn,
     reason = "Email OTP regressions assert native callback, cookie, and storage values while setup errors propagate"

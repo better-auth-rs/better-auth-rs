@@ -1,3 +1,10 @@
+#![expect(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract. Fixture indexing must fail when an expected record or property is missing."
+)]
+
 use better_auth_core::types::{CreateOrganization, CreateUser, HttpMethod};
 use chrono::Duration;
 

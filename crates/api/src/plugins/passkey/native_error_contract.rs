@@ -1,3 +1,7 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
 // Full adapter/internal event traces remain unpaired. The observer documents separate JavaScript
 // host metadata, header-symbol reflection, and typed callback representation boundaries.
 #![expect(

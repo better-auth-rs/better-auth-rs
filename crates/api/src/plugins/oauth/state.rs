@@ -293,6 +293,10 @@ pub(super) fn reserved_state_key(key: &str) -> bool {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
 mod raw_state_tests {
     use super::*;
 
@@ -324,6 +328,11 @@ mod raw_state_tests {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::indexing_slicing,
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract. Fixture indexing must fail when an expected record or property is missing."
+)]
 mod cookie_lifetime_tests {
     use super::*;
 

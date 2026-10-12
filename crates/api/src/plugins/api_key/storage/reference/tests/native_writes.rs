@@ -1,3 +1,8 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+
 use super::*;
 use better_auth_core::{FieldArray, FieldFunction, FieldObject, FromFieldMap};
 use std::sync::atomic::{AtomicUsize, Ordering};

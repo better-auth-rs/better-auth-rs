@@ -1,3 +1,8 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+
 use super::OAuthProvider;
 use super::authorization::{AuthorizationRequest, build_authorization_url};
 use super::resolved::ResolvedProvider;

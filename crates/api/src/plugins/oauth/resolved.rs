@@ -261,6 +261,10 @@ async fn resolve_generic(
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::panic,
+    reason = "Unexpected fixture variants and deliberate callback panics must fail or exercise the recorded unwind path."
+)]
 mod tests {
     use super::*;
 

@@ -151,6 +151,10 @@ fn validate_header(header: &verification::Header, signing: bool) -> AuthResult<(
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
 mod tests {
     use super::*;
 

@@ -327,6 +327,10 @@ fn callback_params(value: &FieldValue) -> AuthResult<Result<FieldValue, AuthErro
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
 mod tests {
     use super::*;
 

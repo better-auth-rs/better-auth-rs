@@ -1,3 +1,9 @@
+#![expect(
+    clippy::indexing_slicing,
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract. Fixture indexing must fail when an expected record or property is missing."
+)]
+
 use super::{google, google_test_support::GoogleFixture, *};
 use crate::plugins::test_helpers;
 use better_auth_core::{AuthPlugin, AuthUser, wire::UserView};

@@ -1,3 +1,7 @@
+#![expect(
+    clippy::panic,
+    reason = "Unexpected fixture variants and deliberate callback panics must fail or exercise the recorded unwind path."
+)]
 #![allow(
     clippy::expect_used,
     reason = "Fixture setup and response assertions require successful fallible construction."

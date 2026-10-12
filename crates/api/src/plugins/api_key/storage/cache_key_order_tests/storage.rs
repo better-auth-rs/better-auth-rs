@@ -1,3 +1,8 @@
+#![expect(
+    clippy::indexing_slicing,
+    reason = "Fixture indexing must fail when an expected record or property is missing."
+)]
+
 use super::*;
 use async_trait::async_trait;
 use better_auth_core::store::SecondaryStorageFuture;

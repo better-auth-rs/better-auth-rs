@@ -1,3 +1,8 @@
+#![expect(
+    clippy::panic,
+    reason = "Unexpected fixture variants and deliberate callback panics must fail or exercise the recorded unwind path."
+)]
+
 use super::*;
 
 fn function(

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::indexing_slicing,
+    reason = "Fixture indexing must fail when an expected record or property is missing."
+)]
+
 //! Paired native input contracts retain the endpoint runtime after getter, conversion, and setter failures.
 
 #![expect(

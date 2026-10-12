@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
+
 use better_auth_core::{AuthPlugin, AuthRequest, AuthResponse, HttpMethod};
 use serde_json::{Value, json};
 

@@ -1,4 +1,9 @@
 #![expect(
+    clippy::indexing_slicing,
+    clippy::panic,
+    reason = "Fixture indexing must fail when an expected record or property is missing. Unexpected fixture variants and deliberate callback panics must fail or exercise the recorded unwind path."
+)]
+#![expect(
     clippy::unwrap_used,
     clippy::panic_in_result_fn,
     reason = "Paired JWT option contracts assert exact native identities, callback order, and stored records."

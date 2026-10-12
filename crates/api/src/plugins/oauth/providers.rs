@@ -560,6 +560,10 @@ impl OAuthProvider {
     }
 
     #[cfg(test)]
+    #[expect(
+        clippy::panic,
+        reason = "Unexpected fixture variants and deliberate callback panics must fail or exercise the recorded unwind path."
+    )]
     pub(super) fn set_google_jwks_url(&mut self, url: String) {
         let ProviderKind::Google { jwks_url, .. } = &mut self.kind else {
             panic!("Google fixture requires a Google provider");

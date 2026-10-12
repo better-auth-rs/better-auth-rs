@@ -189,6 +189,10 @@ fn revive_dates(value: &RawValue) -> serde_json::Result<Box<RawValue>> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
 mod tests {
     use super::*;
 

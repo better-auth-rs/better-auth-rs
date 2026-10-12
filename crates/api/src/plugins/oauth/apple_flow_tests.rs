@@ -1,3 +1,8 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+
 use super::apple_tests::{Mapper, TestResult, configured, fixture, rows, text};
 use super::google_test_support::GoogleFixture;
 use super::*;

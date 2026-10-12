@@ -1,3 +1,10 @@
+#![expect(
+    clippy::panic,
+    clippy::panic_in_result_fn,
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract. Assertions report exact contract mismatches while Result propagates fixture errors. Unexpected fixture variants and deliberate callback panics must fail or exercise the recorded unwind path."
+)]
+
 use super::{SessionIssueError, issue_selected_user_session_optional, issue_user_session};
 use crate::plugins::{
     admin::AdminPlugin,

@@ -1,4 +1,8 @@
 #![expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+#![expect(
     clippy::unwrap_used,
     clippy::indexing_slicing,
     reason = "Pinned encoding contracts must fail immediately on invalid fixture shapes or callback observations."

@@ -1,3 +1,9 @@
+#![expect(
+    clippy::indexing_slicing,
+    clippy::panic_in_result_fn,
+    reason = "Fixture indexing must fail when an expected record or property is missing. Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+
 //! Replay frozen endpoint values through the shared runtime observer.
 //! JavaScript reflection and host diagnostics remain in the source fixtures and coverage ledger.
 

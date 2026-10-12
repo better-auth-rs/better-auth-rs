@@ -1,3 +1,9 @@
+#![expect(
+    clippy::expect_used,
+    clippy::panic_in_result_fn,
+    reason = "Required fixture operations must succeed before comparing the contract. Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+
 use crate::plugins::{
     email_otp::EmailOtpPlugin, email_password::EmailPasswordPlugin, magic_link::MagicLinkPlugin,
     password_management::PasswordManagementPlugin, test_helpers,

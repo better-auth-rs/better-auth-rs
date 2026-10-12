@@ -1,6 +1,5 @@
 #![expect(
     clippy::unwrap_used,
-    clippy::expect_used,
     clippy::indexing_slicing,
     reason = "Contract tests fail immediately on invalid fixture data or a changed provider result."
 )]

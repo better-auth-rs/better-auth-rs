@@ -1,3 +1,8 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+
 //! OAuth public projections run only at the response or cookie-cache boundary.
 
 use std::sync::{

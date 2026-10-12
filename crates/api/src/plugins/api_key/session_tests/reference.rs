@@ -1,3 +1,9 @@
+#![expect(
+    clippy::panic,
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract. Unexpected fixture variants and deliberate callback panics must fail or exercise the recorded unwind path."
+)]
+
 use super::*;
 use better_auth_core::{
     AuthConfig, FieldDate, FieldMap, FieldValue,

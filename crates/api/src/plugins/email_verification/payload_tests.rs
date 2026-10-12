@@ -1,4 +1,8 @@
 #![expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+#![expect(
     clippy::expect_used,
     reason = "The regression contract fails immediately on invalid JWT boundaries or incomplete fixture setup"
 )]
