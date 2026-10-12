@@ -152,3 +152,6 @@ mod native_cookie_transaction_tests;
 mod native_mutation_tests;
 #[cfg(test)]
 mod native_tests;
+
+#[cfg(test)]
+mod native_email_tests;

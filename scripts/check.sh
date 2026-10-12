@@ -1093,6 +1093,7 @@ PY_CHECK
       cargo test --locked -p better-auth-api --lib -- \
         plugins::email_verification plugins::user_management \
         plugins::organization::handlers::native_tests::native_invitation_reads_preserve_email_fallback_and_verification_order \
+        plugins::organization::handlers::native_email_tests \
         plugins::one_time_token::callback_tests::generation_error_keeps_callback_effects_without_hashing_persisting_or_final_headers || email_status=1
       bun --no-install test \
         ./compat-tests/reference-server/contracts/email-verification-duration.test.ts \
