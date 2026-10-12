@@ -59,7 +59,7 @@ run_stage() {
       cargo clippy --locked -p better-auth-seaorm --lib -- -D warnings || driver_status=1
       cargo test --locked -p better-auth-seaorm --lib -- \
         store::db_error::tests:: live_postgres_shared_column_contract postgres_protocol_tests:: \
-        increment_phase_tests:: record_write_tests:: value_predicate_tests:: \
+        increment_phase_tests:: store::record_write::tests:: store::value_predicate::tests:: \
         --include-ignored --test-threads=1 || driver_status=1
       return "$driver_status"
       ;;
