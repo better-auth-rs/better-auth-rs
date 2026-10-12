@@ -1,0 +1,55 @@
+{
+  "contract": "native-email-consumers",
+  "version": "1.7.6",
+  "status": "Two complete upstream captures are byte-identical. Rust replay is pending.",
+  "run": "38298875075",
+  "runURL": "https://github.com/better-auth-rs/better-auth-rs/actions/runs/38298875075",
+  "commit": "325f1f44a65e4f59da1d864c6279dca3857e7c74",
+  "runConclusion": "success",
+  "artifactName": "upstream-native-email-consumers-325f1f44a65e4f59da1d864c6279dca3857e7c74-1",
+  "runtime": {
+    "name": "bun",
+    "version": "1.4.2"
+  },
+  "joseVersion": "6.2.12",
+  "cases": 17,
+  "sources": [
+    {
+      "path": "compat-tests/reference-server/contracts/native-email-consumers-capture.mjs",
+      "bytes": 13084,
+      "sha256": "f46c00de03ecf383793ca212c0b48883e9d77a19b749018f0965c6ead389612f"
+    },
+    {
+      "path": "compat-tests/reference-server/contracts/native-email-consumer-source.mjs",
+      "bytes": 8571,
+      "sha256": "e12d8149bb341f8cddcbb59e02c68dab2df7b83fbbf125ac102265f27537b9ae"
+    },
+    {
+      "path": "compat-tests/reference-server/contracts/secondary-native-shared.mjs",
+      "bytes": 3625,
+      "sha256": "7f708484df4fec8a65d920d12a44fdce06278154e63b484d891f47e396b3193f"
+    },
+    {
+      "path": "compat-tests/reference-server/contracts/email-verification-duration-capture.mjs",
+      "bytes": 11739,
+      "sha256": "03d3f3001d5db30af7dabf494b20b6f41a4d939919b3cda75e5aaa96bd6bf805"
+    },
+    {
+      "path": "compat-tests/reference-server/contracts/email-verification-payload-capture.mjs",
+      "bytes": 10250,
+      "sha256": "1e08d7ee59e483ca524641de05a5fcf8c046de73b296c931254f98c634d6d0a8"
+    },
+    {
+      "path": "compat-tests/reference-server/contracts/write-observation.mjs",
+      "bytes": 209,
+      "sha256": "a84985b984fadc555eca74c8d5df5102094d37412cface23d03587f0908bd588"
+    }
+  ],
+  "fixture": {
+    "path": "tests/fixtures/native-email-consumers-1.7.6.json",
+    "bytes": 1394839,
+    "sha256": "85c9fde1912a90480a0afb241d4734e84b4a3327637cddcf05b0939983ce0087"
+  },
+  "normalizations": [],
+  "boundary": "Invoke the published email token helper and real Better Auth endpoints. Observe native method receivers, getter order, strict comparison identity, complete return values, signed payload bytes, callbacks, adapter selectors, and full Memory or SQLite storage. Preserve both backend observations without normalization. Email transport, OTP state machines, signup/signin gates, arbitrary prototype/Symbol behavior, and new sampling of existing fixtures are outside this additive batch."
+}
