@@ -1,0 +1,40 @@
+{
+  "contract": "native-property-transition",
+  "version": "1.7.6",
+  "status": "Two upstream captures are byte-identical. Rust replay is pending.",
+  "run": "38276170680",
+  "runURL": "https://github.com/better-auth-rs/better-auth-rs/actions/runs/38276170680",
+  "commit": "a1a7bff37c33d3d38ad7b77d857aa5f4206de134",
+  "runConclusion": "success",
+  "artifactName": "upstream-native-property-transition-a1a7bff37c33d3d38ad7b77d857aa5f4206de134-1",
+  "runtime": {
+    "bun": "1.4.2"
+  },
+  "observations": 10,
+  "sources": [
+    {
+      "path": "compat-tests/reference-server/contracts/native-property-transition-capture.mjs",
+      "bytes": 6325,
+      "sha256": "500e8cce2713feb7f46a3dabb2d412cf4dfbc4b1773d11bd50946c363da0f583"
+    },
+    {
+      "path": "compat-tests/reference-server/contracts/secondary-native-shared.mjs",
+      "bytes": 3625,
+      "sha256": "7f708484df4fec8a65d920d12a44fdce06278154e63b484d891f47e396b3193f"
+    },
+    {
+      "path": "compat-tests/reference-server/contracts/protected-function-shared.mjs",
+      "bytes": 20940,
+      "sha256": "4b833be668fe0e40075695641ac9593a9314a63babe98064ca4a4bf2475e7dea"
+    }
+  ],
+  "fixture": {
+    "path": "tests/fixtures/native-property-transition-1.7.6.json",
+    "bytes": 51105,
+    "sha256": "f2583ed368945ca2946d5e71475a13a39233d4d0ba87f78602e242880a254d3c",
+    "uncompressedBytes": 51105,
+    "uncompressedSha256": "f2583ed368945ca2946d5e71475a13a39233d4d0ba87f78602e242880a254d3c"
+  },
+  "normalizations": [],
+  "boundary": "Complete own-property transition graphs and callback events. SameValue records the zero sign explicitly. Prototype lookup and Symbols require separate contracts."
+}

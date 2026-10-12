@@ -1,0 +1,1669 @@
+{
+  "version": "1.7.6",
+  "runtime": {
+    "bun": "1.4.2"
+  },
+  "boundary": "Complete own-property transition graphs and callback events. SameValue records the zero sign explicitly. Prototype lookup and Symbols require separate contracts.",
+  "cases": [
+    {
+      "name": "new-property-defaults-and-redefinition",
+      "events": [],
+      "states": [
+        {
+          "phase": "default",
+          "result": true,
+          "graph": {
+            "identity": "object-1",
+            "type": "object",
+            "ownKeys": [
+              "value"
+            ],
+            "properties": [
+              [
+                "value",
+                {
+                  "enumerable": false,
+                  "configurable": false,
+                  "writable": false,
+                  "value": {
+                    "type": "undefined"
+                  }
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "phase": "rejected-mutations",
+          "result": false,
+          "graph": {
+            "identity": "object-1",
+            "type": "object",
+            "ownKeys": [
+              "value"
+            ],
+            "properties": [
+              [
+                "value",
+                {
+                  "enumerable": false,
+                  "configurable": false,
+                  "writable": false,
+                  "value": {
+                    "type": "undefined"
+                  }
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "phase": "same-undefined",
+          "result": true,
+          "graph": {
+            "identity": "object-1",
+            "type": "object",
+            "ownKeys": [
+              "value"
+            ],
+            "properties": [
+              [
+                "value",
+                {
+                  "enumerable": false,
+                  "configurable": false,
+                  "writable": false,
+                  "value": {
+                    "type": "undefined"
+                  }
+                }
+              ]
+            ]
+          }
+        }
+      ],
+      "functions": []
+    },
+    {
+      "name": "same-value-nan",
+      "events": [],
+      "states": [
+        {
+          "phase": "redefine",
+          "result": true,
+          "graph": {
+            "identity": "object-1",
+            "type": "object",
+            "ownKeys": [
+              "value"
+            ],
+            "properties": [
+              [
+                "value",
+                {
+                  "enumerable": false,
+                  "configurable": false,
+                  "writable": false,
+                  "value": {
+                    "type": "number",
+                    "value": "NaN"
+                  }
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "phase": "zero-sign",
+          "result": true,
+          "graph": {
+            "identity": "object-1",
+            "type": "object",
+            "ownKeys": [
+              "negative"
+            ],
+            "properties": [
+              [
+                "negative",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": false
+                }
+              ]
+            ]
+          }
+        }
+      ],
+      "functions": []
+    },
+    {
+      "name": "same-value-positive-zero",
+      "events": [],
+      "states": [
+        {
+          "phase": "redefine",
+          "result": false,
+          "graph": {
+            "identity": "object-1",
+            "type": "object",
+            "ownKeys": [
+              "value"
+            ],
+            "properties": [
+              [
+                "value",
+                {
+                  "enumerable": false,
+                  "configurable": false,
+                  "writable": false,
+                  "value": 0
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "phase": "zero-sign",
+          "result": true,
+          "graph": {
+            "identity": "object-1",
+            "type": "object",
+            "ownKeys": [
+              "negative"
+            ],
+            "properties": [
+              [
+                "negative",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": false
+                }
+              ]
+            ]
+          }
+        }
+      ],
+      "functions": []
+    },
+    {
+      "name": "same-value-negative-zero",
+      "events": [],
+      "states": [
+        {
+          "phase": "redefine",
+          "result": false,
+          "graph": {
+            "identity": "object-1",
+            "type": "object",
+            "ownKeys": [
+              "value"
+            ],
+            "properties": [
+              [
+                "value",
+                {
+                  "enumerable": false,
+                  "configurable": false,
+                  "writable": false,
+                  "value": 0
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "phase": "zero-sign",
+          "result": true,
+          "graph": {
+            "identity": "object-1",
+            "type": "object",
+            "ownKeys": [
+              "negative"
+            ],
+            "properties": [
+              [
+                "negative",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": true
+                }
+              ]
+            ]
+          }
+        }
+      ],
+      "functions": []
+    },
+    {
+      "name": "data-accessor-data-replacement",
+      "events": [
+        "get"
+      ],
+      "states": [
+        {
+          "phase": "accessor",
+          "result": true,
+          "graph": {
+            "identity": "object-1",
+            "type": "object",
+            "ownKeys": [
+              "object",
+              "get"
+            ],
+            "properties": [
+              [
+                "object",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": {
+                    "identity": "object-2",
+                    "type": "object",
+                    "ownKeys": [
+                      "value"
+                    ],
+                    "properties": [
+                      [
+                        "value",
+                        {
+                          "enumerable": true,
+                          "configurable": true,
+                          "get": {
+                            "identity": "object-3",
+                            "type": "function",
+                            "ownKeys": [
+                              "length",
+                              "name",
+                              "prototype"
+                            ],
+                            "properties": [
+                              [
+                                "length",
+                                {
+                                  "enumerable": false,
+                                  "configurable": true,
+                                  "writable": false,
+                                  "value": 0
+                                }
+                              ],
+                              [
+                                "name",
+                                {
+                                  "enumerable": false,
+                                  "configurable": true,
+                                  "writable": false,
+                                  "value": "getValue"
+                                }
+                              ],
+                              [
+                                "prototype",
+                                {
+                                  "enumerable": false,
+                                  "configurable": false,
+                                  "writable": true,
+                                  "value": {
+                                    "identity": "object-4",
+                                    "type": "object",
+                                    "ownKeys": [
+                                      "constructor"
+                                    ],
+                                    "properties": [
+                                      [
+                                        "constructor",
+                                        {
+                                          "enumerable": false,
+                                          "configurable": true,
+                                          "writable": true,
+                                          "value": {
+                                            "reference": "object-3"
+                                          }
+                                        }
+                                      ]
+                                    ]
+                                  }
+                                }
+                              ]
+                            ],
+                            "value": {
+                              "type": "function",
+                              "identity": "function-1"
+                            }
+                          },
+                          "set": {
+                            "type": "undefined"
+                          }
+                        }
+                      ]
+                    ]
+                  }
+                }
+              ],
+              [
+                "get",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": {
+                    "reference": "object-3"
+                  }
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "phase": "getter-only",
+          "result": false,
+          "graph": {
+            "identity": "object-1",
+            "type": "object",
+            "ownKeys": [
+              "value"
+            ],
+            "properties": [
+              [
+                "value",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "get": {
+                    "identity": "object-2",
+                    "type": "function",
+                    "ownKeys": [
+                      "length",
+                      "name",
+                      "prototype"
+                    ],
+                    "properties": [
+                      [
+                        "length",
+                        {
+                          "enumerable": false,
+                          "configurable": true,
+                          "writable": false,
+                          "value": 0
+                        }
+                      ],
+                      [
+                        "name",
+                        {
+                          "enumerable": false,
+                          "configurable": true,
+                          "writable": false,
+                          "value": "getValue"
+                        }
+                      ],
+                      [
+                        "prototype",
+                        {
+                          "enumerable": false,
+                          "configurable": false,
+                          "writable": true,
+                          "value": {
+                            "identity": "object-3",
+                            "type": "object",
+                            "ownKeys": [
+                              "constructor"
+                            ],
+                            "properties": [
+                              [
+                                "constructor",
+                                {
+                                  "enumerable": false,
+                                  "configurable": true,
+                                  "writable": true,
+                                  "value": {
+                                    "reference": "object-2"
+                                  }
+                                }
+                              ]
+                            ]
+                          }
+                        }
+                      ]
+                    ],
+                    "value": {
+                      "type": "function",
+                      "identity": "function-1"
+                    }
+                  },
+                  "set": {
+                    "type": "undefined"
+                  }
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "phase": "data",
+          "result": true,
+          "graph": {
+            "identity": "object-1",
+            "type": "object",
+            "ownKeys": [
+              "value"
+            ],
+            "properties": [
+              [
+                "value",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": false,
+                  "value": 3
+                }
+              ]
+            ]
+          }
+        }
+      ],
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "getValue",
+          "length": 0,
+          "source": "function getValue() {\n      events.push(\"get\");\n      return this.marker;\n    }",
+          "string": "function getValue() {\n      events.push(\"get\");\n      return this.marker;\n    }",
+          "ownKeys": [
+            "length",
+            "name",
+            "prototype"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "accessor-receiver-errors-and-delete",
+      "events": [
+        [
+          "get",
+          true
+        ],
+        [
+          "set",
+          true,
+          "changed"
+        ],
+        [
+          "set",
+          true,
+          "failure"
+        ]
+      ],
+      "states": [
+        {
+          "phase": "defined",
+          "result": true,
+          "graph": {
+            "identity": "object-1",
+            "type": "object",
+            "ownKeys": [
+              "object",
+              "get",
+              "set"
+            ],
+            "properties": [
+              [
+                "object",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": {
+                    "identity": "object-2",
+                    "type": "object",
+                    "ownKeys": [
+                      "value"
+                    ],
+                    "properties": [
+                      [
+                        "value",
+                        {
+                          "enumerable": true,
+                          "configurable": true,
+                          "get": {
+                            "identity": "object-3",
+                            "type": "function",
+                            "ownKeys": [
+                              "length",
+                              "name",
+                              "prototype"
+                            ],
+                            "properties": [
+                              [
+                                "length",
+                                {
+                                  "enumerable": false,
+                                  "configurable": true,
+                                  "writable": false,
+                                  "value": 0
+                                }
+                              ],
+                              [
+                                "name",
+                                {
+                                  "enumerable": false,
+                                  "configurable": true,
+                                  "writable": false,
+                                  "value": "getValue"
+                                }
+                              ],
+                              [
+                                "prototype",
+                                {
+                                  "enumerable": false,
+                                  "configurable": false,
+                                  "writable": true,
+                                  "value": {
+                                    "identity": "object-4",
+                                    "type": "object",
+                                    "ownKeys": [
+                                      "constructor"
+                                    ],
+                                    "properties": [
+                                      [
+                                        "constructor",
+                                        {
+                                          "enumerable": false,
+                                          "configurable": true,
+                                          "writable": true,
+                                          "value": {
+                                            "reference": "object-3"
+                                          }
+                                        }
+                                      ]
+                                    ]
+                                  }
+                                }
+                              ]
+                            ],
+                            "value": {
+                              "type": "function",
+                              "identity": "function-1"
+                            }
+                          },
+                          "set": {
+                            "identity": "object-5",
+                            "type": "function",
+                            "ownKeys": [
+                              "length",
+                              "name",
+                              "prototype"
+                            ],
+                            "properties": [
+                              [
+                                "length",
+                                {
+                                  "enumerable": false,
+                                  "configurable": true,
+                                  "writable": false,
+                                  "value": 1
+                                }
+                              ],
+                              [
+                                "name",
+                                {
+                                  "enumerable": false,
+                                  "configurable": true,
+                                  "writable": false,
+                                  "value": "setValue"
+                                }
+                              ],
+                              [
+                                "prototype",
+                                {
+                                  "enumerable": false,
+                                  "configurable": false,
+                                  "writable": true,
+                                  "value": {
+                                    "identity": "object-6",
+                                    "type": "object",
+                                    "ownKeys": [
+                                      "constructor"
+                                    ],
+                                    "properties": [
+                                      [
+                                        "constructor",
+                                        {
+                                          "enumerable": false,
+                                          "configurable": true,
+                                          "writable": true,
+                                          "value": {
+                                            "reference": "object-5"
+                                          }
+                                        }
+                                      ]
+                                    ]
+                                  }
+                                }
+                              ]
+                            ],
+                            "value": {
+                              "type": "function",
+                              "identity": "function-2"
+                            }
+                          }
+                        }
+                      ]
+                    ]
+                  }
+                }
+              ],
+              [
+                "get",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": {
+                    "reference": "object-3"
+                  }
+                }
+              ],
+              [
+                "set",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": {
+                    "reference": "object-5"
+                  }
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "phase": "setter-failure",
+          "result": false,
+          "graph": {
+            "identity": "object-1",
+            "type": "object",
+            "ownKeys": [
+              "object",
+              "receiver",
+              "failure",
+              "caught"
+            ],
+            "properties": [
+              [
+                "object",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": {
+                    "identity": "object-2",
+                    "type": "object",
+                    "ownKeys": [
+                      "value"
+                    ],
+                    "properties": [
+                      [
+                        "value",
+                        {
+                          "enumerable": true,
+                          "configurable": true,
+                          "get": {
+                            "identity": "object-3",
+                            "type": "function",
+                            "ownKeys": [
+                              "length",
+                              "name",
+                              "prototype"
+                            ],
+                            "properties": [
+                              [
+                                "length",
+                                {
+                                  "enumerable": false,
+                                  "configurable": true,
+                                  "writable": false,
+                                  "value": 0
+                                }
+                              ],
+                              [
+                                "name",
+                                {
+                                  "enumerable": false,
+                                  "configurable": true,
+                                  "writable": false,
+                                  "value": "getValue"
+                                }
+                              ],
+                              [
+                                "prototype",
+                                {
+                                  "enumerable": false,
+                                  "configurable": false,
+                                  "writable": true,
+                                  "value": {
+                                    "identity": "object-4",
+                                    "type": "object",
+                                    "ownKeys": [
+                                      "constructor"
+                                    ],
+                                    "properties": [
+                                      [
+                                        "constructor",
+                                        {
+                                          "enumerable": false,
+                                          "configurable": true,
+                                          "writable": true,
+                                          "value": {
+                                            "reference": "object-3"
+                                          }
+                                        }
+                                      ]
+                                    ]
+                                  }
+                                }
+                              ]
+                            ],
+                            "value": {
+                              "type": "function",
+                              "identity": "function-1"
+                            }
+                          },
+                          "set": {
+                            "identity": "object-5",
+                            "type": "function",
+                            "ownKeys": [
+                              "length",
+                              "name",
+                              "prototype"
+                            ],
+                            "properties": [
+                              [
+                                "length",
+                                {
+                                  "enumerable": false,
+                                  "configurable": true,
+                                  "writable": false,
+                                  "value": 1
+                                }
+                              ],
+                              [
+                                "name",
+                                {
+                                  "enumerable": false,
+                                  "configurable": true,
+                                  "writable": false,
+                                  "value": "setValue"
+                                }
+                              ],
+                              [
+                                "prototype",
+                                {
+                                  "enumerable": false,
+                                  "configurable": false,
+                                  "writable": true,
+                                  "value": {
+                                    "identity": "object-6",
+                                    "type": "object",
+                                    "ownKeys": [
+                                      "constructor"
+                                    ],
+                                    "properties": [
+                                      [
+                                        "constructor",
+                                        {
+                                          "enumerable": false,
+                                          "configurable": true,
+                                          "writable": true,
+                                          "value": {
+                                            "reference": "object-5"
+                                          }
+                                        }
+                                      ]
+                                    ]
+                                  }
+                                }
+                              ]
+                            ],
+                            "value": {
+                              "type": "function",
+                              "identity": "function-2"
+                            }
+                          }
+                        }
+                      ]
+                    ]
+                  }
+                }
+              ],
+              [
+                "receiver",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": {
+                    "identity": "object-7",
+                    "type": "object",
+                    "ownKeys": [
+                      "marker",
+                      "changed"
+                    ],
+                    "properties": [
+                      [
+                        "marker",
+                        {
+                          "enumerable": true,
+                          "configurable": true,
+                          "writable": true,
+                          "value": "receiver"
+                        }
+                      ],
+                      [
+                        "changed",
+                        {
+                          "enumerable": true,
+                          "configurable": true,
+                          "writable": true,
+                          "value": "failure"
+                        }
+                      ]
+                    ]
+                  }
+                }
+              ],
+              [
+                "failure",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": {
+                    "identity": "object-8",
+                    "type": "object",
+                    "ownKeys": [
+                      "original"
+                    ],
+                    "properties": [
+                      [
+                        "original",
+                        {
+                          "enumerable": true,
+                          "configurable": true,
+                          "writable": true,
+                          "value": true
+                        }
+                      ]
+                    ]
+                  }
+                }
+              ],
+              [
+                "caught",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": {
+                    "reference": "object-8"
+                  }
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "phase": "delete-without-get",
+          "result": true,
+          "graph": {
+            "identity": "object-1",
+            "type": "object",
+            "ownKeys": [],
+            "properties": []
+          }
+        }
+      ],
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "getValue",
+          "length": 0,
+          "source": "function getValue() {\n      events.push([\"get\", this === receiver]);\n      return this.marker;\n    }",
+          "string": "function getValue() {\n      events.push([\"get\", this === receiver]);\n      return this.marker;\n    }",
+          "ownKeys": [
+            "length",
+            "name",
+            "prototype"
+          ]
+        },
+        {
+          "identity": "function-2",
+          "name": "setValue",
+          "length": 1,
+          "source": "function setValue(value) {\n      events.push([\"set\", this === receiver, value]);\n      this.changed = value;\n      if (value === \"failure\")\n        throw failure;\n    }",
+          "string": "function setValue(value) {\n      events.push([\"set\", this === receiver, value]);\n      this.changed = value;\n      if (value === \"failure\")\n        throw failure;\n    }",
+          "ownKeys": [
+            "length",
+            "name",
+            "prototype"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nonconfigurable-accessor-redefinition",
+      "events": [],
+      "states": [
+        {
+          "phase": "same-getter",
+          "result": true,
+          "graph": {
+            "identity": "object-1",
+            "type": "object",
+            "ownKeys": [
+              "object",
+              "get"
+            ],
+            "properties": [
+              [
+                "object",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": {
+                    "identity": "object-2",
+                    "type": "object",
+                    "ownKeys": [
+                      "value"
+                    ],
+                    "properties": [
+                      [
+                        "value",
+                        {
+                          "enumerable": false,
+                          "configurable": false,
+                          "get": {
+                            "identity": "object-3",
+                            "type": "function",
+                            "ownKeys": [
+                              "length",
+                              "name",
+                              "prototype"
+                            ],
+                            "properties": [
+                              [
+                                "length",
+                                {
+                                  "enumerable": false,
+                                  "configurable": true,
+                                  "writable": false,
+                                  "value": 0
+                                }
+                              ],
+                              [
+                                "name",
+                                {
+                                  "enumerable": false,
+                                  "configurable": true,
+                                  "writable": false,
+                                  "value": "getValue"
+                                }
+                              ],
+                              [
+                                "prototype",
+                                {
+                                  "enumerable": false,
+                                  "configurable": false,
+                                  "writable": true,
+                                  "value": {
+                                    "identity": "object-4",
+                                    "type": "object",
+                                    "ownKeys": [
+                                      "constructor"
+                                    ],
+                                    "properties": [
+                                      [
+                                        "constructor",
+                                        {
+                                          "enumerable": false,
+                                          "configurable": true,
+                                          "writable": true,
+                                          "value": {
+                                            "reference": "object-3"
+                                          }
+                                        }
+                                      ]
+                                    ]
+                                  }
+                                }
+                              ]
+                            ],
+                            "value": {
+                              "type": "function",
+                              "identity": "function-1"
+                            }
+                          },
+                          "set": {
+                            "type": "undefined"
+                          }
+                        }
+                      ]
+                    ]
+                  }
+                }
+              ],
+              [
+                "get",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": {
+                    "reference": "object-3"
+                  }
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "phase": "rejected",
+          "result": false,
+          "graph": {
+            "identity": "object-1",
+            "type": "object",
+            "ownKeys": [
+              "value"
+            ],
+            "properties": [
+              [
+                "value",
+                {
+                  "enumerable": false,
+                  "configurable": false,
+                  "get": {
+                    "identity": "object-2",
+                    "type": "function",
+                    "ownKeys": [
+                      "length",
+                      "name",
+                      "prototype"
+                    ],
+                    "properties": [
+                      [
+                        "length",
+                        {
+                          "enumerable": false,
+                          "configurable": true,
+                          "writable": false,
+                          "value": 0
+                        }
+                      ],
+                      [
+                        "name",
+                        {
+                          "enumerable": false,
+                          "configurable": true,
+                          "writable": false,
+                          "value": "getValue"
+                        }
+                      ],
+                      [
+                        "prototype",
+                        {
+                          "enumerable": false,
+                          "configurable": false,
+                          "writable": true,
+                          "value": {
+                            "identity": "object-3",
+                            "type": "object",
+                            "ownKeys": [
+                              "constructor"
+                            ],
+                            "properties": [
+                              [
+                                "constructor",
+                                {
+                                  "enumerable": false,
+                                  "configurable": true,
+                                  "writable": true,
+                                  "value": {
+                                    "reference": "object-2"
+                                  }
+                                }
+                              ]
+                            ]
+                          }
+                        }
+                      ]
+                    ],
+                    "value": {
+                      "type": "function",
+                      "identity": "function-1"
+                    }
+                  },
+                  "set": {
+                    "type": "undefined"
+                  }
+                }
+              ]
+            ]
+          }
+        }
+      ],
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "getValue",
+          "length": 0,
+          "source": "function getValue() {\n      events.push(\"unexpected-get\");\n      return 7;\n    }",
+          "string": "function getValue() {\n      events.push(\"unexpected-get\");\n      return 7;\n    }",
+          "ownKeys": [
+            "length",
+            "name",
+            "prototype"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "array-length-partial-failure-true",
+      "events": [],
+      "states": [
+        {
+          "phase": "before",
+          "result": true,
+          "graph": {
+            "identity": "object-1",
+            "type": "array",
+            "ownKeys": [
+              "0",
+              "1",
+              "2",
+              "3",
+              "length"
+            ],
+            "properties": [
+              [
+                "0",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": 0
+                }
+              ],
+              [
+                "1",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": 1
+                }
+              ],
+              [
+                "2",
+                {
+                  "enumerable": true,
+                  "configurable": false,
+                  "writable": true,
+                  "value": 2
+                }
+              ],
+              [
+                "3",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": 3
+                }
+              ],
+              [
+                "length",
+                {
+                  "enumerable": false,
+                  "configurable": false,
+                  "writable": true,
+                  "value": 4
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "phase": "partial-deletion",
+          "result": false,
+          "graph": {
+            "identity": "object-1",
+            "type": "array",
+            "ownKeys": [
+              "0",
+              "1",
+              "2",
+              "length"
+            ],
+            "properties": [
+              [
+                "0",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": 0
+                }
+              ],
+              [
+                "1",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": 1
+                }
+              ],
+              [
+                "2",
+                {
+                  "enumerable": true,
+                  "configurable": false,
+                  "writable": true,
+                  "value": 2
+                }
+              ],
+              [
+                "length",
+                {
+                  "enumerable": false,
+                  "configurable": false,
+                  "writable": true,
+                  "value": 3
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "phase": "extend",
+          "result": true,
+          "graph": {
+            "identity": "object-1",
+            "type": "array",
+            "ownKeys": [
+              "0",
+              "1",
+              "2",
+              "4",
+              "length"
+            ],
+            "properties": [
+              [
+                "0",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": 0
+                }
+              ],
+              [
+                "1",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": 1
+                }
+              ],
+              [
+                "2",
+                {
+                  "enumerable": true,
+                  "configurable": false,
+                  "writable": true,
+                  "value": 2
+                }
+              ],
+              [
+                "4",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": 4
+                }
+              ],
+              [
+                "length",
+                {
+                  "enumerable": false,
+                  "configurable": false,
+                  "writable": true,
+                  "value": 5
+                }
+              ]
+            ]
+          }
+        }
+      ],
+      "functions": []
+    },
+    {
+      "name": "array-length-partial-failure-false",
+      "events": [],
+      "states": [
+        {
+          "phase": "before",
+          "result": true,
+          "graph": {
+            "identity": "object-1",
+            "type": "array",
+            "ownKeys": [
+              "0",
+              "1",
+              "2",
+              "3",
+              "length"
+            ],
+            "properties": [
+              [
+                "0",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": 0
+                }
+              ],
+              [
+                "1",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": 1
+                }
+              ],
+              [
+                "2",
+                {
+                  "enumerable": true,
+                  "configurable": false,
+                  "writable": true,
+                  "value": 2
+                }
+              ],
+              [
+                "3",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": 3
+                }
+              ],
+              [
+                "length",
+                {
+                  "enumerable": false,
+                  "configurable": false,
+                  "writable": true,
+                  "value": 4
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "phase": "partial-deletion",
+          "result": false,
+          "graph": {
+            "identity": "object-1",
+            "type": "array",
+            "ownKeys": [
+              "0",
+              "1",
+              "2",
+              "length"
+            ],
+            "properties": [
+              [
+                "0",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": 0
+                }
+              ],
+              [
+                "1",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": 1
+                }
+              ],
+              [
+                "2",
+                {
+                  "enumerable": true,
+                  "configurable": false,
+                  "writable": true,
+                  "value": 2
+                }
+              ],
+              [
+                "length",
+                {
+                  "enumerable": false,
+                  "configurable": false,
+                  "writable": false,
+                  "value": 3
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "phase": "extend",
+          "result": false,
+          "graph": {
+            "identity": "object-1",
+            "type": "array",
+            "ownKeys": [
+              "0",
+              "1",
+              "2",
+              "length"
+            ],
+            "properties": [
+              [
+                "0",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": 0
+                }
+              ],
+              [
+                "1",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": 1
+                }
+              ],
+              [
+                "2",
+                {
+                  "enumerable": true,
+                  "configurable": false,
+                  "writable": true,
+                  "value": 2
+                }
+              ],
+              [
+                "length",
+                {
+                  "enumerable": false,
+                  "configurable": false,
+                  "writable": false,
+                  "value": 3
+                }
+              ]
+            ]
+          }
+        }
+      ],
+      "functions": []
+    },
+    {
+      "name": "array-accessor-shrink-does-not-read-getters",
+      "events": [],
+      "states": [
+        {
+          "phase": "before",
+          "result": true,
+          "graph": {
+            "identity": "object-1",
+            "type": "array",
+            "ownKeys": [
+              "0",
+              "1",
+              "2",
+              "length"
+            ],
+            "properties": [
+              [
+                "0",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": 0
+                }
+              ],
+              [
+                "1",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": 1
+                }
+              ],
+              [
+                "2",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "get": {
+                    "identity": "object-2",
+                    "type": "function",
+                    "ownKeys": [
+                      "length",
+                      "name"
+                    ],
+                    "properties": [
+                      [
+                        "length",
+                        {
+                          "enumerable": false,
+                          "configurable": true,
+                          "writable": false,
+                          "value": 0
+                        }
+                      ],
+                      [
+                        "name",
+                        {
+                          "enumerable": false,
+                          "configurable": true,
+                          "writable": false,
+                          "value": "get"
+                        }
+                      ]
+                    ],
+                    "value": {
+                      "type": "function",
+                      "identity": "function-1"
+                    }
+                  },
+                  "set": {
+                    "type": "undefined"
+                  }
+                }
+              ],
+              [
+                "length",
+                {
+                  "enumerable": false,
+                  "configurable": false,
+                  "writable": true,
+                  "value": 3
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "phase": "after",
+          "result": true,
+          "graph": {
+            "identity": "object-1",
+            "type": "array",
+            "ownKeys": [
+              "0",
+              "length"
+            ],
+            "properties": [
+              [
+                "0",
+                {
+                  "enumerable": true,
+                  "configurable": true,
+                  "writable": true,
+                  "value": 0
+                }
+              ],
+              [
+                "length",
+                {
+                  "enumerable": false,
+                  "configurable": false,
+                  "writable": true,
+                  "value": 1
+                }
+              ]
+            ]
+          }
+        }
+      ],
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      events.push(\"unexpected-get\");\n      return 2;\n    }",
+          "string": "get() {\n      events.push(\"unexpected-get\");\n      return 2;\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        }
+      ]
+    }
+  ]
+}
