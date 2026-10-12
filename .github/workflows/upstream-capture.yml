@@ -31,6 +31,8 @@ jobs:
               - two-factor-backup-generation-capture
           - contract: passkey-transport-methods
             regressions: []
+          - contract: api-key-rate-limit-native
+            regressions: []
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
