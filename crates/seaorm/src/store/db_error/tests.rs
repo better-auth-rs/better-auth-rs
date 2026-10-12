@@ -91,6 +91,36 @@ async fn sqlite_database_error_preserves_uniqueness_and_source() -> TestResult {
     result
 }
 
+fn check_postgres_response(value: &FieldValue, source: &DbErr) -> TestResult {
+    let (DbErr::Exec(RuntimeErr::SqlxError(source)) | DbErr::Query(RuntimeErr::SqlxError(source))) =
+        source
+    else {
+        return Err("Expected the original SQLx execution error".into());
+    };
+    let source = source
+        .as_database_error()
+        .and_then(|source| source.try_downcast_ref::<sqlx::postgres::PgDatabaseError>())
+        .ok_or("Expected the original PostgreSQL ErrorResponse")?;
+    assert_eq!(
+        value.model_property("length")?,
+        source.response_length().into()
+    );
+    for (name, code) in [
+        ("severity", b'S'),
+        ("position", b'P'),
+        ("internalPosition", b'p'),
+        ("internalQuery", b'q'),
+        ("line", b'L'),
+    ] {
+        assert_eq!(
+            value.model_property(name)?,
+            source.field(code).map(FieldValue::from).unwrap_or_default(),
+            "{name} must retain the original ErrorResponse field"
+        );
+    }
+    Ok(())
+}
+
 async fn postgres_metadata(database: &DatabaseConnection) -> TestResult {
     let source = database
         .execute_unprepared("SELECT CAST('accepted' AS INTEGER)")
@@ -107,13 +137,14 @@ async fn postgres_metadata(database: &DatabaseConnection) -> TestResult {
         "invalid input syntax for type integer: \"accepted\"".into()
     );
     let value = error.into_thrown_value()?;
+    check_postgres_response(&value, &source)?;
     assert_eq!(value.model_property("name")?, "error".into());
     assert_eq!(value.model_property("severity")?, "ERROR".into());
     assert_eq!(value.model_property("code")?, "22P02".into());
     assert!(value.model_property("position")?.is_string());
     assert!(value.model_property("internalPosition")?.is_undefined());
     assert!(value.model_property("internalQuery")?.is_undefined());
-    assert!(!value.has_property("length")?);
+    assert!(value.enumerable_fields()?.contains_key("length"));
     assert!(!value.enumerable_fields()?.contains_key("message"));
 
     let source = database
@@ -129,6 +160,7 @@ async fn postgres_metadata(database: &DatabaseConnection) -> TestResult {
     let error = map_db_err(source.clone());
     let _ = check_source(&error, &source)?;
     let value = error.into_thrown_value()?;
+    check_postgres_response(&value, &source)?;
     for (name, expected) in [
         ("message", "carrier message"),
         ("code", "P0001"),
@@ -146,6 +178,22 @@ async fn postgres_metadata(database: &DatabaseConnection) -> TestResult {
         assert!(value.model_property(name)?.is_string(), "{name}");
     }
     assert!(value.model_property("position")?.is_undefined());
+
+    let source = database
+        .execute_unprepared("DO $$ BEGIN EXECUTE 'SELECT CAST(''accepted'' AS INTEGER)'; END $$")
+        .await
+        .err()
+        .ok_or("The internal PostgreSQL query must fail")?;
+    let error = map_db_err(source.clone());
+    let _ = check_source(&error, &source)?;
+    let value = error.into_thrown_value()?;
+    check_postgres_response(&value, &source)?;
+    assert!(value.model_property("position")?.is_undefined());
+    assert!(value.model_property("internalPosition")?.is_string());
+    assert_eq!(
+        value.model_property("internalQuery")?,
+        "SELECT CAST('accepted' AS INTEGER)".into()
+    );
     Ok(())
 }
 

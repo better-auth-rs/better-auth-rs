@@ -51,6 +51,13 @@ run_stage() {
       cargo test --locked --features axum,seaorm2,redis-cache --test auth_entity_plugin_alias_tests || cleanup_status=1
       return "$cleanup_status"
       ;;
+    postgres-driver)
+      cargo fmt --all -- --check
+      cargo clippy --locked -p better-auth-seaorm --lib -- -D warnings
+      cargo test --locked -p better-auth-seaorm --lib -- \
+        store::db_error::tests:: live_postgres_shared_column_contract \
+        --include-ignored --test-threads=1
+      ;;
     shared-column)
       cargo fmt --all -- --check
       local column_status=0

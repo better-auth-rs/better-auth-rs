@@ -51,6 +51,7 @@ on:
           - memory-query
           - sql-cleanup
           - shared-column
+          - postgres-driver
           - memory-joins
           - oauth-profile
           - organization-fields

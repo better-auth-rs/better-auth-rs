@@ -26,3 +26,6 @@ josekit = "0.10.3"
 # Keep the upstream KDF cost while making multi-step debug authentication tests practical.
 [profile.dev.package.scrypt]
 opt-level = 3
+
+[patch.crates-io]
+sqlx-postgres = { path = "../../vendor/sqlx-postgres" }

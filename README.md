@@ -9,6 +9,8 @@ Configure model IDs and application-owned defaults through [database ID generati
 
 `DatabaseError` variants carry `DatabaseErrorCause`. Use `.into()` when constructing a cause from a string and `.as_str()` when reading its diagnostic. Driver errors retain their source and native callback identity; see [database errors](docs/content/docs/concepts/database.mdx#database-errors) for metadata and compatibility limits.
 
+For `seaorm2` builds from `codex/upstream-capture`, add the [driver patch](docs/content/docs/concepts/database.mdx#postgresql-driver-patch) to your root manifest.
+
 Derived entities can bind multiple native fields to one member with repeated `#[auth(alias = "native_field")]` attributes. The CLI emits these bindings when declarations share a column, including User and Session getters and typed writes. Configure each logical field's runtime mapping separately; see [adapter configuration](docs/content/docs/concepts/database.mdx#adapter-configuration).
 
 Custom Organization adapters implement `TeamStore::delete_team_for_organization_value` to retain invitation cleanup scope across lifecycle hooks. Custom adapters must provide a credential-account point query independent of list pagination; see [adapter configuration](docs/content/docs/concepts/database.mdx#adapter-configuration). Enable `advanced.database.joins = Some(true)` for typed core and Organization associations with Memory child references or SeaORM query snapshots. Plugins can declare native and custom models through [runtime model registration](docs/content/docs/concepts/plugins.mdx#register-adapter-field-policies). Native declarations share relationship resolution and SeaORM schema validation; custom persistence remains the application adapter's responsibility.

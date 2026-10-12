@@ -44,9 +44,22 @@ Native database errors have no implicit API status, body, or headers. `status_co
 
 Use `AuthError::type_error_native` or `AuthError::better_auth_native` when a runtime message contains native UTF-16 values. Both constructors retain lone surrogates, hidden error properties, and one error object through callbacks and rethrows.
 
-PostgreSQL native properties retain the metadata available from SQLx, including SQLSTATE, severity, detail, hint, positions, context, object names, and source location. Supported optional fields use undefined when absent. SQLx does not expose the original ErrorResponse packet length or raw localized severity. MySQL retains errno, SQLSTATE, and the driver message; SQLx does not expose mysql2's symbolic error code or interpolated SQL text. Those unavailable properties remain absent. SQLite and non-database SQLx failures retain their source and existing native diagnostic without claiming the JavaScript driver's metadata shape.
+PostgreSQL native properties retain SQLSTATE, detail, hint, context, object names, source location, and the original ErrorResponse `length`. The length includes the four-byte length field, every received field, and the final terminator; it excludes the message-type byte. `severity`, `position`, `internalPosition`, `internalQuery`, and `line` retain the original `S`, `P`, `p`, `q`, and `L` strings, including localized severity and leading zeros. Original and internal positions remain independent. Supported optional fields use undefined when absent and preserve empty strings. Unknown protocol fields remain available through `PgDatabaseError::field` and contribute to `length`; the native error object maps the supported properties.
 
-Metadata retention does not establish complete driver equivalence. PostgreSQL's current unknown-literal binding can fail in a different protocol phase from pg's text parameters, changing positions and context. MySQL statement preparation differs from mysql2 interpolation. Native property shape, raw protocol fields, driver query text, and JavaScript stack metadata remain open compatibility boundaries; strict server contracts retain these differences.
+MySQL retains errno, SQLSTATE, and the driver message; SQLx does not expose mysql2's symbolic error code or interpolated SQL text. Those unavailable properties remain absent. SQLite and non-database SQLx failures retain their source and existing native diagnostic without claiming the JavaScript driver's metadata shape.
+
+Metadata retention does not establish complete driver equivalence. PostgreSQL's current unknown-literal binding can fail in a different protocol phase from pg's text parameters, changing positions and context. MySQL statement preparation differs from mysql2 interpolation. Error shape outside the retained metadata, driver query text, and JavaScript stack metadata remain open compatibility boundaries; strict server contracts retain these differences.
+
+### PostgreSQL driver patch
+
+The PostgreSQL metadata patch is available on `codex/upstream-capture` and has not been released. Cargo does not inherit `[patch]` sections from dependency manifests. Applications using this development branch must add the patch to their root `Cargo.toml`:
+
+```toml
+[patch.crates-io]
+sqlx-postgres = { git = "https://github.com/better-auth-rs/better-auth-rs", branch = "codex/upstream-capture" }
+```
+
+Resolve `better-auth` and `sqlx-postgres` to the same repository revision in `Cargo.lock`. If you pin `better-auth` with `rev`, replace `branch` above with the same `rev`. The patch also applies to other users of this SQLx PostgreSQL version in the dependency graph. The patch retains the application's existing pool and transaction ownership; it does not create another pool or transaction layer.
 
 ## Setup
 

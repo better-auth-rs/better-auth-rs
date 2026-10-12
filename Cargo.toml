@@ -12,7 +12,7 @@ workspace = true
 [workspace]
 resolver = "2"
 members = ["crates/core", "crates/api", "crates/derive", "crates/seaorm", "crates/seaorm-macros", "crates/schema-registry", "crates/cli"]
-exclude = ["examples/sqlx-custom-entities", "examples/fullstack/backend", "compat-tests/rust-server"]
+exclude = ["examples/sqlx-custom-entities", "examples/fullstack/backend", "compat-tests/rust-server", "vendor/sqlx-postgres"]
 
 [workspace.package]
 version = "1.0.0-alpha.3"
@@ -222,3 +222,6 @@ inherits = "release"
 opt-level = 2
 lto = "thin"
 codegen-units = 16
+
+[patch.crates-io]
+sqlx-postgres = { path = "vendor/sqlx-postgres" }
