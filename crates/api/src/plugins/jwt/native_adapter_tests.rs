@@ -36,7 +36,11 @@ async fn registered(adapter: FieldValue) -> AuthResult<(JwtPlugin, AuthContext<S
     let context =
         crate::plugins::test_helpers::initialize_test_context(config, store, &[&registered])
             .await?;
-    Ok((JwtPlugin::with_config(options), context))
+    let plugin = JwtPlugin {
+        config: options,
+        options: overrides::NativeOptions::registered(&context)?,
+    };
+    Ok((plugin, context))
 }
 
 #[tokio::test]
@@ -83,10 +87,10 @@ async fn public_endpoint_helpers_preserve_native_adapter_receiver_root_and_key_h
         )?;
         let (plugin, context) = registered(receiver.value()).await?;
         let callbacks = context.extensions.get::<Arc<JwtCallbacks<S>>>().unwrap();
-        let first = overrides::NativeOptions::registered(&plugin.config, &context)?
+        let first = overrides::NativeOptions::registered(&context)?
             .0
             .model_property("adapter")?;
-        let second = overrides::NativeOptions::registered(&plugin.config, &context)?
+        let second = overrides::NativeOptions::registered(&context)?
             .0
             .model_property("adapter")?;
         assert!(callbacks.to_native().strict_equals(&receiver.value()));
@@ -224,7 +228,7 @@ async fn registered_groups_retain_falsy_defaults_and_typed_callback_identity() -
         "".into(),
     ] {
         let (plugin, context) = registered(group.clone()).await?;
-        let options = overrides::NativeOptions::registered(&plugin.config, &context)?;
+        let options = overrides::NativeOptions::registered(&context)?;
         assert!(options.0.has_property("adapter")?);
         assert!(options.0.model_property("adapter")?.strict_equals(&group));
         let endpoint = EndpointContext::native(None, None, FieldValue::Null, &context);
@@ -258,10 +262,10 @@ async fn registered_groups_retain_falsy_defaults_and_typed_callback_identity() -
         }),
     )
     .await?;
-    let first = overrides::NativeOptions::registered(&plugin.config, &context)?
+    let first = overrides::NativeOptions::registered(&context)?
         .0
         .model_property("adapter")?;
-    let second = overrides::NativeOptions::registered(&plugin.config, &context)?
+    let second = overrides::NativeOptions::registered(&context)?
         .0
         .model_property("adapter")?;
     assert!(first.strict_equals(&second));
@@ -273,7 +277,7 @@ async fn registered_groups_retain_falsy_defaults_and_typed_callback_identity() -
     let endpoint =
         EndpointContext::native(None, None, FieldValue::Null, &context).with_native_root(root);
     pointer.store(std::ptr::from_ref(&endpoint) as usize, Ordering::SeqCst);
-    let options = overrides::NativeOptions::registered(&plugin.config, &context)?;
+    let options = overrides::NativeOptions::registered(&context)?;
     assert!(
         adapter::Keyring::new(adapter::store(&endpoint), &options, &endpoint)
             .latest(None)

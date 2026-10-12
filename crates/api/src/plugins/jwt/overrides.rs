@@ -43,10 +43,10 @@ impl<S: AuthSchema> Default for JwtCallOverrides<S> {
 }
 
 impl<S: AuthSchema> JwtCallOverrides<S> {
-    pub(super) fn into_native(self) -> AuthResult<FieldValue> {
+    pub(super) fn into_native(self) -> FieldValue {
         let mut fields = FieldMap::new();
         if let Some(jwt) = self.jwt {
-            let _ = fields.insert("jwt".into(), jwt.into_native()?);
+            let _ = fields.insert("jwt".into(), jwt.into_native());
         }
         if let Some(jwks) = self.jwks {
             let _ = fields.insert("jwks".into(), jwks.into_native());
@@ -54,18 +54,22 @@ impl<S: AuthSchema> JwtCallOverrides<S> {
         if let Some(adapter) = self.adapter {
             let _ = fields.insert("adapter".into(), adapter.into_native());
         }
-        Ok(fields.into())
+        fields.into()
     }
 }
 
 impl JwtTokenOptions {
-    fn into_native(self) -> AuthResult<FieldValue> {
+    fn into_native(self) -> FieldValue {
+        self.fields().into()
+    }
+
+    fn fields(self) -> FieldMap {
         let mut fields = FieldMap::new();
         if let Some(issuer) = self.issuer {
             let _ = fields.insert("issuer".into(), issuer.into());
         }
         if let Some(audience) = self.audience {
-            let _ = fields.insert("audience".into(), FieldValue::from_json(json!(audience))?);
+            let _ = fields.insert("audience".into(), audience.into_native());
         }
         if let Some(expiration) = self.expiration_time {
             let _ = fields.insert("expirationTime".into(), expiration.into_native());
@@ -73,12 +77,29 @@ impl JwtTokenOptions {
         if let Some(callback) = self.custom_sign {
             let _ = fields.insert("sign".into(), custom_sign(callback));
         }
-        Ok(fields.into())
+        fields
+    }
+}
+
+impl JwtAudience {
+    fn into_native(self) -> FieldValue {
+        match self {
+            Self::Single(value) => value.into(),
+            Self::Multiple(values) => values
+                .into_iter()
+                .map(FieldValue::from)
+                .collect::<Vec<_>>()
+                .into(),
+        }
     }
 }
 
 impl JwtKeyOptions {
     fn into_native(self) -> FieldValue {
+        self.fields().into()
+    }
+
+    fn fields(self) -> FieldMap {
         let mut fields = FieldMap::new();
         if let Some(parameters) = self.key_pair {
             let _ = fields.insert("keyPairConfig".into(), parameters.into_native());
@@ -99,7 +120,7 @@ impl JwtKeyOptions {
         if let Some(disabled) = self.disable_private_key_encryption {
             let _ = fields.insert("disablePrivateKeyEncryption".into(), disabled.into());
         }
-        fields.into()
+        fields
     }
 }
 
@@ -141,21 +162,45 @@ fn duration_seconds(duration: Duration) -> f64 {
 pub(super) mod input;
 
 /// The merged outer options object; nested groups retain their original native handles.
+#[derive(Clone)]
 pub(super) struct NativeOptions(pub(super) FieldValue);
 
 impl NativeOptions {
-    pub(super) fn registered<S: AuthSchema>(
-        config: &JwtPluginConfig,
-        context: &AuthContext<S>,
-    ) -> AuthResult<Self> {
-        let jwt = JwtTokenOptions {
+    pub(super) fn registered<S: AuthSchema>(context: &AuthContext<S>) -> AuthResult<Self> {
+        context.extensions.get::<Self>().cloned().ok_or_else(|| {
+            AuthError::config("JWT options are unavailable before plugin initialization")
+        })
+    }
+
+    pub(super) fn from_config(config: &JwtPluginConfig, adapter: Option<FieldValue>) -> Self {
+        let mut jwt = JwtTokenOptions {
             issuer: config.issuer.clone(),
             audience: config.audience.clone(),
             expiration_time: Some(config.expiration_time.clone()),
             custom_sign: config.custom_sign.clone(),
         }
-        .into_native()?;
-        let jwks = JwtKeyOptions {
+        .fields();
+        if let Some(callback) = &config.define_payload {
+            let callback = callback.clone();
+            let _ = jwt.insert(
+                "definePayload".into(),
+                better_auth_core::FieldFunction::asynchronous_contextual(move |_, arguments| {
+                    callback(arguments.first().cloned().unwrap_or_default())
+                })
+                .into(),
+            );
+        }
+        if let Some(callback) = &config.get_subject {
+            let callback = callback.clone();
+            let _ = jwt.insert(
+                "getSubject".into(),
+                better_auth_core::FieldFunction::asynchronous_contextual(move |_, arguments| {
+                    callback(arguments.first().cloned().unwrap_or_default())
+                })
+                .into(),
+            );
+        }
+        let mut jwks = JwtKeyOptions {
             key_pair: config.algorithm.map(|algorithm| JwtKeyPairConfig {
                 algorithm,
                 modulus_length: config.modulus_length,
@@ -164,20 +209,44 @@ impl NativeOptions {
             rotation_interval: config.rotation_interval,
             disable_private_key_encryption: Some(config.disable_private_key_encryption),
         }
-        .into_native();
-        let mut fields = FieldMap::from([("jwt".into(), jwt), ("jwks".into(), jwks)]);
-        if let Some(callbacks) = context
-            .extensions
-            .get::<std::sync::Arc<super::callbacks::JwtCallbacks<S>>>()
-        {
-            let _ = fields.insert("adapter".into(), callbacks.to_native());
+        .fields();
+        if let Some(remote_url) = &config.remote_url {
+            let _ = jwks.insert("remoteUrl".into(), remote_url.clone().into());
         }
-        Ok(Self(fields.into()))
+        let _ = jwks.insert("jwksPath".into(), config.jwks_path.clone().into());
+        let _ = jwks.insert(
+            "gracePeriod".into(),
+            duration_seconds(config.grace_period).into(),
+        );
+        let mut fields = FieldMap::from([
+            ("jwt".into(), jwt.into()),
+            ("jwks".into(), jwks.into()),
+            (
+                "sessionCookieCache".into(),
+                config.session_cookie_cache.into(),
+            ),
+            (
+                "disableSettingJwtHeader".into(),
+                config.disable_setting_jwt_header.into(),
+            ),
+        ]);
+        if let Some(adapter) = adapter {
+            let _ = fields.insert("adapter".into(), adapter);
+        }
+        Self(fields.into())
     }
 
     pub(super) fn merge(self, overrides: &FieldValue) -> AuthResult<Self> {
         let mut fields = self.0.enumerable_fields()?;
         keys::spread(&mut fields, overrides.clone())?;
+        Ok(Self(fields.into()))
+    }
+
+    pub(super) fn with_issuer(self, issuer: &str) -> AuthResult<Self> {
+        let mut fields = self.0.enumerable_fields()?;
+        let mut jwt = self.0.model_property("jwt")?.enumerable_fields()?;
+        let _ = jwt.insert("issuer".into(), issuer.into());
+        let _ = fields.insert("jwt".into(), jwt.into());
         Ok(Self(fields.into()))
     }
 
@@ -188,6 +257,15 @@ impl NativeOptions {
     pub(super) fn primary_algorithm(&self) -> AuthResult<FieldValue> {
         let algorithm = optional_property(&self.property("jwks", "keyPairConfig")?, "alg")?;
         Ok(nullish(algorithm, || "EdDSA".into()))
+    }
+
+    pub(super) fn key_algorithm(&self, key: &FieldValue) -> AuthResult<FieldValue> {
+        let algorithm = key.model_property("alg")?;
+        if algorithm.is_null() || algorithm.is_undefined() {
+            self.primary_algorithm()
+        } else {
+            Ok(algorithm)
+        }
     }
 
     pub(super) fn with_key_pair(&self, parameters: FieldValue) -> AuthResult<Self> {

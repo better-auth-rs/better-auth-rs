@@ -29,15 +29,6 @@ impl From<Vec<String>> for JwtAudience {
     }
 }
 
-impl JwtAudience {
-    pub(super) fn recipients(&self) -> Vec<&str> {
-        match self {
-            Self::Single(value) => vec![value],
-            Self::Multiple(values) => values.iter().map(String::as_str).collect(),
-        }
-    }
-}
-
 /// Default expiration when a payload does not supply its own `exp` claim.
 #[derive(Clone, Debug)]
 pub enum JwtExpiration {
@@ -100,7 +91,7 @@ impl JwtPlugin {
     /// Define claims without serializing the original Session or callback return value.
     pub fn define_payload_native(mut self, callback: JwtNativeDefinePayload) -> Self {
         self.config.define_payload = Some(callback);
-        self
+        Self::with_config(self.config)
     }
 
     /// Select a string subject through an explicit JSON callback boundary.
@@ -114,7 +105,7 @@ impl JwtPlugin {
     /// Select a native subject, preserving nullish fallback and other dynamic values.
     pub fn get_subject_native(mut self, callback: JwtNativeGetSubject) -> Self {
         self.config.get_subject = Some(callback);
-        self
+        Self::with_config(self.config)
     }
 
     /// Sign JSON claims and return a string through the typed convenience boundary.
@@ -142,7 +133,7 @@ impl JwtPlugin {
     /// Sign native claims without narrowing the header, own undefined fields, or return value.
     pub fn custom_sign_native(mut self, callback: JwtNativeCustomSign) -> Self {
         self.config.custom_sign = Some(callback);
-        self
+        Self::with_config(self.config)
     }
 }
 

@@ -94,6 +94,14 @@ async fn context(
             Box::pin(async move { Ok(Some(rows)) })
         }),
     ));
+    plugin.options.0.set_model_property(
+        "adapter",
+        context
+            .extensions
+            .get::<Arc<JwtCallbacks<StatelessSchema>>>()
+            .unwrap()
+            .to_native(),
+    )?;
     let context = Arc::new(context);
     runtime.bind(&context)?;
     Ok((context, reads))

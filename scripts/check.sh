@@ -701,7 +701,9 @@ PY_CHECK
         ./compat-tests/reference-server/contracts/jwt-native-resolved-key-null.test.ts \
         ./compat-tests/reference-server/contracts/native-sort-consumers-capture.test.ts \
         ./compat-tests/reference-server/contracts/native-sort-data-capture.test.ts || jwt_status=1
-      cargo clippy --locked -p better-auth-core -p better-auth-api --lib -- -D warnings || jwt_status=1
+      cargo clippy --locked -p better-auth-macros -p better-auth-core -p better-auth-api --lib -- -D warnings || jwt_status=1
+      cargo clippy --locked --keep-going -p better-auth-core -p better-auth-api --features axum \
+        --tests -- -D warnings || jwt_status=1
       cargo test --locked -p better-auth-core --lib -- \
         error:: field_value:: session:: plugin::tests::native_session_hooks:: \
         endpoint_dispatch::phase_ownership_tests:: plugin::tests::raw_api_errors:: \

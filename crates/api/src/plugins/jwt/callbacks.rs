@@ -166,7 +166,9 @@ fn typed_create(data: FieldValue) -> AuthResult<CreateJwk> {
 
 impl JwtPlugin {
     /// Attach schema-aware key adapter callbacks after configuring plugin options.
-    pub fn callbacks<S: AuthSchema>(self, callbacks: JwtCallbacks<S>) -> impl AuthPlugin<S> {
+    pub fn callbacks<S: AuthSchema>(mut self, callbacks: JwtCallbacks<S>) -> impl AuthPlugin<S> {
+        self.options =
+            super::overrides::NativeOptions::from_config(&self.config, Some(callbacks.to_native()));
         WithCallbacks {
             plugin: self,
             callbacks: Arc::new(callbacks),
@@ -175,7 +177,9 @@ impl JwtPlugin {
 
     /// Retain a native adapter group, including its receiver, accessors, and callback identities.
     /// Unbound callbacks require an explicitly supplied [`EndpointContext::with_native_root`].
-    pub fn native_callbacks<S: AuthSchema>(self, adapter: FieldValue) -> impl AuthPlugin<S> {
+    pub fn native_callbacks<S: AuthSchema>(mut self, adapter: FieldValue) -> impl AuthPlugin<S> {
+        self.options =
+            super::overrides::NativeOptions::from_config(&self.config, Some(adapter.clone()));
         WithCallbacks {
             plugin: self,
             callbacks: Arc::new(JwtCallbacks::<S> {

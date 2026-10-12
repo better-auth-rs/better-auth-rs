@@ -24,7 +24,10 @@ impl<'a, S: AuthSchema> JwtApi<'a, S> {
             .get::<JwtPluginConfig>()
             .ok_or_else(|| AuthError::config("JwtPlugin is not registered"))?;
         Ok(Self {
-            plugin: JwtPlugin::with_config(config.clone()),
+            plugin: JwtPlugin {
+                config: config.clone(),
+                options: super::overrides::NativeOptions::registered(context)?,
+            },
             context,
             caller: None,
             transaction: None,
@@ -95,7 +98,7 @@ impl<'a, S: AuthSchema> JwtApi<'a, S> {
         self.sign_native(
             FieldMap::from_json(payload)?.into(),
             None,
-            Some(overrides.into_native()?),
+            Some(overrides.into_native()),
         )
         .await?
         .decode()
@@ -144,14 +147,13 @@ impl<'a, S: AuthSchema> JwtApi<'a, S> {
                     let input = request.validated_body::<SignInput>().ok_or_else(|| {
                         AuthError::internal("Missing validated JWT signing input")
                     })?;
-                    let defaults = super::overrides::NativeOptions::registered(
-                        &self.plugin.config,
-                        &resolved,
+                    let defaults = self.plugin.options.clone();
+                    let effective = defaults.merge(
+                        input
+                            .override_options
+                            .as_ref()
+                            .unwrap_or(&FieldValue::Undefined),
                     )?;
-                    let effective = match &input.override_options {
-                        Some(overrides) => defaults.merge(overrides)?,
-                        None => defaults,
-                    };
                     let mut endpoint = EndpointContext::native(
                         Some(&request),
                         request.original_request(),

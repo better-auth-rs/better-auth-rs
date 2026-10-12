@@ -36,11 +36,18 @@ impl JwtPlugin {
         issuer: Option<&str>,
         endpoint: &EndpointContext<'_, S>,
     ) -> AuthResult<Option<Map<String, Value>>> {
+        let options = self.options.clone();
+        let options = match issuer.filter(|issuer| !issuer.is_empty()) {
+            Some(issuer) => options.with_issuer(issuer)?,
+            None => options,
+        };
         let Some(header) = raw_header(token).filter(Header::has_key_id) else {
             return Ok(None);
         };
         let verified = async {
-            let keys = self.read_keys(endpoint).await?;
+            let keys = adapter::Keyring::new(adapter::store(endpoint), &options, endpoint)
+                .all()
+                .await?;
             if !keys.is_truthy() || keys.model_property("length")?.strict_equals(&0.into()) {
                 return Ok(None);
             }
@@ -49,19 +56,18 @@ impl JwtPlugin {
                 return Ok(None);
             }
             let public = keys::parse_json(&key.model_property("publicKey")?)?;
-            let algorithm = keys::algorithm(&key, self.config.primary_algorithm().name().into())?;
-            let ctx = endpoint.auth;
-            let issuer = issuer
-                .filter(|issuer| !issuer.is_empty())
-                .or(self.config.issuer.as_deref())
-                .or(ctx.config.base_url.as_static());
-            let audience = self
+            let algorithm = options.key_algorithm(&key)?;
+            let (algorithm, public) = keys::import(public, &algorithm)?;
+            let base = endpoint
+                .auth
                 .config
-                .audience
-                .as_ref()
-                .map(JwtAudience::recipients)
-                .or_else(|| ctx.config.base_url.as_static().map(|base| vec![base]));
-            verify_local(token, public, &algorithm, issuer, audience.as_deref(), 0)
+                .base_url
+                .as_static()
+                .map(|base| base.into())
+                .unwrap_or_default();
+            let issuer = overrides::nullish(options.property("jwt", "issuer")?, || base.clone());
+            let audience = overrides::nullish(options.property("jwt", "audience")?, || base);
+            verify_imported(token, &public, &algorithm, &issuer, &audience, 0)
         }
         .await;
         let verified = match verified {
@@ -167,19 +173,20 @@ pub(super) fn verify_local(
     tolerance: i64,
 ) -> AuthResult<Option<Map<String, Value>>> {
     let (algorithm, public) = keys::import(public, algorithm)?;
-    Ok(verify_imported(
-        token, &public, &algorithm, issuer, audience, tolerance,
-    ))
+    let issuer = issuer.map(FieldValue::from).unwrap_or_default();
+    let audience = audience
+        .map(|values| {
+            values
+                .iter()
+                .map(|value| FieldValue::from(*value))
+                .collect::<Vec<_>>()
+                .into()
+        })
+        .unwrap_or_default();
+    verify_imported(token, &public, &algorithm, &issuer, &audience, tolerance)
 }
 
-fn verify_imported(
-    token: &str,
-    public: &Jwk,
-    algorithm: &str,
-    issuer: Option<&str>,
-    audience: Option<&[&str]>,
-    tolerance: i64,
-) -> Option<Map<String, Value>> {
+fn verify_signed_claims(token: &str, public: &Jwk, algorithm: &str) -> Option<Map<String, Value>> {
     // WebCrypto requires a public key for verification; josekit also accepts private JWK material.
     if public.parameter("d").is_some() {
         return None;
@@ -200,36 +207,84 @@ fn verify_imported(
         |input, signature| verifier.verify(input, signature).is_ok(),
     )
     .ok()?;
-    let claims: Map<String, Value> = serde_json::from_slice(&payload).ok()?;
-    if issuer.is_some_and(|issuer| claims.get("iss").and_then(Value::as_str) != Some(issuer)) {
-        return None;
+    serde_json::from_slice(&payload).ok()
+}
+
+fn verify_imported(
+    token: &str,
+    public: &Jwk,
+    algorithm: &str,
+    issuer: &FieldValue,
+    audience: &FieldValue,
+    tolerance: i64,
+) -> AuthResult<Option<Map<String, Value>>> {
+    let Some(claims) = verify_signed_claims(token, public, algorithm) else {
+        return Ok(None);
+    };
+    let issuer_claim = claims.get("iss");
+    let audience_claim = claims.get("aud");
+    if (!issuer.is_undefined() && issuer_claim.is_none())
+        || (!audience.is_undefined() && audience_claim.is_none())
+    {
+        return Ok(None);
     }
-    if let Some(audience) = audience {
-        let aud = claims.get("aud")?;
-        if !aud.as_str().is_some_and(|value| audience.contains(&value))
-            && !aud.as_array().is_some_and(|values| {
-                values.iter().any(|value| {
-                    value
-                        .as_str()
-                        .is_some_and(|value| audience.contains(&value))
-                })
-            })
+    if let Some(value) = issuer_claim.filter(|_| !issuer.is_undefined()) {
+        let accepted = if matches!(issuer, FieldValue::Array(_)) {
+            issuer.clone()
+        } else {
+            vec![issuer.clone()].into()
+        };
+        if !accepted
+            .includes_method(&FieldValue::from_json(value.clone())?, "issuer")?
+            .is_truthy()
         {
-            return None;
+            return Ok(None);
+        }
+    }
+    if let Some(value) = audience_claim.filter(|_| !audience.is_undefined()) {
+        let payload_audience = FieldValue::from_json(value.clone())?;
+        let accepted = if audience.is_string() {
+            vec![audience.clone()].into()
+        } else {
+            audience.clone()
+        };
+        let matches = if payload_audience.is_string() {
+            accepted
+                .includes_method(&payload_audience, "audOption")?
+                .is_truthy()
+        } else if matches!(payload_audience, FieldValue::Array(_)) {
+            accepted
+                .some_method(
+                    &better_auth_core::FieldFunction::contextual(move |_, arguments| {
+                        payload_audience.includes_method(
+                            arguments.first().unwrap_or(&FieldValue::Undefined),
+                            "audPayload",
+                        )
+                    }),
+                    "audOption",
+                )?
+                .is_truthy()
+        } else {
+            false
+        };
+        if !matches {
+            return Ok(None);
         }
     }
     let now = Utc::now().timestamp() as f64;
     for field in ["iat", "exp", "nbf"] {
         if let Some(value) = claims.get(field) {
-            let value = value.as_f64()?;
+            let Some(value) = value.as_f64() else {
+                return Ok(None);
+            };
             if (field == "exp" && value <= now - tolerance as f64)
                 || (field == "nbf" && value > now + tolerance as f64)
             {
-                return None;
+                return Ok(None);
             }
         }
     }
-    Some(claims)
+    Ok(Some(claims))
 }
 
 #[cfg(test)]

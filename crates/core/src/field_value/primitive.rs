@@ -86,6 +86,31 @@ impl FieldValue {
         }
     }
 
+    /// Invoke `some(predicate)` with sparse-array visits and the original method receiver.
+    pub fn some_method(&self, predicate: &FieldFunction, expression: &str) -> AuthResult<Self> {
+        match (self, self.method_property("some")?) {
+            (_, Some(Self::Function(method))) => {
+                method.call_with(self, &[predicate.clone().into()])
+            }
+            (Self::Array(values), None) => {
+                let length = values.len()?;
+                for index in 0..length {
+                    if let Some(value) = values.get(index)?
+                        && predicate
+                            .call_with(&Self::Undefined, &[value, index.into(), self.clone()])?
+                            .is_truthy()
+                    {
+                        return Ok(true.into());
+                    }
+                }
+                Ok(false.into())
+            }
+            _ => Err(AuthError::type_error(format!(
+                "{expression}.some is not a function"
+            ))),
+        }
+    }
+
     /// Invoke `filter(predicate)` without narrowing a custom method's return value.
     pub fn filter_method(&self, predicate: &FieldFunction, expression: &str) -> AuthResult<Self> {
         match (self, self.method_property("filter")?) {

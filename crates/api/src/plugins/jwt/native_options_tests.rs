@@ -30,6 +30,10 @@ async fn context(plugin: &JwtPlugin, callbacks: JwtCallbacks<S>) -> AuthResult<A
     config.telemetry.enabled = false;
     let config = Arc::new(config);
     let store: Arc<dyn AuthStore<S>> = Arc::new(EphemeralStore::new(config.clone()));
+    plugin
+        .options
+        .0
+        .set_model_property("adapter", callbacks.to_native())?;
     let mut context =
         crate::plugins::test_helpers::initialize_test_context(config, store, &[plugin]).await?;
     context.extensions.insert(Arc::new(callbacks));
@@ -140,7 +144,7 @@ async fn before_hook_group_replacement_cannot_restore_the_original_signer() -> A
             }),
             ..Default::default()
         }
-        .into_native()?;
+        .into_native();
         let result = JwtApi::from_context(&context)?
             .sign_value_with_overrides(claims(), original)
             .await;
@@ -225,7 +229,7 @@ async fn before_hook_adapter_replacement_keeps_bound_endpoints_and_default_persi
                     adapter: Some(original),
                     ..Default::default()
                 }
-                .into_native()?,
+                .into_native(),
             )
             .await?
             .decode::<String>()?;
@@ -500,8 +504,8 @@ async fn owned_callback_builders_invalidate_the_shared_registered_adapter() -> A
         assert!(!replacement.strict_equals(&original));
         let plugin = JwtPlugin::new();
         let context = context(&plugin, callbacks).await?;
-        let first = overrides::NativeOptions::registered(&plugin.config, &context)?;
-        let second = overrides::NativeOptions::registered(&plugin.config, &context)?;
+        let first = overrides::NativeOptions::registered(&context)?;
+        let second = overrides::NativeOptions::registered(&context)?;
         let first_adapter = first.0.model_property("adapter")?;
         let second_adapter = second.0.model_property("adapter")?;
         assert!(first_adapter.strict_equals(&replacement));

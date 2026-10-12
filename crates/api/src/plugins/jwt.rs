@@ -81,7 +81,7 @@ impl JwtAlgorithm {
 
 /// Local signing and discovery options.
 #[derive(Clone, better_auth_core::PluginConfig)]
-#[plugin(name = "JwtPlugin")]
+#[plugin(name = "JwtPlugin", constructor = initialize_options)]
 pub struct JwtPluginConfig {
     /// Use locally managed keys for JWT session cookie caches.
     #[config(default = false)]
@@ -134,21 +134,25 @@ pub struct JwtPluginConfig {
 }
 
 /// Issue session JWTs with keys persisted through `JwksStore`.
+/// Configuration creates native options once. Clones and registered facades share those options.
+/// Consuming configuration builders create a new options owner from the updated typed configuration.
+/// Direct helpers use this plugin's options even when the context registers another JWT plugin.
+#[derive(Clone)]
 pub struct JwtPlugin {
     config: JwtPluginConfig,
-}
-
-impl JwtPluginConfig {
-    fn primary_algorithm(&self) -> JwtAlgorithm {
-        self.algorithm.unwrap_or_default()
-    }
+    options: overrides::NativeOptions,
 }
 
 impl JwtPlugin {
+    fn initialize_options(config: JwtPluginConfig) -> Self {
+        let options = overrides::NativeOptions::from_config(&config, None);
+        Self { config, options }
+    }
+
     /// Set a relative duration, an absolute date, or a NumericDate in seconds.
     pub fn expiration_time(mut self, expiration: impl Into<JwtExpiration>) -> Self {
         self.config.expiration_time = expiration.into();
-        self
+        Self::with_config(self.config)
     }
 }
 
@@ -213,11 +217,12 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
             }
             let signer: std::sync::Arc<dyn better_auth_core::session::SessionCookieSigner<S>> =
                 std::sync::Arc::new(cache::CookieSigner {
-                    plugin: Self::with_config(self.config.clone()),
+                    plugin: self.clone(),
                     runtime: ctx.runtime(),
                 });
             ctx.extensions.insert(signer);
         }
+        ctx.extensions.insert(self.options.clone());
         Ok(())
     }
     async fn on_request(
@@ -268,7 +273,12 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
             "after",
             "plugin:jwt",
             async {
-                if self.config.disable_setting_jwt_header || req.path() != "/get-session" {
+                let options = &self.options;
+                if options
+                    .0
+                    .model_property("disableSettingJwtHeader")?
+                    .is_truthy()
+                {
                     return Ok(());
                 }
                 let snapshot = req.native_session_snapshot()?;
@@ -325,7 +335,8 @@ impl JwtPlugin {
         &self,
         endpoint: &EndpointContext<'_, S>,
     ) -> AuthResult<AuthResponse> {
-        if self.config.remote_url.is_some() {
+        let options = self.options.clone();
+        if options.property("jwks", "remoteUrl")?.is_truthy() {
             let mut response = AuthResponse::new(404);
             let _ = response.headers.insert("content-type", "application/json");
             return Ok(response);
@@ -341,7 +352,10 @@ impl JwtPlugin {
             ));
         }
         let now = Utc::now().timestamp_millis() as f64;
-        let grace = self.config.grace_period.num_milliseconds() as f64;
+        let grace = better_auth_core::query::field_number(&overrides::nullish(
+            options.property("jwks", "gracePeriod")?,
+            || (3600.0 * 24.0 * 30.0).into(),
+        ))? * 1000.0;
         let live_keys = keys.filter_method(
             &better_auth_core::FieldFunction::contextual(move |_, arguments| {
                 let key = arguments.first().unwrap_or(&FieldValue::Undefined);
@@ -361,21 +375,22 @@ impl JwtPlugin {
             }),
             "keySets",
         )?;
-        let default_algorithm: FieldValue = self.config.primary_algorithm().name().into();
+        let key_pair = options.property("jwks", "keyPairConfig")?;
+        let default_curve = if key_pair.is_truthy() && key_pair.has_property("crv")? {
+            key_pair.model_property("crv")?
+        } else {
+            FieldValue::Undefined
+        };
         let public = live_keys.map_method(
             &better_auth_core::FieldFunction::contextual(move |_, arguments| {
                 let key = arguments.first().unwrap_or(&FieldValue::Undefined);
-                let algorithm = keys::algorithm(key, default_algorithm.clone())?;
+                let algorithm = options.key_algorithm(key)?;
                 let curve = key.model_property("crv")?;
                 let mut value = FieldMap::from([
                     ("alg".into(), algorithm),
                     (
                         "crv".into(),
-                        if curve.is_null() {
-                            FieldValue::Undefined
-                        } else {
-                            curve
-                        },
+                        overrides::nullish(curve, || default_curve.clone()),
                     ),
                 ]);
                 keys::spread(
@@ -422,3 +437,9 @@ mod callback_contract_tests;
 
 #[cfg(test)]
 mod native_options_tests;
+
+#[cfg(test)]
+mod initialized_cookie_tests;
+
+#[cfg(test)]
+mod initialized_options_tests;

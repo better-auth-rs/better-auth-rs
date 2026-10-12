@@ -673,6 +673,17 @@ async fn nullable_key_readback_preserves_write_and_endpoint_consumption_order() 
                     }),
             ));
             let plugin = JwtPlugin::new().disable_private_key_encryption(!encrypted);
+            plugin
+                .options
+                .0
+                .set_model_property(
+                    "adapter",
+                    ctx.extensions
+                        .get::<Arc<JwtCallbacks<BundledSchema>>>()
+                        .unwrap()
+                        .to_native(),
+                )
+                .unwrap();
             let endpoint = EndpointContext::new(None, FieldValue::Null, &ctx);
             if operation == "jwks" {
                 let response = plugin.jwks(&endpoint).await.unwrap();

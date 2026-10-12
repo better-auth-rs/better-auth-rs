@@ -198,6 +198,14 @@ async fn capture(
             },
         )));
     let plugin = JwtPlugin::with_config(config(policy, &events));
+    plugin.options.0.set_model_property(
+        "adapter",
+        context
+            .extensions
+            .get::<Arc<JwtCallbacks<BundledSchema>>>()
+            .ok_or("Missing fixture adapter")?
+            .to_native(),
+    )?;
     let request = AuthRequest::new(HttpMethod::Get, "/token");
     let result = if cookie {
         let init = AuthInitContext::new(context.config.clone(), context.database.clone())
@@ -380,6 +388,14 @@ async fn token_header_and_cookie_keys_observe_native_relationship_snapshots() ->
             })
         }),
     ));
+    plugin.options.0.set_model_property(
+        "adapter",
+        context
+            .extensions
+            .get::<Arc<JwtCallbacks<StatelessSchema>>>()
+            .ok_or("Missing fixture adapter")?
+            .to_native(),
+    )?;
     let cookies = format!(
         "better-auth.session_token={}",
         sign_cookie_value(session.token.typed()?, context.config.signing_secret())

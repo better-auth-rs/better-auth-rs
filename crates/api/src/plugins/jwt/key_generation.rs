@@ -6,7 +6,7 @@ impl JwtPlugin {
         &self,
         endpoint: &EndpointContext<'_, S>,
     ) -> AuthResult<FieldValue> {
-        let options = NativeOptions::registered(&self.config, endpoint.auth)?;
+        let options = self.options.clone();
         self.create_key_native(&options, endpoint).await
     }
 
@@ -32,7 +32,9 @@ impl JwtPlugin {
         endpoint: &EndpointContext<'_, S>,
     ) -> AuthResult<Option<better_auth_core::Jwk>> {
         use better_auth_core::FromFieldMap as _;
-        let options = NativeOptions::registered(&self.config, endpoint.auth)?
+        let options = self
+            .options
+            .clone()
             .with_key_pair(parameters.into_native())?;
         let value = self.create_key_native(&options, endpoint).await?;
         if value.is_null() || value.is_undefined() {

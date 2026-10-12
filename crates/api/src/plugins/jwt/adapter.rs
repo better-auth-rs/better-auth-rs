@@ -77,7 +77,7 @@ impl<'a, 'ctx, S: AuthSchema> Keyring<'a, 'ctx, S> {
         })
     }
 
-    async fn all(&self) -> AuthResult<FieldValue> {
+    pub(super) async fn all(&self) -> AuthResult<FieldValue> {
         if let Some((receiver, function)) = self.callback("getJwks")? {
             return self.get(receiver, function).await;
         }
@@ -137,7 +137,7 @@ impl JwtPlugin {
         &self,
         endpoint: &EndpointContext<'_, S>,
     ) -> AuthResult<FieldValue> {
-        let options = NativeOptions::registered(&self.config, endpoint.auth)?;
+        let options = self.options.clone();
         Keyring::new(store(endpoint), &options, endpoint)
             .all()
             .await

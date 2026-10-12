@@ -75,6 +75,14 @@ async fn verify(
         audience: Some("better-auth:session-cache".into()),
         ..Default::default()
     });
+    plugin.options.0.set_model_property(
+        "adapter",
+        context
+            .extensions
+            .get::<Arc<JwtCallbacks<StatelessSchema>>>()
+            .unwrap()
+            .to_native(),
+    )?;
     if !cookie {
         return plugin.verify(token, None, &context).await;
     }

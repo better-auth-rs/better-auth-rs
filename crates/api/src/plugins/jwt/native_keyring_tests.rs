@@ -57,6 +57,10 @@ async fn context(
     config.telemetry.enabled = false;
     let config = Arc::new(config);
     let store: Arc<dyn AuthStore<StatelessSchema>> = Arc::new(EphemeralStore::new(config.clone()));
+    plugin
+        .options
+        .0
+        .set_model_property("adapter", callbacks.to_native())?;
     let mut context =
         crate::plugins::test_helpers::initialize_test_context(config, store, &[plugin]).await?;
     context.extensions.insert(Arc::new(callbacks));

@@ -41,15 +41,39 @@ impl JwtPlugin {
                 })?
                 .user_value()
         };
-        let defined = match &self.config.define_payload {
-            Some(callback) => callback(current()).await?,
-            None => user()?,
+        let options = self.options.clone();
+        let defined = if options.property("jwt", "definePayload")?.is_truthy() {
+            let receiver = options.0.model_property("jwt")?;
+            match receiver.model_property("definePayload")? {
+                FieldValue::Function(callback) => {
+                    callback.call_awaited_with(&receiver, &[current()]).await?
+                }
+                _ => {
+                    return Err(AuthError::type_error(
+                        "options.jwt.definePayload is not a function",
+                    ));
+                }
+            }
+        } else {
+            user()?
         };
         let mut payload = FieldMap::from([("iat".into(), endpoint.auth.now().timestamp().into())]);
         keys::spread(&mut payload, defined)?;
-        let mut subject = match &self.config.get_subject {
-            Some(callback) => callback(current()).await?,
-            None => FieldValue::Undefined,
+        let receiver = options.0.model_property("jwt")?;
+        let callback = overrides::optional_property(&receiver, "getSubject")?;
+        let mut subject = if callback.is_null() || callback.is_undefined() {
+            FieldValue::Undefined
+        } else {
+            match callback {
+                FieldValue::Function(callback) => {
+                    callback.call_awaited_with(&receiver, &[current()]).await?
+                }
+                _ => {
+                    return Err(AuthError::type_error(
+                        "options.jwt.getSubject is not a function",
+                    ));
+                }
+            }
         };
         if subject.is_null() || subject.is_undefined() {
             subject = match user()? {
@@ -67,7 +91,7 @@ impl JwtPlugin {
             };
         }
         let _ = payload.insert("sub".into(), subject);
-        self.sign_value_in_endpoint(payload.into(), None, endpoint)
+        self.sign_native_options(payload.into(), None, &options, endpoint)
             .await
     }
 
@@ -135,7 +159,7 @@ impl JwtPlugin {
         options: Option<&JwtSigningOptions>,
         endpoint: &EndpointContext<'_, S>,
     ) -> AuthResult<FieldValue> {
-        let native = overrides::NativeOptions::registered(&self.config, endpoint.auth)?;
+        let native = self.options.clone();
         self.sign_native_options(fields, options, &native, endpoint)
             .await
     }
@@ -186,7 +210,14 @@ impl JwtPlugin {
         }
         let empty = JwtSigningOptions::default();
         let selection = selection.unwrap_or(&empty);
-        let key = self.resolve_key(selection, options, endpoint).await?;
+        let key = self
+            .resolve_key(selection, options, endpoint)
+            .await?
+            .ok_or_else(|| {
+                AuthError::type_error(
+                    "Cannot destructure property 'alg' from null or undefined value",
+                )
+            })?;
         let mut payload = better_auth_core::StructuredCloneContext::new()
             .clone_value(&fields)?
             .enumerable_fields()?;
@@ -198,8 +229,8 @@ impl JwtPlugin {
         &self,
         selection: &JwtSigningOptions,
         endpoint: &EndpointContext<'_, S>,
-    ) -> AuthResult<ResolvedSigningKey> {
-        let options = overrides::NativeOptions::registered(&self.config, endpoint.auth)?;
+    ) -> AuthResult<Option<ResolvedSigningKey>> {
+        let options = self.options.clone();
         self.resolve_key(selection, &options, endpoint).await
     }
 
@@ -208,11 +239,9 @@ impl JwtPlugin {
         selection: &JwtSigningOptions,
         options: &overrides::NativeOptions,
         endpoint: &EndpointContext<'_, S>,
-    ) -> AuthResult<ResolvedSigningKey> {
+    ) -> AuthResult<Option<ResolvedSigningKey>> {
         if options.property("jwt", "sign")?.is_truthy() {
-            return Err(AuthError::type_error(
-                "Cannot destructure property 'alg' from null or undefined value",
-            ));
+            return Ok(None);
         }
         let mut selected = if let Some(id) = &selection.key_id {
             let key = self.read_key(id, options, endpoint).await?;
@@ -365,11 +394,11 @@ impl JwtPlugin {
                 )));
             }
         };
-        Ok(ResolvedSigningKey {
+        Ok(Some(ResolvedSigningKey {
             algorithm,
             key_id: selected.model_property("id")?,
             signer,
-        })
+        }))
     }
 
     fn default_claims(

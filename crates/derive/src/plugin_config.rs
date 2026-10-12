@@ -10,7 +10,10 @@ struct FieldInfo {
 }
 
 pub(crate) fn derive_plugin_config(input: &DeriveInput) -> TokenStream {
-    let plugin_name = parse_plugin_name(input);
+    let (plugin_name, constructor) = match parse_plugin_options(input) {
+        Ok(options) => options,
+        Err(error) => return error.to_compile_error(),
+    };
     let config_name = &input.ident;
 
     let fields = match &input.data {
@@ -59,19 +62,21 @@ pub(crate) fn derive_plugin_config(input: &DeriveInput) -> TokenStream {
     let builder_methods: Vec<_> = field_infos
         .iter()
         .filter(|fi| !fi.skip)
-        .map(gen_builder_method)
+        .map(|field| gen_builder_method(field, constructor.is_some()))
         .collect();
 
+    let initialize = match &constructor {
+        Some(constructor) => quote! { Self::#constructor(config) },
+        None => quote! { Self { config } },
+    };
     let plugin_impl = quote! {
         impl #plugin_name {
             pub fn new() -> Self {
-                Self {
-                    config: #config_name::default(),
-                }
+                Self::with_config(#config_name::default())
             }
 
             pub fn with_config(config: #config_name) -> Self {
-                Self { config }
+                #initialize
             }
 
             #(#builder_methods)*
@@ -93,25 +98,29 @@ pub(crate) fn derive_plugin_config(input: &DeriveInput) -> TokenStream {
     }
 }
 
-#[expect(clippy::expect_used, reason = "proc-macro error reporting")]
-#[expect(clippy::panic, reason = "proc-macro error reporting")]
-fn parse_plugin_name(input: &DeriveInput) -> Ident {
+fn parse_plugin_options(input: &DeriveInput) -> Result<(Ident, Option<Ident>), syn::Error> {
+    let mut name = None;
+    let mut constructor = None;
     for attr in &input.attrs {
         if attr.path().is_ident("plugin") {
-            let name: LitStr = attr
-                .parse_args_with(|stream: syn::parse::ParseStream| {
-                    let ident: Ident = stream.parse()?;
-                    if ident != "name" {
-                        return Err(syn::Error::new(ident.span(), "expected `name`"));
-                    }
-                    let _: syn::Token![=] = stream.parse()?;
-                    stream.parse::<LitStr>()
-                })
-                .expect("expected #[plugin(name = \"...\")]");
-            return Ident::new(&name.value(), name.span());
+            attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("name") {
+                    let value: LitStr = meta.value()?.parse()?;
+                    name = Some(Ident::new(&value.value(), value.span()));
+                    Ok(())
+                } else if meta.path.is_ident("constructor") {
+                    constructor = Some(meta.value()?.parse()?);
+                    Ok(())
+                } else {
+                    Err(meta.error("expected `name` or `constructor`"))
+                }
+            })?;
         }
     }
-    panic!("missing #[plugin(name = \"...\")] attribute");
+    let name = name.ok_or_else(|| {
+        syn::Error::new_spanned(input, "missing #[plugin(name = \"...\")] attribute")
+    })?;
+    Ok((name, constructor))
 }
 
 #[expect(
@@ -178,29 +187,34 @@ fn extract_option_inner(ty: &Type) -> Option<&Type> {
     None
 }
 
-fn gen_builder_method(fi: &FieldInfo) -> TokenStream {
+fn gen_builder_method(fi: &FieldInfo, reconfigure: bool) -> TokenStream {
     let field_name = &fi.ident;
     let ty = &fi.ty;
+    let finish = if reconfigure {
+        quote! { Self::with_config(self.config) }
+    } else {
+        quote! { self }
+    };
 
     if is_string_type(ty) {
         quote! {
             pub fn #field_name(mut self, val: impl Into<String>) -> Self {
                 self.config.#field_name = val.into();
-                self
+                #finish
             }
         }
     } else if let Some(inner) = extract_option_inner(ty) {
         quote! {
             pub fn #field_name(mut self, val: #inner) -> Self {
                 self.config.#field_name = Some(val);
-                self
+                #finish
             }
         }
     } else {
         quote! {
             pub fn #field_name(mut self, val: #ty) -> Self {
                 self.config.#field_name = val;
-                self
+                #finish
             }
         }
     }

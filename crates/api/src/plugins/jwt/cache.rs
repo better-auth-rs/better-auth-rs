@@ -17,11 +17,6 @@ impl<S: AuthSchema> SessionCookieSigner<S> for CookieSigner<S> {
         expires_in: f64,
         context: SessionCookieContext<'_, S>,
     ) -> AuthResult<String> {
-        if self.plugin.config.custom_sign.is_some() {
-            return Err(AuthError::better_auth(
-                "`jwt({ sessionCookieCache: true })` requires locally managed JWT plugin keys and does not support `jwt.sign`.",
-            ));
-        }
         let runtime = self.runtime.context()?;
         let mut endpoint = EndpointContext::new(
             Some(context.request),
@@ -37,7 +32,12 @@ impl<S: AuthSchema> SessionCookieSigner<S> for CookieSigner<S> {
         let key = self
             .plugin
             .resolve_local_signing_key(&options, &endpoint)
-            .await?;
+            .await?
+            .ok_or_else(|| {
+                AuthError::better_auth(
+                    "`jwt({ sessionCookieCache: true })` requires locally managed JWT plugin keys and does not support `jwt.sign`.",
+                )
+            })?;
         let sid = payload
             .get("session")
             .unwrap_or(&FieldValue::Undefined)
@@ -97,10 +97,13 @@ impl<S: AuthSchema> SessionCookieSigner<S> for CookieSigner<S> {
             }
             let mut algorithm = key.model_property("alg")?;
             if algorithm.is_null() || algorithm.is_undefined() {
-                algorithm = match self.plugin.config.algorithm {
-                    Some(algorithm) => algorithm.name().into(),
-                    None => header.field("alg")?,
-                };
+                algorithm = overrides::optional_property(
+                    &self.plugin.options.property("jwks", "keyPairConfig")?,
+                    "alg",
+                )?;
+                if algorithm.is_null() || algorithm.is_undefined() {
+                    algorithm = header.field("alg")?;
+                }
             }
             if !algorithm.is_truthy() {
                 return Ok(None);
