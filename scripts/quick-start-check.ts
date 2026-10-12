@@ -46,10 +46,17 @@ try {
     dependencies,
     "test the local better-auth source",
   );
+  const manifest = Bun.TOML.parse(await Bun.file(join(root, "Cargo.toml")).text());
+  const patches = manifest.patch?.["crates-io"];
+  assert(patches, "the local source must retain its coordinated driver patches");
+  const localPatches = Object.entries(patches).map(([name, patch]) => {
+    assert(typeof patch.path === "string", `${name} must use its checked-in source`);
+    return `${name} = { path = ${JSON.stringify(resolve(root, patch.path))} }`;
+  });
   await mkdir(join(app, "src"));
   await Bun.write(
     join(app, "Cargo.toml"),
-    `[package]\nname = "better-auth-quick-start"\nversion = "0.0.0"\nedition = "2024"\n\n[workspace]\n\n${localDependencies}`,
+    `[package]\nname = "better-auth-quick-start"\nversion = "0.0.0"\nedition = "2024"\n\n[workspace]\n\n${localDependencies}\n[patch.crates-io]\n${localPatches.join("\n")}\n`,
   );
   await Bun.write(join(app, "src/main.rs"), address(source));
   // Seed dependency versions from the checked-in consumer; Cargo updates only the temporary lock.

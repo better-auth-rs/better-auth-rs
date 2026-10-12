@@ -46,7 +46,7 @@ pub(crate) fn config() -> better_auth::AuthConfig {
     )
     .base_url("http://native-replacements.test");
     config.telemetry.enabled = false;
-    config.logger = better_auth_core::LoggerConfig {
+    config.logger = better_auth::__private_core::LoggerConfig {
         disabled: Some(true),
         ..Default::default()
     }
