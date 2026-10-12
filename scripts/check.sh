@@ -264,6 +264,8 @@ PY_CHECK
     organization-members)
       cargo fmt --all -- --check
       local organization_status=0
+      BETTER_AUTH_ORG_STACK_DIAGNOSTICS=1 cargo test --locked --features axum,seaorm2,redis-cache \
+        --test compat_organization_tests -- --exact test_organization_member_endpoints --nocapture || organization_status=1
       bun --no-install test \
         ./compat-tests/reference-server/contracts/organization-member-point-reads.test.ts \
         ./compat-tests/reference-server/contracts/organization-member-native-routes.test.ts \

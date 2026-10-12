@@ -370,8 +370,24 @@ async fn test_organization_invitation_endpoints() {
 /// Test organization member management endpoints.
 #[tokio::test]
 async fn test_organization_member_endpoints() {
+    fn future_size<F: std::future::Future>(_: impl FnOnce() -> F) -> usize {
+        std::mem::size_of::<F>()
+    }
+    eprintln!(
+        "organization-stack test-start create-auth-future-bytes={}",
+        future_size(create_test_auth)
+    );
     let auth = create_test_auth().await;
+    eprintln!("organization-stack auth-created");
+    let request = get_request("/");
+    eprintln!(
+        "organization-stack helper-futures handle={} send={} signup={}",
+        future_size(|| auth.handle_request(request.clone())),
+        future_size(|| send_request(&auth, request.clone())),
+        future_size(|| signup_user(&auth, "unused@example.test", "unused", "Unused")),
+    );
     let mut validator = SpecValidator::with_profile(OpenApiProfile::AlignedRs);
+    eprintln!("organization-stack validator-created");
 
     // Set up: create owner, member, and org
     let (owner_token, _) =
@@ -499,7 +515,9 @@ async fn test_organization_member_endpoints() {
     )
     .await;
     assert_eq!(status, 200, "leave org failed: {}", body);
+    eprintln!("organization-stack validation-start path=/organization/leave");
     validator.validate_endpoint("/organization/leave", "post", status, &body);
+    eprintln!("organization-stack validation-end path=/organization/leave");
 
     // --- POST /organization/remove-member (owner removes an invited member) ---
     // Re-invite member for remove test
@@ -559,7 +577,9 @@ async fn test_organization_member_endpoints() {
     )
     .await;
     assert_eq!(status, 200, "remove-member failed: {}", body);
+    eprintln!("organization-stack validation-start path=/organization/remove-member");
     validator.validate_endpoint("/organization/remove-member", "post", status, &body);
+    eprintln!("organization-stack validation-end path=/organization/remove-member");
 
     // --- POST /organization/delete ---
     let (status, body) = send_request(
@@ -572,7 +592,9 @@ async fn test_organization_member_endpoints() {
     )
     .await;
     assert_eq!(status, 200, "delete org failed: {}", body);
+    eprintln!("organization-stack validation-start path=/organization/delete");
     validator.validate_endpoint("/organization/delete", "post", status, &body);
+    eprintln!("organization-stack validation-end path=/organization/delete");
 
     // Print report
     let report = validator.report();
@@ -595,6 +617,7 @@ async fn test_organization_member_endpoints() {
             .collect::<Vec<_>>()
             .join("\n")
     );
+    eprintln!("organization-stack test-body-complete");
 }
 
 #[tokio::test]

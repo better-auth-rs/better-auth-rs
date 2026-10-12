@@ -478,17 +478,41 @@ pub fn post_with_auth(path: &str, token: &str) -> AuthRequest {
 // ---------------------------------------------------------------------------
 
 pub async fn send_request(auth: &TestAuth, req: AuthRequest) -> (u16, Value) {
-    let resp = auth
-        .handle_request(req)
+    let diagnostic = std::env::var_os("BETTER_AUTH_ORG_STACK_DIAGNOSTICS")
+        .is_some()
+        .then(|| req.path().to_owned());
+    if let Some(path) = &diagnostic {
+        eprintln!("organization-stack request-start path={path}");
+    }
+    let request = auth.handle_request(req);
+    if let Some(path) = &diagnostic {
+        eprintln!(
+            "organization-stack request-future path={path} bytes={}",
+            std::mem::size_of_val(&request)
+        );
+    }
+    let resp = request
         .await
         .unwrap_or_else(|e| panic!("Request should not panic: {e}"));
     let status = resp.status;
+    if let Some(path) = &diagnostic {
+        eprintln!("organization-stack handler-return path={path} status={status}");
+    }
     let bytes = resp
         .body
         .bytes()
         .expect("The fixture response must serialize");
+    if let Some(path) = &diagnostic {
+        eprintln!(
+            "organization-stack serialized path={path} bytes={}",
+            bytes.len()
+        );
+    }
     let json: Value = serde_json::from_slice(&bytes)
         .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).to_string()));
+    if let Some(path) = &diagnostic {
+        eprintln!("organization-stack request-end path={path}");
+    }
     (status, json)
 }
 
