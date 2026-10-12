@@ -37,7 +37,7 @@ rendered = '\n'.join([
     '        .and_then(|index| CODES.get(index).map(|entry| entry.1))',
     '}',
     '',
-    f'const CODES: [(u16, &str); {len(entries)}] = [',
+    f'static CODES: [(u16, &str); {len(entries)}] = [',
     *(f'    ({number}, "{name}"),' for number, name in entries),
     '];',
     '',
@@ -47,8 +47,8 @@ if args.write:
     output.write_text(rendered)
 else:
     actual = output.read_text()
-    prefix, body = actual.split(f'const CODES: [(u16, &str); {len(entries)}] = [\n', 1)
-    assert prefix == rendered.split('const CODES:', 1)[0], "The generated table header differs"
+    prefix, body = actual.split(f'static CODES: [(u16, &str); {len(entries)}] = [\n', 1)
+    assert prefix == rendered.split('static CODES:', 1)[0], "The generated table header differs"
     assert body.endswith("];\n"), "The Rust table must end at its declared boundary"
     body = body.removesuffix("];\n")
     pattern = r'\(\s*(\d+),\s*"([A-Z0-9_]+)",?\s*\)'

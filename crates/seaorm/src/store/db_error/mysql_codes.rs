@@ -8,7 +8,7 @@ pub(super) fn name(number: u16) -> Option<&'static str> {
         .and_then(|index| CODES.get(index).map(|entry| entry.1))
 }
 
-const CODES: [(u16, &str); 1963] = [
+static CODES: [(u16, &str); 1963] = [
     (1, "EE_CANTCREATEFILE"),
     (2, "EE_READ"),
     (3, "EE_WRITE"),
