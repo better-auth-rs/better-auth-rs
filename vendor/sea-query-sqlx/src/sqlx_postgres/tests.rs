@@ -26,7 +26,7 @@ fn oversized_unsigned_value_returns_original_conversion_error() {
         Value::PostgresUnspecifiedText(Some("tail".into())),
     ]))
     .try_into_pg_arguments();
-    let mut query = sqlx::query_with_result::<Postgres, _>("SELECT $1, $2, $3", result);
+    let mut query = sqlx::__query_with_result::<Postgres, _>("SELECT $1, $2, $3", result);
     let error = query.take_arguments().unwrap_err();
     assert!(error.is::<TryFromIntError>());
 }

@@ -327,7 +327,8 @@ pub(crate) fn sqlx_query(stmt: &Statement) -> sqlx::query::Query<'_, Postgres, P
         .values
         .as_ref()
         .map_or(Values(Vec::new()), |values| values.clone());
-    sqlx::query_with_result(&stmt.sql, SqlxValues(values).try_into_pg_arguments())
+    // SQLx 0.8.6 exposes its fallible constructor through this re-export.
+    sqlx::__query_with_result(&stmt.sql, SqlxValues(values).try_into_pg_arguments())
 }
 
 pub(crate) async fn set_transaction_config(

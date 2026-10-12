@@ -51,7 +51,7 @@ fn insensitive_mode_depends_on_the_operator_and_original_operand_shape() -> Auth
                     pattern.into()
                 };
                 let parameter = if backend == DbBackend::Postgres {
-                    format!("'{value}'")
+                    "$1".into()
                 } else {
                     "?".into()
                 };
@@ -77,7 +77,7 @@ fn insensitive_mode_depends_on_the_operator_and_original_operand_shape() -> Auth
                     "{backend:?}: {operator:?}, array={array}"
                 );
                 let values = if backend == DbBackend::Postgres {
-                    Vec::new()
+                    vec![Value::PostgresUnspecifiedText(Some(value))]
                 } else {
                     vec![Value::String(Some(value))]
                 };

@@ -15,7 +15,7 @@ The published archive omits the repository's license files. Both license files w
 - MIT: <https://raw.githubusercontent.com/SeaQL/sea-query/cf2e79ad21ce2279d3cba9c6d155f2f0fb919c82/LICENSE-MIT>
 - Apache-2.0: <https://raw.githubusercontent.com/SeaQL/sea-query/cf2e79ad21ce2279d3cba9c6d155f2f0fb919c82/LICENSE-APACHE>
 
-The patch adds `SqlxValues::try_into_pg_arguments`. This shared conversion propagates native encoding errors and binds `PostgresUnspecifiedText` with `PgArguments::add_text`. Array conversion validates the declared type and propagates element errors. Scalar and array unsigned overflow errors retain their original error types. The existing `IntoArguments` implementation delegates to the shared conversion and panics on failure; callers that require error propagation must pass the fallible result to `sqlx::query_with_result`. MySQL, SQLite, and Any reject the PostgreSQL carrier.
+The patch adds `SqlxValues::try_into_pg_arguments`. This shared conversion propagates native encoding errors and binds `PostgresUnspecifiedText` with `PgArguments::add_text`. Array conversion validates the declared type and propagates element errors. Scalar and array unsigned overflow errors retain their original error types. The existing `IntoArguments` implementation delegates to the shared conversion and panics on failure; callers that require error propagation must pass the fallible result to SQLx 0.8.6's `sqlx::__query_with_result` re-export. The patch requires that pinned SQLx version. MySQL, SQLite, and Any reject the PostgreSQL carrier.
 
 Modified source paths:
 
