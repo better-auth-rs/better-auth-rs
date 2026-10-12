@@ -1,4 +1,6 @@
-use better_auth_core::{AuthError, DatabaseError, DatabaseErrorCause, FieldMap, FieldValue};
+use better_auth_core::{
+    AuthError, DatabaseError, DatabaseErrorCause, FieldMap, FieldValue, Utf16String,
+};
 use sea_orm::{DbErr, RuntimeErr, SqlErr, sqlx};
 
 mod mysql_codes;
@@ -79,7 +81,11 @@ fn mysql_properties(error: &sqlx::mysql::MySqlDatabaseError) -> FieldMap {
         // mysql2 assigns command.sql || command.query, so an empty SQL string is undefined.
         (
             "sql".into(),
-            optional_text(error.sql().filter(|sql| !sql.is_empty())),
+            match error.sql_utf16() {
+                Some(sql) if !sql.is_empty() => Utf16String::from_units(sql.to_vec()).into(),
+                Some(_) => FieldValue::Undefined,
+                None => optional_text(error.sql().filter(|sql| !sql.is_empty())),
+            },
         ),
     ])
 }

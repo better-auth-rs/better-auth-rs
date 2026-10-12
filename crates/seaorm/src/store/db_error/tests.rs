@@ -296,3 +296,6 @@ async fn live_postgres_database_error_metadata() -> TestResult {
 async fn live_mysql_database_error_metadata() -> TestResult {
     live_database("BETTER_AUTH_TEST_MYSQL_URL").await
 }
+
+#[cfg(test)]
+mod mysql_text;

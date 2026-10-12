@@ -11,6 +11,7 @@ pub struct MySqlArguments {
     pub(crate) values: Vec<u8>,
     pub(crate) types: Vec<MySqlTypeInfo>,
     pub(crate) null_bitmap: NullBitMap,
+    pub(crate) text_command: Option<crate::MySqlTextCommand>,
 }
 
 impl MySqlArguments {
@@ -18,6 +19,9 @@ impl MySqlArguments {
     where
         T: Encode<'q, MySql> + Type<MySql>,
     {
+        if self.text_command.is_some() {
+            return Err("MySQL text commands cannot accept binary parameters".into());
+        }
         let ty = value.produces().unwrap_or_else(T::type_info);
 
         let value_length_before_encoding = self.values.len();

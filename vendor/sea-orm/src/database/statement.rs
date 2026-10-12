@@ -15,6 +15,8 @@ pub struct Statement {
     /// The database backend this statement is constructed for.
     /// The SQL dialect and values should be valid for the DbBackend.
     pub db_backend: DbBackend,
+    #[cfg(feature = "sqlx-mysql")]
+    mysql_text: Option<sqlx::mysql::MySqlTextCommand>,
 }
 
 /// Any type that can build a [Statement]
@@ -28,6 +30,34 @@ pub trait StatementBuilder: Sync {
 }
 
 impl Statement {
+    /// Construct an explicit MySQL text command from complete logical UTF-16 SQL.
+    ///
+    /// The immutable command owns protocol selection and error provenance. Later changes
+    /// to the legacy `sql` or `values` views do not change this command.
+    #[cfg(feature = "sqlx-mysql")]
+    pub fn from_mysql_text(logical_sql: Vec<u16>) -> Self {
+        let command = sqlx::mysql::MySqlTextCommand::new(logical_sql);
+        Self {
+            sql: command.sql().to_owned(),
+            values: None,
+            db_backend: DbBackend::MySql,
+            mysql_text: Some(command),
+        }
+    }
+
+    /// Inspect the logical SQL of an explicit MySQL text command.
+    #[cfg(feature = "sqlx-mysql")]
+    pub fn mysql_text_sql(&self) -> Option<&[u16]> {
+        self.mysql_text
+            .as_ref()
+            .map(sqlx::mysql::MySqlTextCommand::logical_sql)
+    }
+
+    #[cfg(feature = "sqlx-mysql")]
+    pub(crate) fn mysql_text_command(&self) -> Option<&sqlx::mysql::MySqlTextCommand> {
+        self.mysql_text.as_ref()
+    }
+
     /// Create a [Statement] from a [crate::DatabaseBackend] and a raw SQL statement
     pub fn from_string<T>(db_backend: DbBackend, stmt: T) -> Statement
     where
@@ -37,6 +67,8 @@ impl Statement {
             sql: stmt.into(),
             values: None,
             db_backend,
+            #[cfg(feature = "sqlx-mysql")]
+            mysql_text: None,
         }
     }
 
@@ -58,12 +90,18 @@ impl Statement {
             sql: stmt.0.into(),
             values: Some(stmt.1),
             db_backend,
+            #[cfg(feature = "sqlx-mysql")]
+            mysql_text: None,
         }
     }
 }
 
 impl fmt::Display for Statement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        #[cfg(feature = "sqlx-mysql")]
+        if let Some(command) = &self.mysql_text {
+            return f.write_str(command.sql());
+        }
         match &self.values {
             Some(values) => {
                 let string = match self.db_backend {

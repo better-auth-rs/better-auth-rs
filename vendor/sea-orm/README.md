@@ -14,6 +14,8 @@
 
 # 🐚 SeaORM
 
+This vendored package includes an explicit MySQL text-command boundary. See [the local patch notes](BETTER_AUTH_PATCH.md) for constructor usage and source compatibility.
+
 [中文文档](https://github.com/SeaQL/sea-orm/blob/master/README-zh.md)
 
 ### Advanced Relations

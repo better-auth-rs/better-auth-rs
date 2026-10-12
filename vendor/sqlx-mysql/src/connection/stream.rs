@@ -2,6 +2,8 @@ use std::collections::VecDeque;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
+use crate::text_command::CommandSql;
+
 use bytes::{Buf, Bytes, BytesMut};
 
 use crate::collation::{CharSet, Collation};
@@ -31,7 +33,7 @@ pub struct MySqlStream<S = Box<dyn Socket>> {
 #[derive(Debug)]
 pub(crate) struct PendingResponse {
     pub(crate) state: Waiting,
-    sql: Option<Arc<str>>,
+    sql: Option<CommandSql>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -140,13 +142,26 @@ impl<S: Socket> MySqlStream<S> {
     where
         T: ProtocolEncode<'en, Capabilities>,
     {
+        self.write_command_with_sql(
+            payload,
+            sql.map(|sql| CommandSql::Utf8(Arc::from(sql))),
+            state,
+        )
+    }
+
+    fn write_command_with_sql<'en, T>(
+        &mut self,
+        payload: T,
+        sql: Option<CommandSql>,
+        state: Waiting,
+    ) -> Result<(), Error>
+    where
+        T: ProtocolEncode<'en, Capabilities>,
+    {
         self.sequence_id = 0;
         self.write_packet(payload)?;
         // Keep attribution with queued bytes when cancellation interrupts their flush or response.
-        self.waiting.push_back(PendingResponse {
-            state,
-            sql: sql.map(Arc::from),
-        });
+        self.waiting.push_back(PendingResponse { state, sql });
         Ok(())
     }
 
@@ -160,6 +175,19 @@ impl<S: Socket> MySqlStream<S> {
         T: ProtocolEncode<'en, Capabilities>,
     {
         self.write_command(payload, sql, state)?;
+        self.flush().await?;
+        Ok(())
+    }
+
+    pub(crate) async fn send_text_command(
+        &mut self,
+        command: &crate::MySqlTextCommand,
+    ) -> Result<(), Error> {
+        self.write_command_with_sql(
+            crate::protocol::text::Query(command.sql()),
+            Some(CommandSql::Text(command.clone())),
+            Waiting::Result,
+        )?;
         self.flush().await?;
         Ok(())
     }
@@ -347,3 +375,9 @@ mod error_transport_tests;
 
 #[cfg(test)]
 mod error_transport_live_tests;
+
+#[cfg(test)]
+mod error_transport_support;
+
+#[cfg(test)]
+mod text_command_tests;

@@ -326,11 +326,7 @@ pub(crate) async fn set_transaction_config(
 
 #[cfg(feature = "sqlite-use-returning-for-3_35")]
 async fn get_version(conn: &SqlxSqlitePoolConnection) -> Result<String, DbErr> {
-    let stmt = Statement {
-        sql: "SELECT sqlite_version()".to_string(),
-        values: None,
-        db_backend: crate::DbBackend::Sqlite,
-    };
+    let stmt = Statement::from_string(crate::DbBackend::Sqlite, "SELECT sqlite_version()");
     conn.query_one(stmt)
         .await?
         .ok_or_else(|| {

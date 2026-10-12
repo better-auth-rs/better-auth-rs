@@ -9,7 +9,7 @@ mkdir -p "$protocol_output/graphs"
 protocol_root=$(mktemp -d "$RUNNER_TEMP/postgres-protocol.XXXXXX")
 printf '%s\n' "$protocol_root" > "$protocol_output/test-root.txt"
 protocol_patches=()
-for protocol_package in sqlx-postgres sea-query sea-query-sqlx sea-orm; do
+for protocol_package in sqlx-postgres sqlx-mysql sea-query sea-query-sqlx sea-orm; do
   mkdir -p "$protocol_root/$protocol_package"
   cp -R "vendor/$protocol_package/." "$protocol_root/$protocol_package/"
   # Seed each independent package with the validated application dependency versions.
@@ -44,6 +44,7 @@ root = Path(sys.argv[1])
 output = Path(sys.argv[2])
 versions = {
     "sqlx-postgres": "0.8.6",
+    "sqlx-mysql": "0.8.6",
     "sea-query": "1.0.0-rc.31",
     "sea-query-sqlx": "0.8.0-rc.14",
     "sea-orm": "2.0.0-rc.37",

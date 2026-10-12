@@ -8,7 +8,10 @@ use std::borrow::Cow;
 pub(crate) use sqlx_core::error::*;
 
 /// An error returned from the MySQL database.
-pub struct MySqlDatabaseError(pub(super) ErrPacket, pub(super) Option<std::sync::Arc<str>>);
+pub struct MySqlDatabaseError(
+    pub(super) ErrPacket,
+    pub(super) Option<crate::text_command::CommandSql>,
+);
 
 impl MySqlDatabaseError {
     /// The SQL associated with the dispatched command that returned this error.
@@ -16,7 +19,16 @@ impl MySqlDatabaseError {
     /// Text commands retain the sent SQL. Prepared commands retain the SQL template,
     /// without interpolating binary parameters. Errors outside SQL commands return `None`.
     pub fn sql(&self) -> Option<&str> {
-        self.1.as_deref()
+        self.1.as_ref().map(crate::text_command::CommandSql::sql)
+    }
+
+    /// The logical UTF-16 SQL of an explicit text command, before wire encoding.
+    ///
+    /// Ordinary text and prepared commands retain their existing UTF-8 SQL through [`Self::sql`].
+    pub fn sql_utf16(&self) -> Option<&[u16]> {
+        self.1
+            .as_ref()
+            .and_then(crate::text_command::CommandSql::logical_sql)
     }
 
     /// The [SQLSTATE](https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html) code for this error.

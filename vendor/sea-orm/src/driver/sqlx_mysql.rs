@@ -284,12 +284,34 @@ impl From<MySqlQueryResult> for ExecResult {
     }
 }
 
-pub(crate) fn sqlx_query(stmt: &Statement) -> sqlx::query::Query<'_, MySql, SqlxValues> {
+pub(crate) enum MySqlQueryArguments {
+    Prepared(SqlxValues),
+    Text(sqlx::mysql::MySqlTextCommand),
+}
+
+impl<'q> sqlx::IntoArguments<'q, MySql> for MySqlQueryArguments {
+    fn into_arguments(self) -> sqlx::mysql::MySqlArguments {
+        match self {
+            Self::Prepared(values) => {
+                <SqlxValues as sqlx::IntoArguments<'q, MySql>>::into_arguments(values)
+            }
+            Self::Text(command) => <sqlx::mysql::MySqlTextCommand as sqlx::IntoArguments<
+                'q,
+                MySql,
+            >>::into_arguments(command),
+        }
+    }
+}
+
+pub(crate) fn sqlx_query(stmt: &Statement) -> sqlx::query::Query<'_, MySql, MySqlQueryArguments> {
+    if let Some(command) = stmt.mysql_text_command() {
+        return sqlx::query_with(command.sql(), MySqlQueryArguments::Text(command.clone()));
+    }
     let values = stmt
         .values
         .as_ref()
         .map_or(Values(Vec::new()), |values| values.clone());
-    sqlx::query_with(&stmt.sql, SqlxValues(values))
+    sqlx::query_with(&stmt.sql, MySqlQueryArguments::Prepared(SqlxValues(values)))
 }
 
 pub(crate) async fn set_transaction_config(
@@ -308,11 +330,10 @@ pub(crate) async fn set_transaction_config(
     }
 
     if !settings.is_empty() {
-        let stmt = Statement {
-            sql: format!("SET TRANSACTION {}", settings.join(", ")),
-            values: None,
-            db_backend: DbBackend::MySql,
-        };
+        let stmt = Statement::from_string(
+            DbBackend::MySql,
+            format!("SET TRANSACTION {}", settings.join(", ")),
+        );
         let query = sqlx_query(&stmt);
         conn.execute(query).await.map_err(sqlx_error_to_exec_err)?;
     }
@@ -526,3 +547,6 @@ pub(crate) fn from_sqlx_mysql_row_to_proxy_row(row: &sqlx::mysql::MySqlRow) -> c
             .collect(),
     }
 }
+
+#[cfg(test)]
+mod text_command_tests;

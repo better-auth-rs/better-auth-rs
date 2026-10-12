@@ -106,6 +106,22 @@ impl MySqlConnection {
         persistent: bool,
     ) -> Result<impl Stream<Item = Result<Either<MySqlQueryResult, MySqlRow>, Error>> + 'e, Error>
     {
+        let text_command = arguments
+            .as_ref()
+            .and_then(|arguments| arguments.text_command.clone());
+        if text_command
+            .as_ref()
+            .is_some_and(|command| command.sql() != sql)
+        {
+            return Err(err_protocol!(
+                "MySQL text command SQL differs from its encoded provenance"
+            ));
+        }
+        let arguments = if text_command.is_some() {
+            None
+        } else {
+            arguments
+        };
         let mut logger = QueryLogger::new(sql, self.inner.log_settings.clone());
 
         self.inner.stream.wait_until_ready().await?;
@@ -150,7 +166,11 @@ impl MySqlConnection {
                 }
             } else {
                 // https://dev.mysql.com/doc/internals/en/com-query.html
-                self.inner.stream.send_command(Query(sql), Some(sql), Waiting::Result).await?;
+                if let Some(command) = &text_command {
+                    self.inner.stream.send_text_command(command).await?;
+                } else {
+                    self.inner.stream.send_command(Query(sql), Some(sql), Waiting::Result).await?;
+                }
 
                 (Arc::default(), MySqlValueFormat::Text, true)
             };
