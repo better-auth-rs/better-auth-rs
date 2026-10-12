@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: mysql-text
+          - contract: mysql-native-values
             regressions: []
     runs-on: ubuntu-latest
     timeout-minutes: 10
