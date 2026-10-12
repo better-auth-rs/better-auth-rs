@@ -57,6 +57,11 @@ export function createConsumerHarness(scenario, identifier) {
     }
   };
   const attempts = () => {
+    if (scenario.attempts === "string-object" || scenario.attempts === "string-error") {
+      const value = { marker: "attempts" };
+      method(value, "toString", () => scenario.attempts === "string-error" ? fail("throw:attempt-conversion") : "  +2tail");
+      return value;
+    }
     if (scenario.attempts === "object" || scenario.attempts === "conversion-error") {
       const value = { marker: "attempts" };
       method(value, "valueOf", () => scenario.attempts === "conversion-error" ? fail("throw:attempt-conversion") : 1);
@@ -89,6 +94,8 @@ export function createConsumerHarness(scenario, identifier) {
       counts.split += 1;
       if (scenario.fail === "split:second" && counts.split === 2) fail("throw:split:second");
       const raw = attempts();
+      if (scenario.splitShape === "null") return null;
+      if (scenario.splitShape === "undefined") return undefined;
       if (scenario.splitShape === "string") return "12";
       if (scenario.splitShape === "array-like") return { 0: "123456", 1: raw, length: 2 };
       return ["123456", raw];

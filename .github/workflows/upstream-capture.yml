@@ -22,7 +22,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: native-property-clone-array-boundaries
+          - contract: two-factor-otp-native
+            regressions:
+              - verification-otp-consumer-native-capture
+              - verification-auth-consumer-native-capture
+              - two-factor-backup-code-native-capture
+              - two-factor-backup-code-encoding-capture
+              - two-factor-backup-generation-capture
+          - contract: passkey-transport-methods
             regressions: []
     runs-on: ubuntu-latest
     timeout-minutes: 10
