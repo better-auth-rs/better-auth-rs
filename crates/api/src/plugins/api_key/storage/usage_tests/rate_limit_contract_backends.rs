@@ -2,10 +2,11 @@ use super::*;
 use crate::plugins::api_key::{ApiKeyConfig, ApiKeyPlugin, ApiKeyStorage};
 use async_trait::async_trait;
 use better_auth_core::{
-    AuthConfig, AuthContext, AuthPlugin, StatelessSchema,
+    AuthConfig, AuthContext, AuthPlugin,
     plugin_runtime::ModelFields,
     store::{
-        ConsumeApiKeyResult, EphemeralStore, RuntimeStore, SecondaryStorage, schema::EntityRole,
+        ConsumeApiKeyResult, EphemeralStore, RuntimeStore, SecondaryStorage, StatelessSchema,
+        schema::EntityRole,
     },
     user_fields::{
         FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform, UserFieldType,

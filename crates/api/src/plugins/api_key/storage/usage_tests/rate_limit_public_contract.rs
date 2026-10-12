@@ -20,7 +20,7 @@ async fn public_rate_limit_denial_preserves_complete_response_and_storage() -> A
     let cache = Arc::new(Cache::with_seed(fields)?);
     let logs = Arc::new(Mutex::new(Vec::<FieldValue>::new()));
     let mut config = AuthConfig::default();
-    config.logger = FieldMap::from([
+    let logger: better_auth_core::FieldObject = FieldMap::from([
         ("level".into(), "error".into()),
         (
             "log".into(),
@@ -47,6 +47,7 @@ async fn public_rate_limit_denial_preserves_complete_response_and_storage() -> A
         ),
     ])
     .into();
+    config.logger = logger.into();
     let config = Arc::new(config);
     let raw = Arc::new(EphemeralStore::from_storage(
         config.clone(),

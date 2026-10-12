@@ -11,12 +11,11 @@ use better_auth_core::{
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform},
 };
 use chrono::Utc;
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, AtomicUsize, Ordering},
+};
 use tokio::{sync::Barrier, task::JoinSet};
-
-tokio::task_local! {
-    static FIRST_RESERVATION_OUTPUT: std::cell::Cell<bool>;
-}
 
 struct FailAfterVerification;
 #[better_auth_core::database_hooks()]
@@ -60,14 +59,22 @@ async fn database_cleanup_reservations_preserve_new_owner_sessions_after_committ
             run_migrations(&database).await?;
             let mut config = AuthConfig::new("a-secret-that-is-at-least-32-characters");
             let reservation_reads = Arc::new(Barrier::new(8));
+            let synchronize_reservations = Arc::new(AtomicBool::new(false));
+            let reservation_outputs = Arc::new(AtomicUsize::new(0));
+            let synchronize_outputs = synchronize_reservations.clone();
             let _ = config.verification.additional_fields.insert("value".into(), UserFieldConfig {
                 required: Some(true),
                 transform: Some(FieldTransforms {
                     input: None,
                     output: Some(UserFieldTransform::new_async(move |value| {
                         let reservation_reads = reservation_reads.clone();
+                        let synchronize_outputs = synchronize_outputs.clone();
+                        let reservation_outputs = reservation_outputs.clone();
                         async move {
-                            if FIRST_RESERVATION_OUTPUT.try_with(|first| first.replace(false)).unwrap_or(false) {
+                            // Output projection runs in child tasks, so the barrier cannot use a caller task-local.
+                            if synchronize_outputs.load(Ordering::Acquire)
+                                && reservation_outputs.fetch_add(1, Ordering::AcqRel) < 8
+                            {
                                 // Upstream rethrows the insert error if the owner releases before the duplicate readback.
                                 let _ = tokio::time::timeout(std::time::Duration::from_secs(10), reservation_reads.wait())
                                     .await.map_err(|error| AuthError::internal(format!("Reservation readback barrier: {error}")))?;
@@ -102,16 +109,17 @@ scope: Default::default(),
             assert!(store.get_user_sessions(user_id.typed()?).await?.is_empty());
             assert!(store.get_verification_by_identifier(&format!("revoke-unproven-account-access:{}", user_id.typed()?)).await?.is_none());
             let _ = store.update_user(user_id.typed()?, UpdateUser { email_verified: Some(false), ..Default::default() }).await?;
+            synchronize_reservations.store(true, Ordering::Release);
             let barrier = Arc::new(Barrier::new(8));
             let mut tasks = JoinSet::new();
             for _ in 0..8 {
                 let store = store.clone(); let barrier = barrier.clone(); let user_id = user_id.clone();
-                let _ = tasks.spawn(FIRST_RESERVATION_OUTPUT.scope(std::cell::Cell::new(true), async move {
+                let _ = tasks.spawn(async move {
                     let _ = barrier.wait().await;
                     let user = store.verify_user_and_revoke_unproven_access(user_id.typed()?).await?.ok_or_else(|| AuthError::internal("Verified user is absent"))?;
                     assert!(user.email_verified().typed().copied()?);
                     store.create_session(session(user_id.typed()?)).await
-                }));
+                });
             }
             while let Some(result) = tasks.join_next().await { let _ = result??; }
             assert_eq!(store.get_user_sessions(user_id.typed()?).await?.len(), 8);

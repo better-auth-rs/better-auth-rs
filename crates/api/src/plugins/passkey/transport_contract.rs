@@ -123,6 +123,8 @@ async fn replay_transport_case(case: &Json) -> AuthResult<Json> {
     transport.assert_calls(name);
     let outcome = match result {
         Ok(response) => {
+            let response = response
+                .ok_or_else(|| AuthError::internal("The Passkey route must return a response"))?;
             assert_eq!(response.status, 200);
             json!({
                 "returned":true,

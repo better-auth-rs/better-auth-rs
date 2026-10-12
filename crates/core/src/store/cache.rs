@@ -630,6 +630,10 @@ mod tests {
     #[cfg(feature = "redis-cache")]
     #[tokio::test]
     #[ignore = "Requires REDIS_TEST_URL for a disposable Redis 7+ instance"]
+    #[expect(
+        clippy::expect_used,
+        reason = "The explicitly enabled Redis test requires its connection URL."
+    )]
     async fn redis_counters_create_atomically_and_preserve_the_initial_expiration() {
         use super::RedisAdapter;
         use redis::AsyncCommands;
