@@ -191,19 +191,11 @@ async fn runtime_join_resolution_uses_secondary_storage_schema_presence()
             .await?;
         let mut config =
             AuthConfig::new("schema-reference-conflict-at-least-thirty-two-characters");
-        {
-            let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-                #[allow(
-                    clippy::panic,
-                    clippy::panic_in_result_fn,
-                    reason = "The fixture modifies its existing authored logger options."
-                )]
-                {
-                    panic!("fixture requires authored logger options");
-                }
-            };
-            logger_options.disabled = Some(true);
+        config.logger = better_auth_core::LoggerConfig {
+            disabled: Some(true),
+            ..Default::default()
         }
+        .into();
         config.telemetry.enabled = false;
         config.session.store_session_in_database = Some(store_session);
         let _ = config

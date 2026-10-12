@@ -40,20 +40,12 @@ async fn headers_identity_controls_rereads_and_prevents_duplicate_context_cookie
         let value = raw_error(&events, &["APIError"], None, vec![("headers", getter)]);
         let mut config = (*crate::test_store::test_config()).clone();
         config.experimental.instrumentation.enabled = false;
-        {
-            let crate::LoggerSource::Config(logger_options) = &mut config.logger else {
-                #[allow(
-                    clippy::panic,
-                    clippy::panic_in_result_fn,
-                    reason = "The fixture modifies its existing authored logger options."
-                )]
-                {
-                    panic!("fixture requires authored logger options");
-                }
-            };
-            logger_options.disabled = Some(true);
-            logger_options.level = Some(LogLevel::Warn);
+        config.logger = crate::LoggerConfig {
+            disabled: Some(true),
+            level: Some(LogLevel::Warn),
+            ..Default::default()
         }
+        .into();
         let config = Arc::new(config);
         let context = AuthContext::new(config.clone(), Arc::new(EphemeralStore::new(config)))
             .expect("fixture context initializes");

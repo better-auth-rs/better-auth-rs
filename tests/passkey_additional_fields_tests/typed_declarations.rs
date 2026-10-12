@@ -32,19 +32,11 @@ fn locked(events: &Events) -> AuthResult<MutexGuard<'_, Vec<Event>>> {
 
 fn config() -> AuthConfig {
     let mut config = AuthConfig::new("typed-passkey-declarations-at-least-thirty-two-characters");
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.telemetry.enabled = false;
     config.advanced.database.generate_id = Some(IdGeneration::Custom(IdGenerator::new(|_| {
         Ok(Some(ID.into()))

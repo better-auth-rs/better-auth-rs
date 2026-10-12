@@ -330,12 +330,14 @@ impl<T: ObjectRow> RowRef<T> {
         self.field_value().enumerable_fields()
     }
 
+    #[cfg(test)]
     pub(super) fn set_field(&self, name: String, value: FieldValue) -> AuthResult<()> {
         let _operation = self.gate.lock();
         self.discard_user_state()?;
         self.field_value().set_model_property(&name, value)
     }
 
+    #[cfg(test)]
     pub(super) fn delete_field(&self, name: &str) -> AuthResult<bool> {
         self.delete(name)
     }

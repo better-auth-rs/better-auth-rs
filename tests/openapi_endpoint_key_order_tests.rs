@@ -72,19 +72,11 @@ async fn endpoint_keys_match_upstream_paths_operations_and_duplicate_ids()
     let mut config =
         AuthConfig::new("ordinary-openapi-endpoint-key-order-secret-at-least-32-characters")
             .base_url("http://openapi-endpoint-key-order.test");
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.telemetry.enabled = false;
     let auth = BetterAuth::stateless(config)
         .rate_limit(RateLimitConfig::new().enabled(false))

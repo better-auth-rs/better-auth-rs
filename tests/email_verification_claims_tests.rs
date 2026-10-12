@@ -80,19 +80,11 @@ fn required<'a>(value: &'a Value, pointer: &str) -> &'a Value {
 
 fn config(events: Option<&Events>) -> AuthConfig {
     let mut config = AuthConfig::new(SECRET).base_url(ORIGIN);
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.telemetry.enabled = false;
     config.session.expires_in = Some(chrono::Duration::seconds(3600));
     config.session.update_age = Some(chrono::Duration::seconds(600));

@@ -61,14 +61,11 @@ fn record(events: &Events, field: &str, phase: &str, value: FieldValue) -> AuthR
 
 fn settings(ids: Ids) -> AuthResult<AuthConfig> {
     let mut settings = config();
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut settings.logger else {
-            return Err(AuthError::internal(
-                "Fixture requires authored logger options",
-            ));
-        };
-        logger_options.disabled = Some(true);
+    settings.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     settings.advanced.database.generate_id =
         Some(IdGeneration::Custom(IdGenerator::new(move |_| {
             Ok(Some(trace_lock(&ids)?.clone()))

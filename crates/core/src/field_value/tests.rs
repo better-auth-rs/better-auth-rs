@@ -200,20 +200,14 @@ async fn live_object_read_errors_propagate_without_implicit_snapshots() {
     assert_eq!(source.0.load(Ordering::SeqCst), 6);
 
     let log = Arc::new(FailureLog(AtomicUsize::new(0), failure));
-    let mut config = AuthConfig::default();
-    {
-        let crate::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.log = Some(log.clone());
-    }
+    let mut config = AuthConfig {
+        logger: crate::LoggerConfig {
+            log: Some(log.clone()),
+            ..Default::default()
+        }
+        .into(),
+        ..Default::default()
+    };
     config
         .initialize_logger()
         .expect("fixture initialization succeeds");

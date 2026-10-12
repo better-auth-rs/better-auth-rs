@@ -92,15 +92,11 @@ async fn username_hook_reads_current_identity_only_when_validation_consumes_it()
             let _ = original.insert("username".into(), "same_user".into());
             let _ = original.insert("displayUsername".into(), "Same_User".into());
             let mut config = AuthConfig::new(SECRET);
-            {
-                let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger
-                else {
-                    return Err(AuthError::internal(
-                        "fixture requires authored logger options",
-                    ));
-                };
-                logger_options.disabled = Some(true);
+            config.logger = better_auth_core::LoggerConfig {
+                disabled: Some(true),
+                ..Default::default()
             }
+            .into();
             let _ = config.user.fields_mut().insert(
                 "updatedAt".into(),
                 UserFieldConfig {

@@ -45,19 +45,11 @@ type TestResult<T = ()> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 fn config(scenario: &str, joins: bool, events: Option<&Events>) -> AuthConfig {
     let mut config = AuthConfig::new(SECRET);
     config.base_url = "http://session-user-join-reference.test".into();
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.telemetry.enabled = false;
     config.advanced.database.joins = Some(joins);
     config.session.cookie_cache = None;

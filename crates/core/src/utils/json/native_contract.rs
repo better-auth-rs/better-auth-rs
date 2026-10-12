@@ -124,20 +124,14 @@ async fn run_case(name: &str) -> AuthResult<Json> {
         failure: (name == "logger-original-error").then(|| input.logger_failure.clone()),
         ..Default::default()
     });
-    let mut config = AuthConfig::default();
-    {
-        let crate::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.log = Some(sink.clone());
-    }
+    let mut config = AuthConfig {
+        logger: crate::LoggerConfig {
+            log: Some(sink.clone()),
+            ..Default::default()
+        }
+        .into(),
+        ..Default::default()
+    };
     config
         .initialize_logger()
         .expect("fixture initialization succeeds");

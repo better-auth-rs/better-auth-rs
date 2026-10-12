@@ -95,7 +95,7 @@ impl FieldPropertyDescriptor {
         match &self.property {
             FieldProperty::Data { writable, .. } => Ok((!*writable).then_some(false)),
             FieldProperty::Accessor { set: Some(set), .. } => {
-                set.call_with(receiver, &[value])?;
+                let _ = set.call_with(receiver, &[value])?;
                 Ok(Some(true))
             }
             FieldProperty::Accessor { set: None, .. } => Ok(Some(false)),

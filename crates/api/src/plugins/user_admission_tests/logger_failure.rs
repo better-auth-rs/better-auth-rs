@@ -1,6 +1,6 @@
 use super::*;
 use better_auth_core::{
-    LoggerSource, NativeRequest,
+    NativeRequest,
     observability::{LogArgument, LogLevel, LogSink},
 };
 
@@ -72,12 +72,11 @@ async fn check_failure<S: AuthSchema>(
             .then(|| FieldMap::from([("source".into(), "logger".into())]).into()),
     });
     let mut config = test_helpers::create_test_config();
-    let LoggerSource::Config(logger) = &mut config.logger else {
-        return Err(AuthError::internal(
-            "Fixture requires authored logger options",
-        ));
-    };
-    logger.log = Some(trace.clone());
+    config.logger = better_auth_core::LoggerConfig {
+        log: Some(trace.clone()),
+        ..Default::default()
+    }
+    .into();
     let config = Arc::new(config);
     let store = store.with_runtime(config.clone(), vec![], Default::default())?;
     let mut context = AuthContext::new(config, store)?;

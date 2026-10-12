@@ -305,15 +305,12 @@ async fn native_phone_matcher_retains_input_presence_and_getter_order() -> AuthR
         };
         let phone = PhoneNumberPlugin::new();
         let mut config = test_helpers::create_test_config();
-        {
-            let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-                return Err(AuthError::config(
-                    "Fixture requires authored logger options",
-                ));
-            };
-            logger_options.level = Some(LogLevel::Debug);
-            logger_options.log = Some(trace.clone());
+        config.logger = better_auth_core::LoggerConfig {
+            level: Some(LogLevel::Debug),
+            log: Some(trace.clone()),
+            ..Default::default()
         }
+        .into();
         let config = Arc::new(config);
         let store = Arc::new(EphemeralStore::new(config.clone()));
         let context =
@@ -435,16 +432,12 @@ async fn api_key_wraps_only_the_matcher_getter_for_native_and_typed_calls() -> A
                 .custom_api_key_getter(getter.clone())
                 .build();
             let mut config = test_helpers::create_test_config();
-            {
-                let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger
-                else {
-                    return Err(AuthError::config(
-                        "Fixture requires authored logger options",
-                    ));
-                };
-                logger_options.level = Some(LogLevel::Debug);
-                logger_options.log = Some(trace.clone());
+            config.logger = better_auth_core::LoggerConfig {
+                level: Some(LogLevel::Debug),
+                log: Some(trace.clone()),
+                ..Default::default()
             }
+            .into();
             let config = Arc::new(config);
             let store = Arc::new(EphemeralStore::new(config.clone()));
             let context =

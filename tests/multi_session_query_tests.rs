@@ -152,19 +152,11 @@ async fn multi_session_query_order_limits_expiration_and_cache_match_upstream() 
         serde_json::from_str(include_str!("fixtures/multi-session-query-upstream.json"))?;
     for case in cases {
         let mut config = AuthConfig::new(SECRET).base_url("http://multi.test");
-        {
-            let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-                #[allow(
-                    clippy::panic,
-                    clippy::panic_in_result_fn,
-                    reason = "The fixture modifies its existing authored logger options."
-                )]
-                {
-                    panic!("fixture requires authored logger options");
-                }
-            };
-            logger_options.disabled = Some(true);
+        config.logger = better_auth_core::LoggerConfig {
+            disabled: Some(true),
+            ..Default::default()
         }
+        .into();
         config.advanced.database.default_find_many_limit = case["limit"].as_f64();
         config.session.store_session_in_database = Some(true);
         let actual =

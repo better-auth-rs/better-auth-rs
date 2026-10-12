@@ -275,14 +275,12 @@ async fn replay_case(case: &Json) -> AuthResult<(Json, Json)> {
             let sequence = generated.fetch_add(1, Ordering::Relaxed) + 1;
             Ok(Some(format!("{}-{sequence}", request.model)))
         })));
-    if let better_auth_core::LoggerSource::Config(logger) = &mut config.logger {
-        logger.level = Some(LogLevel::Error);
-        logger.log = Some(Arc::new(Logger(state.clone())));
-    } else {
-        return Err(AuthError::config(
-            "Passkey fixture requires authored logger configuration",
-        ));
+    config.logger = better_auth_core::LoggerConfig {
+        level: Some(LogLevel::Error),
+        log: Some(Arc::new(Logger(state.clone()))),
+        ..Default::default()
     }
+    .into();
     let failure = case["scenario"]["failure"].as_str().unwrap();
     let now = chrono::DateTime::from_timestamp_millis(NOW).unwrap();
     // The source freezes its process clock and forwards a token override before real session creation.

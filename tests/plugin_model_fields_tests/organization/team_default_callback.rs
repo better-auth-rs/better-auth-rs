@@ -160,14 +160,11 @@ async fn check<S: AuthSchema>(
         }
     };
     let mut config = config();
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            return Err(AuthError::internal(
-                "Fixture requires authored logger options",
-            ));
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.advanced.database.generate_id =
         Some(IdGeneration::Custom(IdGenerator::new(|request| {
             Ok(Some(format!("{}-a", request.model)))

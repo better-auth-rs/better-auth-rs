@@ -102,20 +102,12 @@ async fn duplicate_notification_uses_signup_transaction_and_preserves_after_comm
         let mut config =
             AuthConfig::new("duplicate-transaction-contract-secret-longer-than-thirty-two")
                 .base_url("http://localhost:3000");
-        {
-            let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-                #[allow(
-                    clippy::panic,
-                    clippy::panic_in_result_fn,
-                    reason = "The fixture modifies its existing authored logger options."
-                )]
-                {
-                    panic!("fixture requires authored logger options");
-                }
-            };
-            logger_options.level = Some(LogLevel::Error);
-            logger_options.log = Some(events.clone());
+        config.logger = better_auth_core::LoggerConfig {
+            level: Some(LogLevel::Error),
+            log: Some(events.clone()),
+            ..Default::default()
         }
+        .into();
         let db = Database::connect("sqlite::memory:").await.unwrap();
         migrator::run_migrations(&db).await.unwrap();
         let sender = events.clone();

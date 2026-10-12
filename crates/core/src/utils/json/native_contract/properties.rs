@@ -25,13 +25,6 @@ impl Properties {
         value
     }
 
-    pub(super) fn receiver(&self) -> AuthResult<Arc<FieldValue>> {
-        self.receiver
-            .lock()
-            .upgrade()
-            .ok_or_else(|| AuthError::internal("Native getter receiver is absent"))
-    }
-
     pub(super) fn getter(&self, name: &str, callback: FieldFunction, enumerable: bool) {
         let expected = self.receiver.clone();
         let observer = self.observer.clone();

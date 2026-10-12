@@ -232,14 +232,11 @@ async fn observe(
     let mut config =
         AuthConfig::new("ordinary-device-request-fields-secret-at-least-32-characters")
             .base_url(ORIGIN);
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            return Err(AuthError::internal(
-                "Fixture requires authored logger options",
-            ));
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     let store = EphemeralStore::new(Arc::new(config.clone()));
     let auth = BetterAuth::<StatelessSchema>::new(config)
         .store(store)

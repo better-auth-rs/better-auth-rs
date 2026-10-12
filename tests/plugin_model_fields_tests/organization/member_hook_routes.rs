@@ -294,14 +294,11 @@ async fn check<S: AuthSchema>(
     let observations = Arc::new(Mutex::new(Observations::default()));
     let reads = Arc::new(AtomicUsize::new(0));
     let mut options = config();
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut options.logger else {
-            return Err(AuthError::internal(
-                "Fixture requires authored logger options",
-            ));
-        };
-        logger_options.disabled = Some(true);
+    options.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     options.session.disable_session_refresh = Some(true);
     options.advanced.database.joins = Some(joins);
     let _ = options.user.fields_mut().insert(

@@ -54,19 +54,11 @@ fn age(name: &str) -> Option<f64> {
 
 fn config() -> AuthConfig {
     let mut config = AuthConfig::new(SECRET).base_url("https://cookie-errors.test");
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.advanced.use_secure_cookies = Some(false);
     config.session.expires_in = Some(Duration::seconds(300));
     config.session.cookie_cache = Some(better_auth_core::CookieCacheConfig {

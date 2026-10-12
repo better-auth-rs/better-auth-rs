@@ -45,19 +45,11 @@ fn config() -> AuthConfig {
         AuthConfig::new("email-verification-duration-contract-secret-at-least-32-characters")
             .base_url(ORIGIN);
     config.telemetry.enabled = false;
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.session.cookie_cache = Some(better_auth_core::CookieCacheConfig {
         enabled: Some(false),
         ..Default::default()

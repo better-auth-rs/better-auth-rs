@@ -217,19 +217,11 @@ async fn generated_openapi_fields_match_javascript_enumeration_and_core_declarat
         let mut config =
             AuthConfig::new("ordinary-openapi-property-order-secret-at-least-32-characters")
                 .base_url("http://openapi-property-order.test");
-        {
-            let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-                #[allow(
-                    clippy::panic,
-                    clippy::panic_in_result_fn,
-                    reason = "The fixture modifies its existing authored logger options."
-                )]
-                {
-                    panic!("fixture requires authored logger options");
-                }
-            };
-            logger_options.disabled = Some(true);
+        config.logger = better_auth_core::LoggerConfig {
+            disabled: Some(true),
+            ..Default::default()
         }
+        .into();
         config.telemetry.enabled = false;
         let numeric = name == "numeric-display-names";
         if numeric {

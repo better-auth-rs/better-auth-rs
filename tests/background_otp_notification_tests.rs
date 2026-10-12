@@ -214,20 +214,12 @@ async fn run(
     migrator::run_migrations(&db).await.unwrap();
     let mut config = AuthConfig::new("background-contract-secret-at-least-thirty-two-characters")
         .base_url("http://localhost:3000");
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.level = Some(LogLevel::Error);
-        logger_options.log = Some(state.clone());
+    config.logger = better_auth_core::LoggerConfig {
+        level: Some(LogLevel::Error),
+        log: Some(state.clone()),
+        ..Default::default()
     }
+    .into();
     if scheduling != "default" {
         let state = state.clone();
         config.advanced.background_tasks = Some(BackgroundTasks::new(move |task| {

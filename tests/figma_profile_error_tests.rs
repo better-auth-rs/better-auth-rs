@@ -269,19 +269,11 @@ impl Fixture {
         }
         let mut config = AuthConfig::new("figma-public-error-test-secret-more-than-32-characters")
             .base_url(BASE_URL);
-        {
-            let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-                #[allow(
-                    clippy::panic,
-                    clippy::panic_in_result_fn,
-                    reason = "The fixture modifies its existing authored logger options."
-                )]
-                {
-                    panic!("fixture requires authored logger options");
-                }
-            };
-            logger_options.log = Some(state.logs.clone());
+        config.logger = better_auth_core::LoggerConfig {
+            log: Some(state.logs.clone()),
+            ..Default::default()
         }
+        .into();
         let database = Database::connect("sqlite::memory:").await.unwrap();
         migrator::run_migrations(&database).await.unwrap();
         let builder =

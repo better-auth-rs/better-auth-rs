@@ -536,19 +536,11 @@ async fn schema_default_and_explicit_empty_roots_keep_create_and_error_timing() 
                 } else {
                     crate::id::IdGeneration::Database
                 });
-                {
-                    let crate::LoggerSource::Config(logger_options) = &mut config.logger else {
-                        #[allow(
-                            clippy::panic,
-                            clippy::panic_in_result_fn,
-                            reason = "The fixture modifies its existing authored logger options."
-                        )]
-                        {
-                            panic!("fixture requires authored logger options");
-                        }
-                    };
-                    logger_options.log = Some(logs.clone());
+                config.logger = crate::LoggerConfig {
+                    log: Some(logs.clone()),
+                    ..Default::default()
                 }
+                .into();
                 config.base_url = "http://memory-root.test".into();
                 let mut models = ModelFields::default();
                 models.register(

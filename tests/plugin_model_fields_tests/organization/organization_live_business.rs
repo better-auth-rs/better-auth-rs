@@ -36,14 +36,11 @@ fn declaration(values: impl IntoIterator<Item = (&'static str, UserFieldConfig)>
 
 fn settings() -> AuthResult<AuthConfig> {
     let mut settings = config();
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut settings.logger else {
-            return Err(AuthError::internal(
-                "Fixture requires authored logger options",
-            ));
-        };
-        logger_options.disabled = Some(true);
+    settings.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     settings.session.disable_session_refresh = Some(true);
     settings.advanced.database.generate_id =
         Some(IdGeneration::Custom(IdGenerator::new(|request| {

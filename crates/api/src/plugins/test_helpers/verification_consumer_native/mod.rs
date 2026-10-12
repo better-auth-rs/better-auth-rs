@@ -278,15 +278,12 @@ impl Harness {
     pub(crate) fn config(&self) -> AuthResult<AuthConfig> {
         let mut config = AuthConfig::new(SECRET).base_url(ORIGIN);
         config.verification.store_in_database = false;
-        {
-            let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-                return Err(AuthError::config(
-                    "Fixture requires authored logger options",
-                ));
-            };
-            logger_options.level = Some(LogLevel::Debug);
-            logger_options.log = Some(Arc::new(Logger(self.state.clone())));
+        config.logger = better_auth_core::LoggerConfig {
+            level: Some(LogLevel::Debug),
+            log: Some(Arc::new(Logger(self.state.clone()))),
+            ..Default::default()
         }
+        .into();
         let state = self.state.clone();
         config.advanced.database.generate_id =
             Some(IdGeneration::Custom(IdGenerator::new(move |request| {

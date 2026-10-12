@@ -166,20 +166,12 @@ async fn contract<S: AuthSchema>(
         .await?;
     let recorder = Recorder::default();
     let mut config = configuration();
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.level = Some(better_auth_core::observability::LogLevel::Debug);
-        logger_options.log = Some(Arc::new(recorder.clone()));
+    config.logger = better_auth_core::LoggerConfig {
+        level: Some(better_auth_core::observability::LogLevel::Debug),
+        log: Some(Arc::new(recorder.clone())),
+        ..Default::default()
     }
+    .into();
     let config = Arc::new(config);
     let cache = Arc::new(Cache::new(case, recorder.clone())?);
     let hooks = Hooks {

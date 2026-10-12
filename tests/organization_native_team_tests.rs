@@ -336,19 +336,11 @@ async fn trusted_and_owner_native_teams_match_pinned_memory_and_sqlite() -> Auth
         let state = Arc::new(State::default());
         let mut config = AuthConfig::new("native-team-contract-secret-at-least-thirty-two")
             .base_url("http://localhost:3000");
-        {
-            let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-                #[allow(
-                    clippy::panic,
-                    clippy::panic_in_result_fn,
-                    reason = "The fixture modifies its existing authored logger options."
-                )]
-                {
-                    panic!("fixture requires authored logger options");
-                }
-            };
-            logger_options.disabled = Some(true);
+        config.logger = better_auth_core::LoggerConfig {
+            disabled: Some(true),
+            ..Default::default()
         }
+        .into();
         let sqlite = string(&case, "backend")? == "sqlite";
         let plugin = OrganizationPlugin::with_config(options(&state, sqlite));
         if sqlite {

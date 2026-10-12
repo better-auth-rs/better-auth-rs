@@ -91,24 +91,16 @@ async fn matcher_failures_preserve_log_identity_and_skip_handler_error_recovery(
                 .into(),
         );
         let mut config = (*crate::test_store::test_config()).clone();
-        {
-            let crate::LoggerSource::Config(logger_options) = &mut config.logger else {
-                #[allow(
-                    clippy::panic,
-                    clippy::panic_in_result_fn,
-                    reason = "The fixture modifies its existing authored logger options."
-                )]
-                {
-                    panic!("fixture requires authored logger options");
-                }
-            };
-            logger_options.level = Some(LogLevel::Debug);
-            logger_options.disabled = Some(false);
-            logger_options.log = Some(Arc::new(MatcherFailure {
+        config.logger = crate::LoggerConfig {
+            level: Some(LogLevel::Debug),
+            disabled: Some(false),
+            log: Some(Arc::new(MatcherFailure {
                 value: value.clone(),
                 events: events.clone(),
-            }));
+            })),
+            ..Default::default()
         }
+        .into();
         let config = Arc::new(config);
         let context = AuthContext::new(config.clone(), Arc::new(EphemeralStore::new(config)))
             .expect("fixture context initializes");

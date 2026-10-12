@@ -185,19 +185,11 @@ fn config(calls: &Arc<Calls>) -> AuthConfig {
         AuthConfig::new("rate-limit-declaration-secret-at-least-thirty-two-characters")
             .base_url("http://rate-limit-declaration.test");
     config.telemetry.enabled = false;
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     let calls = calls.clone();
     config.advanced.database.generate_id =
         Some(IdGeneration::Custom(IdGenerator::new(move |request| {

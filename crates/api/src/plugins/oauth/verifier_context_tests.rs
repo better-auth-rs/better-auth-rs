@@ -170,12 +170,11 @@ async fn observe(
         });
     }
     let mut config = AuthConfig::new(SECRET).base_url(ORIGIN);
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            return Err(AuthError::config("Fixture requires authored logger options").into());
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.telemetry.enabled = false;
     let context = test_helpers::create_test_context_with_config(config).await;
     let cookie = if operation == Operation::Link {
@@ -367,12 +366,11 @@ async fn exercise_endpoint_verifier(
 ) -> TestResult<()> {
     const EMAIL: &str = "typed-verifier@example.test";
     let mut config = AuthConfig::new(SECRET).base_url(ORIGIN);
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            return Err(AuthError::config("Fixture requires authored logger options").into());
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.telemetry.enabled = false;
     let mut context = test_helpers::create_test_context_with_config(config).await;
     let runtime_user = context

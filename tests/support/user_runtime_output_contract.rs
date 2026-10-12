@@ -31,19 +31,11 @@ pub(crate) fn cases() -> AuthResult<Value> {
 pub(crate) fn config() -> AuthResult<AuthConfig> {
     let mut config = AuthConfig::new("user-runtime-output-secret-at-least-thirty-two-characters")
         .base_url("http://localhost:3000");
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.telemetry.enabled = false;
     let cases = cases()?;
     for field in cases["fields"].as_array().unwrap() {

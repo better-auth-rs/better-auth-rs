@@ -30,19 +30,11 @@ struct Observation {
 
 fn configured(sequence: &Sequence, events: &Events) -> AuthConfig {
     let mut config = AuthConfig::default();
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.telemetry.enabled = false;
     config.advanced.database.joins = Some(sequence.joins);
     for name in ["id", "image"] {

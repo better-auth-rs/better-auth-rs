@@ -117,20 +117,14 @@ async fn native_revival_catches_original_callback_errors_and_logs_the_error_prop
         FieldFunction::contextual(move |_, _| Err(AuthError::from_thrown(thrown.clone()))).into(),
     )?;
     let logs = Logs::default();
-    let mut config = AuthConfig::default();
-    {
-        let crate::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.log = Some(Arc::new(Sink(logs.clone())));
-    }
+    let mut config = AuthConfig {
+        logger: crate::LoggerConfig {
+            log: Some(Arc::new(Sink(logs.clone()))),
+            ..Default::default()
+        }
+        .into(),
+        ..Default::default()
+    };
     config
         .initialize_logger()
         .expect("fixture initialization succeeds");

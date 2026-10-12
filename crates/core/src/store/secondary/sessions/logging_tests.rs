@@ -98,24 +98,16 @@ impl SecondaryStorage for Storage {
 fn configuration(owner: &'static str, events: &Events, cause: &FieldValue) -> Arc<AuthConfig> {
     let mut config = AuthConfig::default();
     config.session.store_session_in_database = Some(true);
-    {
-        let crate::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disable_colors = Some(true);
-        logger_options.log = Some(Arc::new(Logs {
+    config.logger = crate::LoggerConfig {
+        disable_colors: Some(true),
+        log: Some(Arc::new(Logs {
             owner,
             events: events.clone(),
             cause: cause.clone(),
-        }));
+        })),
+        ..Default::default()
     }
+    .into();
     config.advanced.database.generate_id = Some(crate::id::IdGeneration::Custom(
         crate::id::IdGenerator::new(|request| Ok(Some(format!("{}-created", request.model)))),
     ));

@@ -267,15 +267,11 @@ async fn http_json_router_preserves_catch_headers_and_response_hook_order() -> A
             let contract = Contract::new(phase, specimen)?;
             let mut config = AuthConfig::new("http-json-router-contract-at-least-32-characters")
                 .base_url(ORIGIN);
-            {
-                let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger
-                else {
-                    return Err(AuthError::internal(
-                        "fixture requires authored logger options",
-                    ));
-                };
-                logger_options.disabled = Some(true);
+            config.logger = better_auth_core::LoggerConfig {
+                disabled: Some(true),
+                ..Default::default()
             }
+            .into();
             let auth = BetterAuth::stateless(config)
                 .hooks(EndpointHooks {
                     before: Some(Arc::new(contract.clone())),
@@ -394,14 +390,11 @@ async fn structural_api_error_reaches_router_callback_without_losing_owned_heade
         trace: Arc::new(Trace::default()),
     };
     let mut config = AuthConfig::new("raw-router-contract-at-least-32-characters").base_url(ORIGIN);
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            return Err(AuthError::internal(
-                "fixture requires authored logger options",
-            ));
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.experimental.instrumentation.enabled = false;
     let auth = BetterAuth::stateless(config)
         .hooks(EndpointHooks {

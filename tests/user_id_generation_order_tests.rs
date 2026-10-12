@@ -100,19 +100,11 @@ fn field(name: &'static str, operation: Operation, trace: &Trace) -> UserFieldCo
 
 fn config(slot: Slot, operation: Operation, trace: &Trace) -> AuthConfig {
     let mut config = AuthConfig::default();
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.telemetry.enabled = false;
     let generator_trace = trace.clone();
     config.advanced.database.generate_id =

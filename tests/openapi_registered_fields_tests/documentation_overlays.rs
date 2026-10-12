@@ -147,19 +147,11 @@ async fn documentation_overlays_preserve_runtime_policies_and_final_declaration_
     let mut config =
         AuthConfig::new("documentation-overlay-contract-at-least-thirty-two-characters")
             .base_url("http://documentation-overlay.test");
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.telemetry.enabled = false;
     let calls = Arc::new(CallbackCalls::default());
     let raw = EphemeralStore::new(Arc::new(config.clone()));
@@ -374,19 +366,11 @@ async fn user_component_and_request_documentation_keep_their_distinct_runtime_po
         let mut config =
             AuthConfig::new("user-documentation-overlay-contract-at-least-thirty-two-characters")
                 .base_url("http://user-documentation-overlay.test");
-        {
-            let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-                #[allow(
-                    clippy::panic,
-                    clippy::panic_in_result_fn,
-                    reason = "The fixture modifies its existing authored logger options."
-                )]
-                {
-                    panic!("fixture requires authored logger options");
-                }
-            };
-            logger_options.disabled = Some(true);
+        config.logger = better_auth_core::LoggerConfig {
+            disabled: Some(true),
+            ..Default::default()
         }
+        .into();
         config.telemetry.enabled = false;
         config.user = fields([(
             "rank",
@@ -492,19 +476,11 @@ async fn username_and_last_login_components_follow_registered_options() -> AuthR
     let mut config =
         AuthConfig::new("user-plugin-components-contract-at-least-thirty-two-characters")
             .base_url("http://user-plugin-components.test");
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.telemetry.enabled = false;
     let baseline = BetterAuth::stateless(config.clone())
         .rate_limit(RateLimitConfig::new().enabled(false))

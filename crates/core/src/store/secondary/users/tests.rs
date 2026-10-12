@@ -115,20 +115,14 @@ async fn refresh_logs_to_instance_and_keeps_pending_peer_after_return()
             release: Semaphore::new(0),
             synchronous_storage,
         });
-        let mut config = crate::AuthConfig::default();
-        {
-            let crate::LoggerSource::Config(logger_options) = &mut config.logger else {
-                #[allow(
-                    clippy::panic,
-                    clippy::panic_in_result_fn,
-                    reason = "The fixture modifies its existing authored logger options."
-                )]
-                {
-                    panic!("fixture requires authored logger options");
-                }
-            };
-            logger_options.log = Some(Arc::new(Logs(logger)));
-        }
+        let config = crate::AuthConfig {
+            logger: crate::LoggerConfig {
+                log: Some(Arc::new(Logs(logger))),
+                ..Default::default()
+            }
+            .into(),
+            ..Default::default()
+        };
         let config = Arc::new(config);
         let inner = Arc::new(EphemeralStore::new(config.clone()));
         let user = inner
@@ -169,20 +163,14 @@ async fn refresh_logs_to_instance_and_keeps_pending_peer_after_return()
             Default::default(),
         )?;
         let (caller_logger, mut caller_logs) = mpsc::unbounded_channel();
-        let mut caller_config = crate::AuthConfig::default();
-        {
-            let crate::LoggerSource::Config(logger_options) = &mut caller_config.logger else {
-                #[allow(
-                    clippy::panic,
-                    clippy::panic_in_result_fn,
-                    reason = "The fixture modifies its existing authored logger options."
-                )]
-                {
-                    panic!("fixture requires authored logger options");
-                }
-            };
-            logger_options.log = Some(Arc::new(Logs(caller_logger)));
-        }
+        let caller_config = crate::AuthConfig {
+            logger: crate::LoggerConfig {
+                log: Some(Arc::new(Logs(caller_logger))),
+                ..Default::default()
+            }
+            .into(),
+            ..Default::default()
+        };
         let caller_config = Arc::new(caller_config);
         let caller = crate::AuthContext::new(
             caller_config.clone(),

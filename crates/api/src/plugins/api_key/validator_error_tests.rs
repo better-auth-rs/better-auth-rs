@@ -218,15 +218,11 @@ async fn validator_errors_preserve_catch_scope_response_and_committed_callback_w
         for scoped in [false, true] {
             let trace = Arc::new(Trace::default());
             let mut config = AuthConfig::default();
-            {
-                let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger
-                else {
-                    return Err(AuthError::config(
-                        "Fixture requires authored logger options",
-                    ));
-                };
-                logger_options.log = Some(trace.clone());
+            config.logger = better_auth_core::LoggerConfig {
+                log: Some(trace.clone()),
+                ..Default::default()
             }
+            .into();
             let config = Arc::new(config);
             let store = Arc::new(EphemeralStore::new(config.clone()));
             assert_eq!(

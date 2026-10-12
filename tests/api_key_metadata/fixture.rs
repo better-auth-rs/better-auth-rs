@@ -83,20 +83,12 @@ impl Fixture {
         let mut config = AuthConfig::new("api-key-metadata-contract-secret-longer-than-thirty-two")
             .base_url("http://localhost:3000");
         config.session.store_session_in_database = Some(true);
-        {
-            let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-                #[allow(
-                    clippy::panic,
-                    clippy::panic_in_result_fn,
-                    reason = "The fixture modifies its existing authored logger options."
-                )]
-                {
-                    panic!("fixture requires authored logger options");
-                }
-            };
-            logger_options.level = Some(LogLevel::Warn);
-            logger_options.log = Some(state.clone());
+        config.logger = better_auth_core::LoggerConfig {
+            level: Some(LogLevel::Warn),
+            log: Some(state.clone()),
+            ..Default::default()
         }
+        .into();
         if scheduling != "default" {
             let state = state.clone();
             config.advanced.background_tasks = Some(BackgroundTasks::new(move |task| {

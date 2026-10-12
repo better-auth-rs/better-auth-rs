@@ -196,24 +196,16 @@ impl Hooks {
     async fn run(&self, http: bool, status: SchemaValue<u16>) -> AuthResult<AuthResponse> {
         let mut config = (*crate::test_store::test_config()).clone();
         config.experimental.instrumentation.enabled = self.instrumentation;
-        {
-            let crate::LoggerSource::Config(logger_options) = &mut config.logger else {
-                #[allow(
-                    clippy::panic,
-                    clippy::panic_in_result_fn,
-                    reason = "The fixture modifies its existing authored logger options."
-                )]
-                {
-                    panic!("fixture requires authored logger options");
-                }
-            };
-            logger_options.disabled = Some(true);
-            logger_options.level = Some(if self.debug {
+        config.logger = crate::LoggerConfig {
+            disabled: Some(true),
+            level: Some(if self.debug {
                 LogLevel::Debug
             } else {
                 LogLevel::Warn
-            });
+            }),
+            ..Default::default()
         }
+        .into();
         let config = Arc::new(config);
         let mut context = AuthContext::new(config.clone(), Arc::new(EphemeralStore::new(config)))
             .expect("fixture context initializes");

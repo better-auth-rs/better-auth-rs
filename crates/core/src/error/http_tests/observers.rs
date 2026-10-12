@@ -210,20 +210,12 @@ impl Harness {
             records: Mutex::default(),
         });
         let mut config = (*crate::test_store::test_config()).clone();
-        {
-            let crate::LoggerSource::Config(logger_options) = &mut config.logger else {
-                #[allow(
-                    clippy::panic,
-                    clippy::panic_in_result_fn,
-                    reason = "The fixture modifies its existing authored logger options."
-                )]
-                {
-                    panic!("fixture requires authored logger options");
-                }
-            };
-            logger_options.disabled = Some(disabled);
-            logger_options.log = Some(logs.clone());
+        config.logger = crate::LoggerConfig {
+            disabled: Some(disabled),
+            log: Some(logs.clone()),
+            ..Default::default()
         }
+        .into();
         config.api_error.throw_errors = Some(throws);
         let config = Arc::new(config);
         Self {

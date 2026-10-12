@@ -124,21 +124,13 @@ async fn last_login_veto_precedes_expiration_validation_and_preserves_error_poli
             hook: input["hook"].as_str().unwrap().into(),
             ..Default::default()
         });
-        {
-            let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-                #[allow(
-                    clippy::panic,
-                    clippy::panic_in_result_fn,
-                    reason = "The fixture modifies its existing authored logger options."
-                )]
-                {
-                    panic!("fixture requires authored logger options");
-                }
-            };
-            logger_options.disabled = Some(false);
-            logger_options.level = Some(LogLevel::Error);
-            logger_options.log = Some(observer.clone());
+        config.logger = better_auth_core::LoggerConfig {
+            disabled: Some(false),
+            level: Some(LogLevel::Error),
+            log: Some(observer.clone()),
+            ..Default::default()
         }
+        .into();
         let plugin = LastLoginMethodPlugin::new(LastLoginMethodConfig {
             max_age: 90.5,
             ..Default::default()

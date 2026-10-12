@@ -81,21 +81,13 @@ async fn contract<S: AuthSchema>(
     storage::assert_snapshot(&before, &case.before, backend.is_sqlite(), case);
     let events = Events::default();
     let mut options = config::configured(scenario, case.joins, Some(&events))?;
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut options.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disabled = Some(false);
-        logger_options.level = Some(LogLevel::Error);
-        logger_options.log = Some(Arc::new(Logger(events.clone())));
+    options.logger = better_auth_core::LoggerConfig {
+        disabled: Some(false),
+        level: Some(LogLevel::Error),
+        log: Some(Arc::new(Logger(events.clone()))),
+        ..Default::default()
     }
+    .into();
     let store = raw.with_runtime(
         Arc::new(options.clone()),
         vec![Arc::new(hooks::Hooks(events.clone()))],

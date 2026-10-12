@@ -37,19 +37,11 @@ fn config() -> AuthConfig {
     let mut config =
         AuthConfig::new("request-runtime-mutation-secret-at-least-32-characters").base_url(ORIGIN);
     config.base_path = BASE_PATH.into();
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.telemetry.enabled = false;
     config
 }

@@ -133,19 +133,11 @@ fn reader<S: AuthSchema>(
 ) -> AuthResult<Arc<dyn AuthStore<S>>> {
     let serial = matches!(policy, IdGeneration::Serial);
     let mut config = AuthConfig::default();
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.advanced.database.generate_id = Some(policy);
     let reader = base.with_runtime(Arc::new(config), Vec::new(), Default::default())?;
     reader.configure_organization_fields(configured(model, fields, serial))?;

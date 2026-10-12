@@ -49,12 +49,11 @@ fn config() -> Result<AuthConfig> {
             enabled: Some(false),
             ..Default::default()
         });
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            return Err(AuthError::internal("fixture requires authored logger options").into());
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     Ok(config)
 }
 

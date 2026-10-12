@@ -343,14 +343,11 @@ async fn check(input: Option<Value>, http: bool, api_key: bool) -> AuthResult<()
     let contract = Contract::new(input.clone(), "body observed", http)?;
     let mut config = AuthConfig::new("native-body-context-secret-at-least-32-characters");
     config.base_url = ORIGIN.into();
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            return Err(AuthError::internal(
-                "fixture requires authored logger options",
-            ));
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     let store = Arc::new(EphemeralStore::new(Arc::new(config.clone())));
     let mut builder = BetterAuth::new(config)
         .store_arc(store.clone())

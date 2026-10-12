@@ -40,20 +40,12 @@ impl LogSink for State {
 }
 fn config(state: Arc<State>, fail_handler: bool) -> AuthConfig {
     let mut config = AuthConfig::default();
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.level = Some(LogLevel::Error);
-        logger_options.log = Some(state.clone());
+    config.logger = better_auth_core::LoggerConfig {
+        level: Some(LogLevel::Error),
+        log: Some(state.clone()),
+        ..Default::default()
     }
+    .into();
     config.advanced.background_tasks = Some(BackgroundTasks::new(move |task| {
         state.events.lock().unwrap().push("handler".into());
         state.tasks.lock().unwrap().push(task);

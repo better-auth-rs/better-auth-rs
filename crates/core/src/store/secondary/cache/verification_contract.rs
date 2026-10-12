@@ -278,23 +278,15 @@ async fn capture(name: &str, in_transaction: bool) -> AuthResult<Json> {
     });
     let mut config = AuthConfig::default();
     config.verification.store_in_database = false;
-    {
-        let crate::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.level = Some(LogLevel::Debug);
-        logger_options.log = Some(Arc::new(Logger {
+    config.logger = crate::LoggerConfig {
+        level: Some(LogLevel::Debug),
+        log: Some(Arc::new(Logger {
             observer: observer.clone(),
             original: input.original.clone(),
-        }));
+        })),
+        ..Default::default()
     }
+    .into();
     config
         .initialize_logger()
         .expect("fixture initialization succeeds");

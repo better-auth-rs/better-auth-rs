@@ -28,19 +28,11 @@ fn fixture() -> Value {
 
 fn config(seconds: f64) -> AuthConfig {
     let mut config = AuthConfig::new(SECRET).base_url("https://cookie-precision.test");
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.advanced.use_secure_cookies = Some(false);
     config.session.expires_in = Some(Duration::milliseconds((seconds * 1000.0) as i64));
     config.session.cookie_cache = Some(CookieCacheConfig {

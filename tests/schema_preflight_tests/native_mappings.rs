@@ -160,19 +160,11 @@ fn declaration(field: &'static str, destination: &str, events: &Events) -> UserC
 fn settings() -> AuthConfig {
     let mut settings = config();
     settings.telemetry.enabled = false;
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut settings.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disabled = Some(true);
+    settings.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     settings.advanced.database.generate_id = Some(IdGeneration::Custom(IdGenerator::new(|_| {
         Ok(Some(ID.into()))
     })));

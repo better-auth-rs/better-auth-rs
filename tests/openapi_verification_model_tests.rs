@@ -104,19 +104,11 @@ async fn verification_component_follows_final_storage_configuration()
         let mut config =
             AuthConfig::new("ordinary-openapi-verification-model-secret-at-least-32-characters")
                 .base_url("http://openapi-verification-model.test");
-        {
-            let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-                #[allow(
-                    clippy::panic,
-                    clippy::panic_in_result_fn,
-                    reason = "The fixture modifies its existing authored logger options."
-                )]
-                {
-                    panic!("fixture requires authored logger options");
-                }
-            };
-            logger_options.disabled = Some(true);
+        config.logger = better_auth_core::LoggerConfig {
+            disabled: Some(true),
+            ..Default::default()
         }
+        .into();
         config.telemetry.enabled = false;
         config.verification.store_in_database = name == "secondary-database";
         config.verification.additional_fields = [(

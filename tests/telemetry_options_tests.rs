@@ -184,25 +184,21 @@ async fn configured_options_keep_omission_after_storage_normalization() -> AuthR
             config.account.account_linking.update_user_info_on_link = Some(custom);
             config.verification.disable_cleanup = Some(custom);
             config.api_error.throw_errors = Some(custom);
-            {
-                let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger
-                else {
-                    #[allow(
-                        clippy::panic,
-                        clippy::panic_in_result_fn,
-                        reason = "The fixture modifies its existing authored logger options."
-                    )]
-                    {
-                        panic!("fixture requires authored logger options");
-                    }
-                };
-                logger_options.disabled = Some(custom);
-                logger_options.level = Some(if custom {
+            config.logger = better_auth_core::LoggerConfig {
+                disabled: Some(custom),
+                level: Some(if custom {
                     LogLevel::Error
                 } else {
                     LogLevel::Warn
-                });
+                }),
+                log: if custom {
+                    Some(Arc::new(Callbacks))
+                } else {
+                    None
+                },
+                ..Default::default()
             }
+            .into();
             config.session.cookie_cache = Some(CookieCacheConfig {
                 enabled: Some(custom),
                 max_age: Some(chrono::Duration::seconds(if custom { 900 } else { 300 })),
@@ -227,20 +223,6 @@ async fn configured_options_keep_omission_after_storage_normalization() -> AuthR
             config.advanced.default_cookie_attributes.path =
                 Some(if custom { "/auth" } else { "/" }.into());
             if custom {
-                {
-                    let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger
-                    else {
-                        #[allow(
-                            clippy::panic,
-                            clippy::panic_in_result_fn,
-                            reason = "The fixture modifies its existing authored logger options."
-                        )]
-                        {
-                            panic!("fixture requires authored logger options");
-                        }
-                    };
-                    logger_options.log = Some(Arc::new(Callbacks));
-                }
                 config.session.fresh_age = Some(chrono::Duration::zero());
                 config.advanced.cookie_prefix = Some(String::new());
                 config.advanced.default_cookie_attributes.domain = Some("example.test".into());

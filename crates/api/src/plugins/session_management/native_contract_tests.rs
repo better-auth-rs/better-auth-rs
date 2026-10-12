@@ -487,14 +487,11 @@ async fn check(case: &Value) -> AuthResult<()> {
         ..Default::default()
     });
     let mut config = AuthConfig::new(SECRET).base_url(ORIGIN);
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            return Err(AuthError::config(
-                "Fixture requires authored logger options",
-            ));
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.session.fresh_age = Some(Duration::seconds(60));
     config.session.disable_session_refresh = Some(true);
     config.session.cookie_cache = Some(CookieCacheConfig {

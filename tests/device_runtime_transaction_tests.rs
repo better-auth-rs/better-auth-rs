@@ -95,19 +95,11 @@ async fn setup(
 ) -> AuthResult<(BetterAuth<StatelessSchema>, DeviceCode)> {
     let mut config = AuthConfig::new("device-runtime-transaction-secret-at-least-32-characters")
         .base_url("http://device-runtime.test");
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.telemetry.enabled = false;
     let raw = Arc::new(EphemeralStore::new(Arc::new(config.clone())));
     let auth = BetterAuth::new(config)

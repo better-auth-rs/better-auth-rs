@@ -66,39 +66,23 @@ async fn native_join_reads_missing_child_only_after_a_matching_base_row() -> Aut
         for disabled in [false, true] {
             let mut config = AuthConfig::default();
             config.advanced.database.joins = Some(true);
-            {
-                let crate::LoggerSource::Config(logger_options) = &mut config.logger else {
-                    #[allow(
-                        clippy::panic,
-                        clippy::panic_in_result_fn,
-                        reason = "The fixture modifies its existing authored logger options."
-                    )]
-                    {
-                        panic!("fixture requires authored logger options");
-                    }
-                };
-                logger_options.disabled = Some(true);
+            config.logger = crate::LoggerConfig {
+                disabled: Some(true),
+                ..Default::default()
             }
+            .into();
             let store = Arc::new(EphemeralStore::empty(Arc::new(config.clone())));
             let table = TableRef::new(store.operations.clone());
             let row = table.push(session())?;
             store
                 .operation(|op| op.replace_physical_table("session".into(), Some(table.clone())))?;
             let logs = Arc::new(Logs::default());
-            {
-                let crate::LoggerSource::Config(logger_options) = &mut config.logger else {
-                    #[allow(
-                        clippy::panic,
-                        clippy::panic_in_result_fn,
-                        reason = "The fixture modifies its existing authored logger options."
-                    )]
-                    {
-                        panic!("fixture requires authored logger options");
-                    }
-                };
-                logger_options.disabled = Some(disabled);
-                logger_options.log = Some(logs.clone());
+            config.logger = crate::LoggerConfig {
+                disabled: Some(disabled),
+                log: Some(logs.clone()),
+                ..Default::default()
             }
+            .into();
             let context = AuthContext::new(Arc::new(config), store.clone())
                 .expect("fixture context initializes");
             let result = context

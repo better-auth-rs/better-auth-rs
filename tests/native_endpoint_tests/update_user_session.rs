@@ -56,14 +56,11 @@ async fn check(case: &'static str, signed_cookie: bool) -> AuthResult<()> {
     };
     let mut config = AuthConfig::new(SECRET);
     config.base_url = ORIGIN.into();
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            return Err(AuthError::internal(
-                "fixture requires authored logger options",
-            ));
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.session.store_session_in_database = Some(true);
     let _ = config
         .user

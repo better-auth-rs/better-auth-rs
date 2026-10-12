@@ -193,18 +193,15 @@ async fn run_case(name: &str) -> AuthResult<Json> {
     .into();
     let projected = values::projected(name, &observer, &original)?;
     let mut config = AuthConfig::new(SECRET).base_url(ORIGIN);
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            return Err(AuthError::config(
-                "Fixture requires authored logger options",
-            ));
-        };
-        logger_options.level = Some(LogLevel::Error);
-        logger_options.log = Some(Arc::new(Sink {
+    config.logger = better_auth_core::LoggerConfig {
+        level: Some(LogLevel::Error),
+        log: Some(Arc::new(Sink {
             observer: observer.clone(),
             original,
-        }));
+        })),
+        ..Default::default()
     }
+    .into();
     let observed = observer.clone();
     let _ = config.account.additional_fields.insert(
         "updatedAt".into(),

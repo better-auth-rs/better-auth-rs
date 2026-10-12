@@ -51,19 +51,11 @@ fn field(events: &Events, kind: &'static str, required: bool) -> UserFieldConfig
 fn configuration(limit: Option<f64>, events: &Events) -> (AuthConfig, OrganizationPlugin) {
     let mut config = AuthConfig::new("organization-list-contract-secret-at-least-thirty-two")
         .base_url("http://localhost:3000");
-    {
-        let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
-        };
-        logger_options.disabled = Some(true);
+    config.logger = better_auth_core::LoggerConfig {
+        disabled: Some(true),
+        ..Default::default()
     }
+    .into();
     config.advanced.database.default_find_many_limit = limit;
     let _ = config
         .user
