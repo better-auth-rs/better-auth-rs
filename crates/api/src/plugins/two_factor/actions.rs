@@ -367,6 +367,10 @@ pub(super) async fn send_otp_core<S: better_auth_core::AuthSchema>(
     _ = ctx
         .database
         .create_verification_optional(CreateVerification {
+            field_order: ["value", "identifier", "expiresAt"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
             identifier: (identifier).into(),
             value: SchemaValue::from_field(better_auth_core::query::field_add(
                 &stored_otp.display_utf16()?.into(),
@@ -466,6 +470,10 @@ pub(super) async fn verify_otp_core(
         _ = ctx
             .database
             .create_verification_optional(CreateVerification {
+                field_order: ["value", "identifier", "expiresAt"]
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect(),
                 identifier: (identifier).into(),
                 value: SchemaValue::from_field(next_value),
                 expires_at,

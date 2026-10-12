@@ -36,6 +36,22 @@ impl Transport {
     }
 }
 
+async fn native_options(fixture: &Fixture, request: &AuthRequest) -> AuthResult<AuthResponse> {
+    let context = fixture.ctx.initialize_request_context().await?;
+    let plugin = PasskeyPlugin::new()
+        .rp_id(RP_ID)
+        .rp_name("Passkey reopen")
+        .origin(ORIGIN);
+    let mut response = plugin
+        .on_request(request, &context)
+        .await?
+        .ok_or_else(|| AuthError::internal("Native Passkey options route did not match"))?;
+    context
+        .session_manager()
+        .finish_response(request, &mut response)?;
+    Ok(response)
+}
+
 #[tokio::test]
 async fn native_options_retain_split_results_and_original_method_errors() -> TestResult {
     let path = std::env::temp_dir().join(format!(
@@ -65,9 +81,12 @@ async fn native_options_retain_split_results_and_original_method_errors() -> Tes
             ("/passkey/generate-authenticate-options", "allowCredentials"),
         ] {
             transport.events.lock().unwrap().clear();
-            let response = fixture
-                .route(&request(path, Some(session.token.typed()?), None, None))
-                .await;
+            // Descriptor identities must be observed before the explicit HTTP serialization checks below.
+            let response = native_options(
+                &fixture,
+                &request(path, Some(session.token.typed()?), None, None),
+            )
+            .await;
             transport.assert_calls(name);
             if Transport::fails(name) {
                 let error = response.err().ok_or("Expected original split error")?;
