@@ -26,7 +26,7 @@ pub trait QueryBuilder:
         self.prepare_insert(insert.replace, sql);
 
         if let Some(table) = &insert.table {
-            sql.write_str(" INTO ").unwrap();
+            self.write_keyword(" INTO ", sql).unwrap();
 
             self.prepare_table_ref(table, sql);
         }
@@ -61,7 +61,7 @@ pub trait QueryBuilder:
                 sql.write_str(" ").unwrap();
                 match source {
                     InsertValueSource::Values(values) => {
-                        sql.write_str("VALUES ").unwrap();
+                        self.write_keyword("VALUES ", sql).unwrap();
                         let mut vals = values.iter();
                         join_io!(
                             vals,
@@ -106,10 +106,10 @@ pub trait QueryBuilder:
         sql: &mut impl SqlWriter,
     ) {
         match union_type {
-            UnionType::Intersect => sql.write_str(" INTERSECT (").unwrap(),
-            UnionType::Distinct => sql.write_str(" UNION (").unwrap(),
-            UnionType::Except => sql.write_str(" EXCEPT (").unwrap(),
-            UnionType::All => sql.write_str(" UNION ALL (").unwrap(),
+            UnionType::Intersect => self.write_keyword(" INTERSECT (", sql).unwrap(),
+            UnionType::Distinct => self.write_keyword(" UNION (", sql).unwrap(),
+            UnionType::Except => self.write_keyword(" EXCEPT (", sql).unwrap(),
+            UnionType::All => self.write_keyword(" UNION ALL (", sql).unwrap(),
         }
         self.prepare_select_statement(select_statement, sql);
         sql.write_str(")").unwrap();
@@ -121,7 +121,7 @@ pub trait QueryBuilder:
             self.prepare_with_clause(with, sql);
         }
 
-        sql.write_str("SELECT ").unwrap();
+        self.write_keyword("SELECT ", sql).unwrap();
 
         if let Some(distinct) = &select.distinct {
             self.prepare_select_distinct(distinct, sql);
@@ -149,7 +149,7 @@ pub trait QueryBuilder:
             from_tables,
             table_ref,
             first {
-                sql.write_str(" FROM ").unwrap();
+                self.write_keyword(" FROM ", sql).unwrap();
             },
             join {
                 sql.write_str(", ").unwrap();
@@ -175,7 +175,7 @@ pub trait QueryBuilder:
             groups,
             expr,
             first {
-                sql.write_str(" GROUP BY ").unwrap();
+                self.write_keyword(" GROUP BY ", sql).unwrap();
             },
             join {
                 sql.write_str(", ").unwrap();
@@ -198,7 +198,7 @@ pub trait QueryBuilder:
             orders,
             expr,
             first {
-                sql.write_str(" ORDER BY ").unwrap();
+                self.write_keyword(" ORDER BY ", sql).unwrap();
             },
             join {
                 sql.write_str(", ").unwrap();
@@ -216,9 +216,9 @@ pub trait QueryBuilder:
         }
 
         if let Some((name, query)) = &select.window {
-            sql.write_str(" WINDOW ").unwrap();
+            self.write_keyword(" WINDOW ", sql).unwrap();
             self.prepare_iden(name, sql);
-            sql.write_str(" AS (").unwrap();
+            self.write_keyword(" AS (", sql).unwrap();
             self.prepare_window_statement(query, sql);
             sql.write_str(")").unwrap();
         }
@@ -227,12 +227,12 @@ pub trait QueryBuilder:
     // Translate the LIMIT and OFFSET expression in [`SelectStatement`]
     fn prepare_select_limit_offset(&self, select: &SelectStatement, sql: &mut impl SqlWriter) {
         if let Some(limit) = &select.limit {
-            sql.write_str(" LIMIT ").unwrap();
+            self.write_keyword(" LIMIT ", sql).unwrap();
             self.prepare_value(limit.clone(), sql);
         }
 
         if let Some(offset) = &select.offset {
-            sql.write_str(" OFFSET ").unwrap();
+            self.write_keyword(" OFFSET ", sql).unwrap();
             self.prepare_value(offset.clone(), sql);
         }
     }
@@ -243,7 +243,7 @@ pub trait QueryBuilder:
             self.prepare_with_clause(with, sql);
         }
 
-        sql.write_str("UPDATE ").unwrap();
+        self.write_keyword("UPDATE ", sql).unwrap();
 
         if let Some(table) = &update.table {
             self.prepare_table_ref(table, sql);
@@ -251,7 +251,7 @@ pub trait QueryBuilder:
 
         self.prepare_update_join(&update.from, &update.r#where, sql);
 
-        sql.write_str(" SET ").unwrap();
+        self.write_keyword(" SET ", sql).unwrap();
 
         let mut values = update.values.iter();
         join_io!(
@@ -291,7 +291,7 @@ pub trait QueryBuilder:
             from_iter,
             table_ref,
             first {
-                sql.write_str(" FROM ").unwrap();
+                self.write_keyword(" FROM ", sql).unwrap();
             },
             join {
                 sql.write_str(", ").unwrap();
@@ -328,7 +328,7 @@ pub trait QueryBuilder:
             orders,
             expr,
             first {
-                sql.write_str(" ORDER BY ").unwrap();
+                self.write_keyword(" ORDER BY ", sql).unwrap();
             },
             join {
                 sql.write_str(", ").unwrap();
@@ -342,7 +342,7 @@ pub trait QueryBuilder:
     /// Translate LIMIT expression in [`UpdateStatement`].
     fn prepare_update_limit(&self, update: &UpdateStatement, sql: &mut impl SqlWriter) {
         if let Some(limit) = &update.limit {
-            sql.write_str(" LIMIT ").unwrap();
+            self.write_keyword(" LIMIT ", sql).unwrap();
             self.prepare_value(limit.clone(), sql);
         }
     }
@@ -353,10 +353,10 @@ pub trait QueryBuilder:
             self.prepare_with_clause(with, sql);
         }
 
-        sql.write_str("DELETE ").unwrap();
+        self.write_keyword("DELETE ", sql).unwrap();
 
         if let Some(table) = &delete.table {
-            sql.write_str("FROM ").unwrap();
+            self.write_keyword("FROM ", sql).unwrap();
             self.prepare_table_ref(table, sql);
         }
 
@@ -378,7 +378,7 @@ pub trait QueryBuilder:
             orders,
             expr,
             first {
-                sql.write_str(" ORDER BY ").unwrap();
+                self.write_keyword(" ORDER BY ", sql).unwrap();
             },
             join {
                 sql.write_str(", ").unwrap();
@@ -392,7 +392,7 @@ pub trait QueryBuilder:
     /// Translate LIMIT expression in [`DeleteStatement`].
     fn prepare_delete_limit(&self, delete: &DeleteStatement, sql: &mut impl SqlWriter) {
         if let Some(limit) = &delete.limit {
-            sql.write_str(" LIMIT ").unwrap();
+            self.write_keyword(" LIMIT ", sql).unwrap();
             self.prepare_value(limit.clone(), sql);
         }
     }
@@ -511,30 +511,30 @@ pub trait QueryBuilder:
 
     /// Translate [`CaseStatement`] into SQL statement.
     fn prepare_case_statement(&self, stmts: &CaseStatement, sql: &mut impl SqlWriter) {
-        sql.write_str("(CASE").unwrap();
+        self.write_keyword("(CASE", sql).unwrap();
 
         let CaseStatement { when, r#else } = stmts;
 
         for case in when.iter() {
-            sql.write_str(" WHEN (").unwrap();
+            self.write_keyword(" WHEN (", sql).unwrap();
             self.prepare_condition_where(&case.condition, sql);
-            sql.write_str(") THEN ").unwrap();
+            self.write_keyword(") THEN ", sql).unwrap();
 
             self.prepare_expr(&case.result, sql);
         }
         if let Some(r#else) = r#else {
-            sql.write_str(" ELSE ").unwrap();
+            self.write_keyword(" ELSE ", sql).unwrap();
             self.prepare_expr(r#else, sql);
         }
 
-        sql.write_str(" END)").unwrap();
+        self.write_keyword(" END)", sql).unwrap();
     }
 
     /// Translate [`SelectDistinct`] into SQL statement.
     fn prepare_select_distinct(&self, select_distinct: &SelectDistinct, sql: &mut impl SqlWriter) {
         match select_distinct {
-            SelectDistinct::All => sql.write_str("ALL").unwrap(),
-            SelectDistinct::Distinct => sql.write_str("DISTINCT").unwrap(),
+            SelectDistinct::All => self.write_keyword("ALL", sql).unwrap(),
+            SelectDistinct::Distinct => self.write_keyword("DISTINCT", sql).unwrap(),
             _ => {}
         }
     }
@@ -553,13 +553,14 @@ pub trait QueryBuilder:
 
     /// Translate [`LockType`] into SQL statement.
     fn prepare_select_lock(&self, lock: &LockClause, sql: &mut impl SqlWriter) {
-        sql.write_str(self.lock_phrase(lock.r#type)).unwrap();
+        self.write_keyword(self.lock_phrase(lock.r#type), sql)
+            .unwrap();
         let mut tables = lock.tables.iter();
         join_io!(
             tables,
             table_ref,
             first {
-                sql.write_str(" OF ").unwrap();
+                self.write_keyword(" OF ", sql).unwrap();
             },
             join {
                 sql.write_str(", ").unwrap();
@@ -571,8 +572,8 @@ pub trait QueryBuilder:
 
         if let Some(behavior) = lock.behavior {
             match behavior {
-                LockBehavior::Nowait => sql.write_str(" NOWAIT").unwrap(),
-                LockBehavior::SkipLocked => sql.write_str(" SKIP LOCKED").unwrap(),
+                LockBehavior::Nowait => self.write_keyword(" NOWAIT", sql).unwrap(),
+                LockBehavior::SkipLocked => self.write_keyword(" SKIP LOCKED", sql).unwrap(),
             }
         }
     }
@@ -582,11 +583,11 @@ pub trait QueryBuilder:
         self.prepare_expr(&select_expr.expr, sql);
         match &select_expr.window {
             Some(WindowSelectType::Name(name)) => {
-                sql.write_str(" OVER ").unwrap();
+                self.write_keyword(" OVER ", sql).unwrap();
                 self.prepare_iden(name, sql);
             }
             Some(WindowSelectType::Query(window)) => {
-                sql.write_str(" OVER ").unwrap();
+                self.write_keyword(" OVER ", sql).unwrap();
                 sql.write_str("( ").unwrap();
                 self.prepare_window_statement(window, sql);
                 sql.write_str(" )").unwrap();
@@ -595,7 +596,7 @@ pub trait QueryBuilder:
         };
 
         if let Some(alias) = &select_expr.alias {
-            sql.write_str(" AS ").unwrap();
+            self.write_keyword(" AS ", sql).unwrap();
             self.prepare_iden(alias, sql);
         };
     }
@@ -612,7 +613,7 @@ pub trait QueryBuilder:
 
     fn prepare_join_table_ref(&self, join_expr: &JoinExpr, sql: &mut impl SqlWriter) {
         if join_expr.lateral {
-            sql.write_str("LATERAL ").unwrap();
+            self.write_keyword("LATERAL ", sql).unwrap();
         }
         self.prepare_table_ref(&join_expr.table, sql);
     }
@@ -624,20 +625,20 @@ pub trait QueryBuilder:
                 sql.write_str("(").unwrap();
                 self.prepare_select_statement(query, sql);
                 sql.write_str(")").unwrap();
-                sql.write_str(" AS ").unwrap();
+                self.write_keyword(" AS ", sql).unwrap();
                 self.prepare_iden(alias, sql);
             }
             TableRef::ValuesList(values, alias) => {
                 sql.write_str("(").unwrap();
                 self.prepare_values_list(values, sql);
                 sql.write_str(")").unwrap();
-                sql.write_str(" AS ").unwrap();
+                self.write_keyword(" AS ", sql).unwrap();
                 self.prepare_iden(alias, sql);
             }
             TableRef::FunctionCall(func, alias) => {
                 self.prepare_function_name(&func.func, sql);
                 self.prepare_function_arguments(func, sql);
-                sql.write_str(" AS ").unwrap();
+                self.write_keyword(" AS ", sql).unwrap();
                 self.prepare_iden(alias, sql);
             }
             _ => self.prepare_table_ref_iden(table_ref, sql),
@@ -665,45 +666,55 @@ pub trait QueryBuilder:
 
     /// Translate [`UnOper`] into SQL statement.
     fn prepare_un_oper(&self, un_oper: &UnOper, sql: &mut impl SqlWriter) {
-        sql.write_str(match un_oper {
-            UnOper::Not => "NOT",
-        })
+        self.write_keyword(
+            match un_oper {
+                UnOper::Not => "NOT",
+            },
+            sql,
+        )
         .unwrap();
     }
 
     fn prepare_bin_oper_common(&self, bin_oper: &BinOper, sql: &mut impl SqlWriter) {
-        sql.write_str(match bin_oper {
-            BinOper::And => "AND",
-            BinOper::Or => "OR",
-            BinOper::Like => "LIKE",
-            BinOper::NotLike => "NOT LIKE",
-            BinOper::Is => "IS",
-            BinOper::IsNot => "IS NOT",
-            BinOper::In => "IN",
-            BinOper::NotIn => "NOT IN",
-            BinOper::Between => "BETWEEN",
-            BinOper::NotBetween => "NOT BETWEEN",
-            BinOper::Equal => "=",
-            BinOper::NotEqual => "<>",
-            BinOper::SmallerThan => "<",
-            BinOper::GreaterThan => ">",
-            BinOper::SmallerThanOrEqual => "<=",
-            BinOper::GreaterThanOrEqual => ">=",
-            BinOper::Add => "+",
-            BinOper::Sub => "-",
-            BinOper::Mul => "*",
-            BinOper::Div => "/",
-            BinOper::Mod => "%",
-            BinOper::LShift => "<<",
-            BinOper::RShift => ">>",
-            BinOper::As => "AS",
-            BinOper::Escape => "ESCAPE",
-            BinOper::Custom(raw) => raw,
-            BinOper::BitAnd => "&",
-            BinOper::BitOr => "|",
-            #[allow(unreachable_patterns)]
-            _ => unimplemented!(),
-        })
+        if let BinOper::Custom(raw) = bin_oper {
+            sql.write_str(raw).unwrap();
+            return;
+        }
+        self.write_keyword(
+            match bin_oper {
+                BinOper::And => "AND",
+                BinOper::Or => "OR",
+                BinOper::Like => "LIKE",
+                BinOper::NotLike => "NOT LIKE",
+                BinOper::Is => "IS",
+                BinOper::IsNot => "IS NOT",
+                BinOper::In => "IN",
+                BinOper::NotIn => "NOT IN",
+                BinOper::Between => "BETWEEN",
+                BinOper::NotBetween => "NOT BETWEEN",
+                BinOper::Equal => "=",
+                BinOper::NotEqual => "<>",
+                BinOper::SmallerThan => "<",
+                BinOper::GreaterThan => ">",
+                BinOper::SmallerThanOrEqual => "<=",
+                BinOper::GreaterThanOrEqual => ">=",
+                BinOper::Add => "+",
+                BinOper::Sub => "-",
+                BinOper::Mul => "*",
+                BinOper::Div => "/",
+                BinOper::Mod => "%",
+                BinOper::LShift => "<<",
+                BinOper::RShift => ">>",
+                BinOper::As => "AS",
+                BinOper::Escape => "ESCAPE",
+                BinOper::Custom(raw) => raw,
+                BinOper::BitAnd => "&",
+                BinOper::BitOr => "|",
+                #[allow(unreachable_patterns)]
+                _ => unimplemented!(),
+            },
+            sql,
+        )
         .unwrap();
     }
 
@@ -714,12 +725,15 @@ pub trait QueryBuilder:
 
     /// Translate [`SubQueryOper`] into SQL statement.
     fn prepare_sub_query_oper(&self, oper: &SubQueryOper, sql: &mut impl SqlWriter) {
-        sql.write_str(match oper {
-            SubQueryOper::Exists => "EXISTS",
-            SubQueryOper::Any => "ANY",
-            SubQueryOper::Some => "SOME",
-            SubQueryOper::All => "ALL",
-        })
+        self.write_keyword(
+            match oper {
+                SubQueryOper::Exists => "EXISTS",
+                SubQueryOper::Any => "ANY",
+                SubQueryOper::Some => "SOME",
+                SubQueryOper::All => "ALL",
+            },
+            sql,
+        )
         .unwrap();
     }
 
@@ -737,7 +751,7 @@ pub trait QueryBuilder:
         };
         if i > 0 {
             sql.write_str(" ").unwrap();
-            sql.write_str(oper).unwrap();
+            self.write_keyword(oper, sql).unwrap();
             sql.write_str(" ").unwrap();
         }
         let both_binary = match simple_expr {
@@ -761,30 +775,33 @@ pub trait QueryBuilder:
         if let Func::Custom(iden) = function {
             sql.write_str(&iden.0)
         } else {
-            sql.write_str(match function {
-                Func::Max => "MAX",
-                Func::Min => "MIN",
-                Func::Sum => "SUM",
-                Func::Avg => "AVG",
-                Func::Abs => "ABS",
-                Func::Coalesce => "COALESCE",
-                Func::Count => "COUNT",
-                Func::IfNull => self.if_null_function(),
-                Func::Greatest => self.greatest_function(),
-                Func::Least => self.least_function(),
-                Func::CharLength => self.char_length_function(),
-                Func::Cast => "CAST",
-                Func::Lower => "LOWER",
-                Func::Upper => "UPPER",
-                Func::BitAnd => "BIT_AND",
-                Func::BitOr => "BIT_OR",
-                Func::Custom(_) => "",
-                Func::Random => self.random_function(),
-                Func::Round => "ROUND",
-                Func::Md5 => "MD5",
-                #[cfg(feature = "backend-postgres")]
-                Func::PgFunction(_) => unimplemented!(),
-            })
+            self.write_keyword(
+                match function {
+                    Func::Max => "MAX",
+                    Func::Min => "MIN",
+                    Func::Sum => "SUM",
+                    Func::Avg => "AVG",
+                    Func::Abs => "ABS",
+                    Func::Coalesce => "COALESCE",
+                    Func::Count => "COUNT",
+                    Func::IfNull => self.if_null_function(),
+                    Func::Greatest => self.greatest_function(),
+                    Func::Least => self.least_function(),
+                    Func::CharLength => self.char_length_function(),
+                    Func::Cast => "CAST",
+                    Func::Lower => "LOWER",
+                    Func::Upper => "UPPER",
+                    Func::BitAnd => "BIT_AND",
+                    Func::BitOr => "BIT_OR",
+                    Func::Custom(_) => "",
+                    Func::Random => self.random_function(),
+                    Func::Round => "ROUND",
+                    Func::Md5 => "MD5",
+                    #[cfg(feature = "backend-postgres")]
+                    Func::PgFunction(_) => unimplemented!(),
+                },
+                sql,
+            )
         }
         .unwrap();
     }
@@ -795,7 +812,7 @@ pub trait QueryBuilder:
 
         if let Some((arg, modifier)) = args.next() {
             if modifier.distinct {
-                sql.write_str("DISTINCT ").unwrap();
+                self.write_keyword("DISTINCT ", sql).unwrap();
             }
             self.prepare_expr(arg, sql);
         }
@@ -803,7 +820,7 @@ pub trait QueryBuilder:
         for (arg, modifier) in args {
             sql.write_str(", ").unwrap();
             if modifier.distinct {
-                sql.write_str("DISTINCT ").unwrap();
+                self.write_keyword("DISTINCT ", sql).unwrap();
             }
             self.prepare_expr(arg, sql);
         }
@@ -836,30 +853,30 @@ pub trait QueryBuilder:
     ) {
         if with_clause.recursive {
             if let Some(search) = &with_clause.search {
-                sql.write_str("SEARCH ").unwrap();
+                self.write_keyword("SEARCH ", sql).unwrap();
                 sql.write_str(match &search.order.as_ref().unwrap() {
                     SearchOrder::BREADTH => "BREADTH",
                     SearchOrder::DEPTH => "DEPTH",
                 })
                 .unwrap();
-                sql.write_str(" FIRST BY ").unwrap();
+                self.write_keyword(" FIRST BY ", sql).unwrap();
 
                 self.prepare_expr(&search.expr.as_ref().unwrap().expr, sql);
 
-                sql.write_str(" SET ").unwrap();
+                self.write_keyword(" SET ", sql).unwrap();
 
                 self.prepare_iden(search.expr.as_ref().unwrap().alias.as_ref().unwrap(), sql);
                 sql.write_str(" ").unwrap();
             }
             if let Some(cycle) = &with_clause.cycle {
-                sql.write_str("CYCLE ").unwrap();
+                self.write_keyword("CYCLE ", sql).unwrap();
 
                 self.prepare_expr(cycle.expr.as_ref().unwrap(), sql);
 
-                sql.write_str(" SET ").unwrap();
+                self.write_keyword(" SET ", sql).unwrap();
 
                 self.prepare_iden(cycle.set_as.as_ref().unwrap(), sql);
-                sql.write_str(" USING ").unwrap();
+                self.write_keyword(" USING ", sql).unwrap();
                 self.prepare_iden(cycle.using.as_ref().unwrap(), sql);
                 sql.write_str(" ").unwrap();
             }
@@ -912,7 +929,7 @@ pub trait QueryBuilder:
             sql.write_str(") ").unwrap();
         }
 
-        sql.write_str("AS ").unwrap();
+        self.write_keyword("AS ", sql).unwrap();
 
         self.prepare_with_query_clause_materialization(cte, sql);
 
@@ -933,27 +950,27 @@ pub trait QueryBuilder:
     ) {
         if let Some(materialized) = cte.materialized {
             if !materialized {
-                sql.write_str("NOT MATERIALIZED ")
+                self.write_keyword("NOT MATERIALIZED ", sql)
             } else {
-                sql.write_str(" MATERIALIZED ")
+                self.write_keyword(" MATERIALIZED ", sql)
             }
             .unwrap()
         }
     }
 
     fn prepare_with_clause_start(&self, with_clause: &WithClause, sql: &mut impl SqlWriter) {
-        sql.write_str("WITH ").unwrap();
+        self.write_keyword("WITH ", sql).unwrap();
 
         if with_clause.recursive {
-            sql.write_str("RECURSIVE ").unwrap();
+            self.write_keyword("RECURSIVE ", sql).unwrap();
         }
     }
 
     fn prepare_insert(&self, replace: bool, sql: &mut impl SqlWriter) {
         if replace {
-            sql.write_str("REPLACE").unwrap();
+            self.write_keyword("REPLACE", sql).unwrap();
         } else {
-            sql.write_str("INSERT").unwrap();
+            self.write_keyword("INSERT", sql).unwrap();
         }
     }
 
@@ -991,15 +1008,18 @@ pub trait QueryBuilder:
     }
 
     fn prepare_join_type_common(&self, join_type: &JoinType, sql: &mut impl SqlWriter) {
-        sql.write_str(match join_type {
-            JoinType::Join => "JOIN",
-            JoinType::CrossJoin => "CROSS JOIN",
-            JoinType::InnerJoin => "INNER JOIN",
-            JoinType::LeftJoin => "LEFT JOIN",
-            JoinType::RightJoin => "RIGHT JOIN",
-            JoinType::FullOuterJoin => "FULL OUTER JOIN",
-            JoinType::StraightJoin => "STRAIGHT_JOIN",
-        })
+        self.write_keyword(
+            match join_type {
+                JoinType::Join => "JOIN",
+                JoinType::CrossJoin => "CROSS JOIN",
+                JoinType::InnerJoin => "INNER JOIN",
+                JoinType::LeftJoin => "LEFT JOIN",
+                JoinType::RightJoin => "RIGHT JOIN",
+                JoinType::FullOuterJoin => "FULL OUTER JOIN",
+                JoinType::StraightJoin => "STRAIGHT_JOIN",
+            },
+            sql,
+        )
         .unwrap()
     }
 
@@ -1022,8 +1042,8 @@ pub trait QueryBuilder:
     /// Translate [`Order`] into SQL statement.
     fn prepare_order(&self, order_expr: &OrderExpr, sql: &mut impl SqlWriter) {
         match &order_expr.order {
-            Order::Asc => sql.write_str(" ASC").unwrap(),
-            Order::Desc => sql.write_str(" DESC").unwrap(),
+            Order::Asc => self.write_keyword(" ASC", sql).unwrap(),
+            Order::Desc => self.write_keyword(" DESC", sql).unwrap(),
             Order::Field(values) => self.prepare_field_order(order_expr, values, sql),
         }
     }
@@ -1035,22 +1055,22 @@ pub trait QueryBuilder:
         values: &Values,
         sql: &mut impl SqlWriter,
     ) {
-        sql.write_str("CASE ").unwrap();
+        self.write_keyword("CASE ", sql).unwrap();
         let mut i = 0;
         for value in &values.0 {
-            sql.write_str("WHEN ").unwrap();
+            self.write_keyword("WHEN ", sql).unwrap();
             self.prepare_expr(&order_expr.expr, sql);
             sql.write_str("=").unwrap();
             self.write_value(sql, value).unwrap();
-            sql.write_str(" THEN ").unwrap();
+            self.write_keyword(" THEN ", sql).unwrap();
             write_int(sql, i);
             sql.write_str(" ").unwrap();
             i += 1;
         }
 
-        sql.write_str("ELSE ").unwrap();
+        self.write_keyword("ELSE ", sql).unwrap();
         write_int(sql, i);
-        sql.write_str(" END").unwrap();
+        self.write_keyword(" END", sql).unwrap();
     }
 
     /// Write [`Value`] into SQL statement as parameter.
@@ -1063,7 +1083,7 @@ pub trait QueryBuilder:
 
     /// Translate a `&[ValueTuple]` into a VALUES list.
     fn prepare_values_list(&self, value_tuples: &[ValueTuple], sql: &mut impl SqlWriter) {
-        sql.write_str("VALUES ").unwrap();
+        self.write_keyword("VALUES ", sql).unwrap();
         let mut tuples = value_tuples.iter();
         join_io!(
             tuples,
@@ -1072,7 +1092,7 @@ pub trait QueryBuilder:
                 sql.write_str(", ").unwrap();
             },
             do {
-                sql.write_str(self.values_list_tuple_prefix()).unwrap();
+                self.write_keyword(self.values_list_tuple_prefix(), sql).unwrap();
                 sql.write_str("(").unwrap();
 
                 let mut values = value_tuple.clone().into_iter();
@@ -1093,7 +1113,7 @@ pub trait QueryBuilder:
     }
 
     fn prepare_values_rows(&self, values: &[Values], sql: &mut impl SqlWriter) {
-        sql.write_str("VALUES ").unwrap();
+        self.write_keyword("VALUES ", sql).unwrap();
         let mut rows = values.iter();
         join_io!(
             rows,
@@ -1136,11 +1156,11 @@ pub trait QueryBuilder:
     /// Translate [`Keyword`] into SQL statement.
     fn prepare_keyword(&self, keyword: &Keyword, sql: &mut impl SqlWriter) {
         match keyword {
-            Keyword::Null => sql.write_str("NULL").unwrap(),
-            Keyword::CurrentDate => sql.write_str("CURRENT_DATE").unwrap(),
-            Keyword::CurrentTime => sql.write_str("CURRENT_TIME").unwrap(),
-            Keyword::CurrentTimestamp => sql.write_str("CURRENT_TIMESTAMP").unwrap(),
-            Keyword::Default => sql.write_str("DEFAULT").unwrap(),
+            Keyword::Null => self.write_keyword("NULL", sql).unwrap(),
+            Keyword::CurrentDate => self.write_keyword("CURRENT_DATE", sql).unwrap(),
+            Keyword::CurrentTime => self.write_keyword("CURRENT_TIME", sql).unwrap(),
+            Keyword::CurrentTimestamp => self.write_keyword("CURRENT_TIMESTAMP", sql).unwrap(),
+            Keyword::Default => self.write_keyword("DEFAULT", sql).unwrap(),
             Keyword::Custom(iden) => sql.write_str(&iden.0).unwrap(),
         }
     }
@@ -1514,7 +1534,7 @@ pub trait QueryBuilder:
         if let Some(action) = on_conflict_action {
             match action {
                 OnConflictAction::DoNothing(_) => {
-                    sql.write_str(" DO NOTHING").unwrap();
+                    self.write_keyword(" DO NOTHING", sql).unwrap();
                 }
                 OnConflictAction::Update(update_strats) => {
                     self.prepare_on_conflict_do_update_keywords(sql);
@@ -1548,13 +1568,13 @@ pub trait QueryBuilder:
     #[doc(hidden)]
     /// Write ON CONFLICT keywords
     fn prepare_on_conflict_keywords(&self, sql: &mut impl SqlWriter) {
-        sql.write_str(" ON CONFLICT ").unwrap();
+        self.write_keyword(" ON CONFLICT ", sql).unwrap();
     }
 
     #[doc(hidden)]
     /// Write ON CONFLICT keywords
     fn prepare_on_conflict_do_update_keywords(&self, sql: &mut impl SqlWriter) {
-        sql.write_str(" DO UPDATE SET ").unwrap();
+        self.write_keyword(" DO UPDATE SET ", sql).unwrap();
     }
 
     #[doc(hidden)]
@@ -1585,7 +1605,7 @@ pub trait QueryBuilder:
     /// Hook to insert "RETURNING" statements.
     fn prepare_returning(&self, returning: &Option<ReturningClause>, sql: &mut impl SqlWriter) {
         if let Some(returning) = returning {
-            sql.write_str(" RETURNING ").unwrap();
+            self.write_keyword(" RETURNING ", sql).unwrap();
             match &returning {
                 ReturningClause::All => sql.write_str("*").unwrap(),
                 ReturningClause::Columns(cols) => {
@@ -1630,7 +1650,7 @@ pub trait QueryBuilder:
             ConditionHolderContents::Empty => (),
             ConditionHolderContents::Chain(conditions) => {
                 sql.write_str(" ").unwrap();
-                sql.write_str(keyword).unwrap();
+                self.write_keyword(keyword, sql).unwrap();
                 sql.write_str(" ").unwrap();
                 for (i, log_chain_oper) in conditions.iter().enumerate() {
                     self.prepare_logical_chain_oper(log_chain_oper, i, conditions.len(), sql);
@@ -1638,7 +1658,7 @@ pub trait QueryBuilder:
             }
             ConditionHolderContents::Condition(c) => {
                 sql.write_str(" ").unwrap();
-                sql.write_str(keyword).unwrap();
+                self.write_keyword(keyword, sql).unwrap();
                 sql.write_str(" ").unwrap();
                 self.prepare_condition_where(c, sql);
             }
@@ -1656,17 +1676,17 @@ pub trait QueryBuilder:
     /// Translate [`Frame`] into SQL statement.
     fn prepare_frame(&self, frame: &Frame, sql: &mut impl SqlWriter) {
         match *frame {
-            Frame::UnboundedPreceding => sql.write_str("UNBOUNDED PRECEDING").unwrap(),
+            Frame::UnboundedPreceding => self.write_keyword("UNBOUNDED PRECEDING", sql).unwrap(),
             Frame::Preceding(v) => {
                 self.prepare_value(v.into(), sql);
-                sql.write_str("PRECEDING").unwrap();
+                self.write_keyword("PRECEDING", sql).unwrap();
             }
-            Frame::CurrentRow => sql.write_str("CURRENT ROW").unwrap(),
+            Frame::CurrentRow => self.write_keyword("CURRENT ROW", sql).unwrap(),
             Frame::Following(v) => {
                 self.prepare_value(v.into(), sql);
-                sql.write_str("FOLLOWING").unwrap();
+                self.write_keyword("FOLLOWING", sql).unwrap();
             }
-            Frame::UnboundedFollowing => sql.write_str("UNBOUNDED FOLLOWING").unwrap(),
+            Frame::UnboundedFollowing => self.write_keyword("UNBOUNDED FOLLOWING", sql).unwrap(),
         }
     }
 
@@ -1678,7 +1698,7 @@ pub trait QueryBuilder:
             partition_iter,
             expr,
             first {
-                sql.write_str("PARTITION BY ").unwrap();
+                self.write_keyword("PARTITION BY ", sql).unwrap();
             },
             join {
                 sql.write_str(", ").unwrap();
@@ -1693,7 +1713,7 @@ pub trait QueryBuilder:
             order_iter,
             expr,
             first {
-                sql.write_str(" ORDER BY ").unwrap();
+                self.write_keyword(" ORDER BY ", sql).unwrap();
             },
             join {
                 sql.write_str(", ").unwrap();
@@ -1705,13 +1725,13 @@ pub trait QueryBuilder:
 
         if let Some(frame) = &window.frame {
             match frame.r#type {
-                FrameType::Range => sql.write_str(" RANGE ").unwrap(),
-                FrameType::Rows => sql.write_str(" ROWS ").unwrap(),
+                FrameType::Range => self.write_keyword(" RANGE ", sql).unwrap(),
+                FrameType::Rows => self.write_keyword(" ROWS ", sql).unwrap(),
             };
             if let Some(end) = &frame.end {
-                sql.write_str("BETWEEN ").unwrap();
+                self.write_keyword("BETWEEN ", sql).unwrap();
                 self.prepare_frame(&frame.start, sql);
-                sql.write_str(" AND ").unwrap();
+                self.write_keyword(" AND ", sql).unwrap();
                 self.prepare_frame(end, sql);
             } else {
                 self.prepare_frame(&frame.start, sql);
@@ -1840,13 +1860,15 @@ pub trait QueryBuilder:
 
     /// Write insert default rows expression.
     fn insert_default_values(&self, num_rows: u32, sql: &mut impl SqlWriter) {
-        sql.write_str("VALUES ").unwrap();
+        self.write_keyword("VALUES ", sql).unwrap();
         if num_rows > 0 {
-            sql.write_str(self.insert_default_keyword()).unwrap();
+            self.write_keyword(self.insert_default_keyword(), sql)
+                .unwrap();
 
             for _ in 1..num_rows {
                 sql.write_str(", ").unwrap();
-                sql.write_str(self.insert_default_keyword()).unwrap();
+                self.write_keyword(self.insert_default_keyword(), sql)
+                    .unwrap();
             }
         }
     }

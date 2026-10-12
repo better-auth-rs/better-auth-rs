@@ -1,16 +1,19 @@
 use super::*;
 use crate::extension::mysql::*;
 
-impl QueryBuilder for MysqlQueryBuilder {
+macro_rules! impl_mysql_query_builder {
+    ($builder:ty, { $($extra:item)* }) => {
+impl QueryBuilder for $builder {
+    $($extra)*
     fn values_list_tuple_prefix(&self) -> &str {
         "ROW"
     }
 
     fn prepare_select_distinct(&self, select_distinct: &SelectDistinct, sql: &mut impl SqlWriter) {
         match select_distinct {
-            SelectDistinct::All => sql.write_str("ALL").unwrap(),
-            SelectDistinct::Distinct => sql.write_str("DISTINCT").unwrap(),
-            SelectDistinct::DistinctRow => sql.write_str("DISTINCTROW").unwrap(),
+            SelectDistinct::All => self.write_keyword("ALL", sql).unwrap(),
+            SelectDistinct::Distinct => self.write_keyword("DISTINCT", sql).unwrap(),
+            SelectDistinct::DistinctRow => self.write_keyword("DISTINCTROW", sql).unwrap(),
             _ => {}
         };
     }
@@ -41,19 +44,19 @@ impl QueryBuilder for MysqlQueryBuilder {
             do {
                 match hint.r#type {
                     IndexHintType::Use => {
-                        sql.write_str("USE INDEX ").unwrap();
+                        self.write_keyword("USE INDEX ", sql).unwrap();
                         self.prepare_index_hint_scope(&hint.scope, sql);
                         sql.write_str("(").unwrap();
                         self.prepare_iden(&hint.index, sql);
                     }
                     IndexHintType::Ignore => {
-                        sql.write_str("IGNORE INDEX ").unwrap();
+                        self.write_keyword("IGNORE INDEX ", sql).unwrap();
                         self.prepare_index_hint_scope(&hint.scope, sql);
                         sql.write_str("(").unwrap();
                         self.prepare_iden(&hint.index, sql);
                     }
                     IndexHintType::Force => {
-                        sql.write_str("FORCE INDEX ").unwrap();
+                        self.write_keyword("FORCE INDEX ", sql).unwrap();
                         self.prepare_index_hint_scope(&hint.scope, sql);
                         sql.write_str("(").unwrap();
                         self.prepare_iden(&hint.index, sql);
@@ -90,7 +93,7 @@ impl QueryBuilder for MysqlQueryBuilder {
             return;
         }
 
-        sql.write_str(" JOIN ").unwrap();
+        self.write_keyword(" JOIN ", sql).unwrap();
 
         // TODO what if we have multiple from?
         self.prepare_table_ref(&from[0], sql);
@@ -146,11 +149,11 @@ impl QueryBuilder for MysqlQueryBuilder {
             None => (),
             Some(NullOrdering::Last) => {
                 self.prepare_expr(&order_expr.expr, sql);
-                sql.write_str(" IS NULL ASC, ").unwrap()
+                self.write_keyword(" IS NULL ASC, ", sql).unwrap()
             }
             Some(NullOrdering::First) => {
                 self.prepare_expr(&order_expr.expr, sql);
-                sql.write_str(" IS NULL DESC, ").unwrap()
+                self.write_keyword(" IS NULL DESC, ", sql).unwrap()
             }
         }
         if !matches!(order_expr.order, Order::Field(_)) {
@@ -194,7 +197,7 @@ impl QueryBuilder for MysqlQueryBuilder {
                         }
                     );
                 } else {
-                    sql.write_str(" IGNORE").unwrap();
+                    self.write_keyword(" IGNORE", sql).unwrap();
                 }
             }
             _ => self.prepare_on_conflict_action_common(on_conflict_action, sql),
@@ -202,15 +205,15 @@ impl QueryBuilder for MysqlQueryBuilder {
     }
 
     fn prepare_on_conflict_keywords(&self, sql: &mut impl SqlWriter) {
-        sql.write_str(" ON DUPLICATE KEY").unwrap();
+        self.write_keyword(" ON DUPLICATE KEY", sql).unwrap();
     }
 
     fn prepare_on_conflict_do_update_keywords(&self, sql: &mut impl SqlWriter) {
-        sql.write_str(" UPDATE ").unwrap();
+        self.write_keyword(" UPDATE ", sql).unwrap();
     }
 
     fn prepare_on_conflict_excluded_table(&self, col: &DynIden, sql: &mut impl SqlWriter) {
-        sql.write_str("VALUES(").unwrap();
+        self.write_keyword("VALUES(", sql).unwrap();
         self.prepare_iden(col, sql);
         sql.write_str(")").unwrap();
     }
@@ -237,7 +240,35 @@ impl QueryBuilder for MysqlQueryBuilder {
     }
 }
 
-impl MysqlQueryBuilder {
+    };
+}
+
+impl_mysql_query_builder!(MysqlQueryBuilder, {});
+impl_mysql_query_builder!(KyselyMysqlQueryBuilder, {
+    fn prepare_expr(&self, expression: &Expr, sql: &mut impl SqlWriter) {
+        // Kysely emits empty IN lists without SeaQuery's boolean rewrite.
+        match expression {
+            Expr::Binary(left, operator @ (BinOper::In | BinOper::NotIn), right) if matches!(right.as_ref(), Expr::Tuple(values) if values.is_empty()) =>
+            {
+                self.binary_expr(left, operator, right, sql);
+            }
+            _ => self.prepare_expr_common(expression, sql),
+        }
+    }
+
+    fn prepare_constant(&self, value: &Value, sql: &mut impl SqlWriter) {
+        if value == &value.as_null() {
+            sql.write_str("null").unwrap();
+        } else if let Value::Bool(Some(value)) = value {
+            sql.write_str(if *value { "true" } else { "false" })
+                .unwrap();
+        } else {
+            self.write_value(sql, value).unwrap();
+        }
+    }
+});
+
+trait MysqlIndexHints: QueryBuilder {
     fn prepare_index_hint_scope(
         &self,
         index_hint_scope: &IndexHintScope,
@@ -245,15 +276,18 @@ impl MysqlQueryBuilder {
     ) {
         match index_hint_scope {
             IndexHintScope::Join => {
-                sql.write_str("FOR JOIN ").unwrap();
+                self.write_keyword("FOR JOIN ", sql).unwrap();
             }
             IndexHintScope::OrderBy => {
-                sql.write_str("FOR ORDER BY ").unwrap();
+                self.write_keyword("FOR ORDER BY ", sql).unwrap();
             }
             IndexHintScope::GroupBy => {
-                sql.write_str("FOR GROUP BY ").unwrap();
+                self.write_keyword("FOR GROUP BY ", sql).unwrap();
             }
             IndexHintScope::All => {}
         }
     }
 }
+
+impl MysqlIndexHints for MysqlQueryBuilder {}
+impl MysqlIndexHints for KyselyMysqlQueryBuilder {}

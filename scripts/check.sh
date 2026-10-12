@@ -75,6 +75,10 @@ run_stage() {
         --include-ignored --test-threads=1 || mysql_status=1
       return "$mysql_status"
       ;;
+    mysql-text)
+      cargo fmt --all -- --check
+      ./scripts/test-mysql-text.sh "${RUNNER_TEMP:?}/mysql-text"
+      ;;
     shared-column)
       cargo fmt --all -- --check
       local column_status=0

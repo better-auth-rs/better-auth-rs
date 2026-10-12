@@ -1,0 +1,55 @@
+{
+  "contract": "mysql-text",
+  "version": "1.7.6",
+  "status": "Two upstream captures are byte-identical. Rust compiler and formatter replay are pending.",
+  "run": "38269310337",
+  "runURL": "https://github.com/better-auth-rs/better-auth-rs/actions/runs/38269310337",
+  "commit": "90971630c88009aac00317fbbe5ef29b0c9b8136",
+  "runConclusion": "success",
+  "artifactName": "upstream-mysql-text-90971630c88009aac00317fbbe5ef29b0c9b8136-1",
+  "versions": {
+    "kysely": "0.29.5",
+    "mysql2": "3.24.5",
+    "sqlEscaper": "1.5.2"
+  },
+  "timezone": "UTC",
+  "observations": {
+    "formats": 30,
+    "nativeCallbacks": 2,
+    "compiledQueries": 11
+  },
+  "sources": [
+    {
+      "path": "compat-tests/reference-server/contracts/mysql-text-capture.mjs",
+      "bytes": 5105,
+      "sha256": "50d3251aeb163c914c9ba2691228685bb40b1883d5d01d4b006dc367cc6463ab"
+    },
+    {
+      "path": "compat-tests/reference-server/contracts/mysql-text-cases.json",
+      "bytes": 5081,
+      "sha256": "e3d6dc81aeb398e5a65650b93c386d653129f481372231dc135522d4659c4b6d"
+    },
+    {
+      "path": "vendor/sql-escaper-source/lib/index.js",
+      "bytes": 20528,
+      "sha256": "ac9bfa502b26eea8f8503036a4944046701c37f755bd4da8710482980fe61eed"
+    },
+    {
+      "path": "vendor/sql-escaper-source/package.json",
+      "bytes": 2193,
+      "sha256": "ea2757620053be93e93337220b1c517caded5c9e46b55482bf6ab494009aa9de"
+    },
+    {
+      "path": "vendor/sql-escaper-source/LICENSE",
+      "bytes": 1123,
+      "sha256": "93277a18ec90d5b72d3bfaaaccc73cec7e735a8a1b154b74e9fec3e529603cbf"
+    }
+  ],
+  "fixture": {
+    "path": "tests/fixtures/mysql-text-1.7.6.json",
+    "bytes": 17877,
+    "sha256": "ca804d6f72dd59a72d8f296cfe23c47716029d0a7cf951cbb2af7eecc2bbdad5"
+  },
+  "normalizations": [],
+  "boundary": "Preserve complete UTF-16 formatted SQL, native callback event order and thrown identity, and compiled SQL with ordered parameters. These observations do not establish production query, transport, or arbitrary native value parity."
+}

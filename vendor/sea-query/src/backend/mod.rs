@@ -40,6 +40,11 @@ pub trait QuotedBuilder {
     /// The type of quote the builder uses.
     fn quote(&self) -> Quote;
 
+    /// Write compiler-owned syntax without changing identifiers, literals, or raw SQL.
+    fn write_keyword(&self, keyword: &str, sql: &mut impl Write) -> std::fmt::Result {
+        sql.write_str(keyword)
+    }
+
     /// To prepare iden and write to SQL.
     fn prepare_iden(&self, iden: &DynIden, sql: &mut impl SqlWriter) {
         let q = self.quote();

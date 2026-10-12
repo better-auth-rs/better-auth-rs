@@ -53,6 +53,7 @@ on:
           - shared-column
           - postgres-driver
           - mysql-driver
+          - mysql-text
           - memory-joins
           - oauth-profile
           - organization-fields
@@ -106,7 +107,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: ${{ !contains(fromJSON('["id-input", "lint-default", "lint-features", "format", "rustdoc", "runtime-values", "native-json", "native-errors", "secondary-user-refresh", "account-user-auth", "oauth-signin-order", "telemetry", "plugin-display-values", "memory-sorting", "memory-query", "memory-joins", "oauth-profile", "organization-fields", "organization-details", "organization-transactions", "organization-team-delete", "organization-members", "api-key-cache", "jwt", "email-verification", "cookie-attributes", "oauth-duration", "oauth-proxy", "totp-period", "credential-timing", "validation-errors"]'), inputs.stage) && 'postgres:18.6' || '' }}
+        image: ${{ !contains(fromJSON('["id-input", "lint-default", "lint-features", "format", "rustdoc", "runtime-values", "native-json", "native-errors", "secondary-user-refresh", "account-user-auth", "oauth-signin-order", "telemetry", "plugin-display-values", "memory-sorting", "memory-query", "memory-joins", "oauth-profile", "organization-fields", "organization-details", "organization-transactions", "organization-team-delete", "organization-members", "api-key-cache", "jwt", "email-verification", "cookie-attributes", "oauth-duration", "oauth-proxy", "totp-period", "credential-timing", "validation-errors", "mysql-text"]'), inputs.stage) && 'postgres:18.6' || '' }}
         env:
           POSTGRES_USER: better_auth
           POSTGRES_PASSWORD: better_auth_ci
@@ -119,7 +120,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       mysql:
-        image: ${{ !contains(fromJSON('["id-input", "lint-default", "lint-features", "format", "rustdoc", "runtime-values", "native-json", "native-errors", "secondary-user-refresh", "account-user-auth", "oauth-signin-order", "telemetry", "plugin-display-values", "memory-sorting", "memory-query", "memory-joins", "oauth-profile", "organization-fields", "organization-details", "organization-transactions", "organization-team-delete", "organization-members", "api-key-cache", "jwt", "email-verification", "cookie-attributes", "oauth-duration", "oauth-proxy", "totp-period", "credential-timing", "validation-errors"]'), inputs.stage) && 'mysql:8.4.11' || '' }}
+        image: ${{ !contains(fromJSON('["id-input", "lint-default", "lint-features", "format", "rustdoc", "runtime-values", "native-json", "native-errors", "secondary-user-refresh", "account-user-auth", "oauth-signin-order", "telemetry", "plugin-display-values", "memory-sorting", "memory-query", "memory-joins", "oauth-profile", "organization-fields", "organization-details", "organization-transactions", "organization-team-delete", "organization-members", "api-key-cache", "jwt", "email-verification", "cookie-attributes", "oauth-duration", "oauth-proxy", "totp-period", "credential-timing", "validation-errors", "mysql-text"]'), inputs.stage) && 'mysql:8.4.11' || '' }}
         env:
           MYSQL_ROOT_PASSWORD: better_auth_ci
           MYSQL_ROOT_HOST: "%"
@@ -212,6 +213,10 @@ jobs:
         env:
           DATABASE_URL: ${{ env.BETTER_AUTH_TEST_MYSQL_URL }}
         run: devenv shell -- ./scripts/test-mysql-driver-errors.sh "$RUNNER_TEMP/mysql-driver-protocol"
+      - name: Check MySQL compiler and native text contracts
+        id: mysql-text
+        if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
+        run: devenv shell -- ./scripts/test-mysql-text.sh "$RUNNER_TEMP/mysql-text"
       - name: Check the complete pinned mysql2 error table
         if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
         run: python3 scripts/check-mysql-error-codes.py
@@ -294,6 +299,14 @@ jobs:
         with:
           name: mysql-driver-protocol-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/mysql-driver-protocol/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve MySQL text contracts
+        if: always() && ((env.CHECK_STAGE == 'all' && steps.mysql-text.outcome != 'skipped') || (env.CHECK_STAGE == 'mysql-text' && steps.focused.outcome != 'skipped'))
+        uses: actions/upload-artifact@v4
+        with:
+          name: mysql-text-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/mysql-text/
           if-no-files-found: error
           retention-days: 14
       - name: Preserve telemetry host observations

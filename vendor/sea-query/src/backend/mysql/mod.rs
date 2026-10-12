@@ -1,5 +1,7 @@
 pub(crate) mod foreign_key;
 pub(crate) mod index;
+mod kysely;
+pub use kysely::KyselyMysqlQueryBuilder;
 pub(crate) mod query;
 pub(crate) mod table;
 
