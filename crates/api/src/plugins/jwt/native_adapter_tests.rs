@@ -128,10 +128,12 @@ async fn native_adapter_failures_retain_the_original_thrown_value() -> AuthResul
             .await
             .unwrap_err();
         assert!(get_error.into_thrown_value()?.strict_equals(&original));
-        let create_error = plugin
+        let Err(create_error) = plugin
             .create_key_pair_in_endpoint(JwtKeyPairConfig::new(JwtAlgorithm::EdDsa), &endpoint)
             .await
-            .unwrap_err();
+        else {
+            panic!("Native key creation must preserve the callback failure");
+        };
         assert!(create_error.into_thrown_value()?.strict_equals(&original));
         assert!(context.database.list_jwk_records().await?.is_empty());
     }
@@ -165,10 +167,12 @@ async fn explicit_nullish_and_primitive_roots_reach_native_callbacks() -> AuthRe
         )
         .await?;
         let absent = EndpointContext::native(None, None, root.clone(), &context);
-        let error = plugin
+        let Err(error) = plugin
             .create_key_pair_in_endpoint(JwtKeyPairConfig::new(JwtAlgorithm::EdDsa), &absent)
             .await
-            .unwrap_err();
+        else {
+            panic!("Native key creation must reject an absent endpoint root");
+        };
         assert_eq!(
             error.message_value()?,
             "Native JWT adapter callbacks require an explicit native endpoint root".into()
