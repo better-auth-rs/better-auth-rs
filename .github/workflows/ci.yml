@@ -201,24 +201,59 @@ jobs:
         if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
         run: devenv shell -- ./scripts/check.sh lint-features
       - name: Test workspace
+        id: workspace-tests
         if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
-        run: devenv shell -- ./scripts/check.sh workspace-tests
+        run: |
+          set -o pipefail
+          devenv shell -- ./scripts/check.sh workspace-tests 2>&1 | tee "$RUNNER_TEMP/workspace-tests.log"
+      - name: Preserve workspace test log before remaining checks
+        if: always() && (steps.workspace-tests.outcome == 'success' || steps.workspace-tests.outcome == 'failure')
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-tests-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/workspace-tests.log
+          if-no-files-found: error
+          retention-days: 14
       - name: Check PostgreSQL driver protocol
         id: postgres-protocol
         if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
         env:
           DATABASE_URL: ${{ env.BETTER_AUTH_TEST_POSTGRES_URL }}
         run: devenv shell -- ./scripts/test-postgres-driver-protocol.sh "$RUNNER_TEMP/postgres-driver-protocol"
+      - name: Preserve PostgreSQL protocol results
+        if: always() && env.CHECK_STAGE == 'all' && steps.postgres-protocol.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-driver-protocol-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/postgres-driver-protocol/
+          if-no-files-found: error
+          retention-days: 14
       - name: Check MySQL driver protocol
         id: mysql-protocol
         if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
         env:
           DATABASE_URL: ${{ env.BETTER_AUTH_TEST_MYSQL_URL }}
         run: devenv shell -- ./scripts/test-mysql-driver-errors.sh "$RUNNER_TEMP/mysql-driver-protocol"
+      - name: Preserve MySQL protocol results
+        if: always() && env.CHECK_STAGE == 'all' && steps.mysql-protocol.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mysql-driver-protocol-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/mysql-driver-protocol/
+          if-no-files-found: error
+          retention-days: 14
       - name: Check MySQL compiler and native text contracts
         id: mysql-text
         if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
         run: devenv shell -- ./scripts/test-mysql-text.sh "$RUNNER_TEMP/mysql-text"
+      - name: Preserve MySQL text contracts
+        if: always() && env.CHECK_STAGE == 'all' && steps.mysql-text.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mysql-text-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/mysql-text/
+          if-no-files-found: error
+          retention-days: 14
       - name: Check the complete pinned mysql2 error table
         if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
         run: python3 scripts/check-mysql-error-codes.py
@@ -288,7 +323,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Preserve PostgreSQL protocol results
-        if: always() && ((env.CHECK_STAGE == 'all' && steps.postgres-protocol.outcome != 'skipped') || (env.CHECK_STAGE == 'postgres-driver' && steps.focused.outcome != 'skipped'))
+        if: always() && (env.CHECK_STAGE == 'postgres-driver' && steps.focused.outcome != 'skipped')
         uses: actions/upload-artifact@v4
         with:
           name: postgres-driver-protocol-${{ github.sha }}-${{ github.run_attempt }}
@@ -296,7 +331,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Preserve MySQL protocol results
-        if: always() && ((env.CHECK_STAGE == 'all' && steps.mysql-protocol.outcome != 'skipped') || (contains(fromJSON('["mysql-driver", "mysql-adapter"]'), env.CHECK_STAGE) && steps.focused.outcome != 'skipped'))
+        if: always() && (contains(fromJSON('["mysql-driver", "mysql-adapter"]'), env.CHECK_STAGE) && steps.focused.outcome != 'skipped')
         uses: actions/upload-artifact@v4
         with:
           name: mysql-driver-protocol-${{ github.sha }}-${{ github.run_attempt }}
@@ -304,7 +339,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Preserve MySQL text contracts
-        if: always() && ((env.CHECK_STAGE == 'all' && steps.mysql-text.outcome != 'skipped') || (env.CHECK_STAGE == 'mysql-text' && steps.focused.outcome != 'skipped'))
+        if: always() && (env.CHECK_STAGE == 'mysql-text' && steps.focused.outcome != 'skipped')
         uses: actions/upload-artifact@v4
         with:
           name: mysql-text-${{ github.sha }}-${{ github.run_attempt }}
