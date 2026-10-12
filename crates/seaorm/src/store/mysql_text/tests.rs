@@ -1,6 +1,7 @@
 use super::*;
 use better_auth_core::{
-    FieldDate, FieldFunction, FieldMap, FieldObject, FieldObjectSource, FieldPropertyDescriptor,
+    FieldDate, FieldFunction, FieldMap, FieldObject,
+    field_value::{FieldObjectSource, FieldPropertyDescriptor},
 };
 use serde_json::{Value as Json, json};
 use std::sync::{
