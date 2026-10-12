@@ -22,10 +22,10 @@ where
     C: ConnectionTrait,
 {
     let mut reselect = updated_reselect_filter(&query, reselect);
-    if db.get_database_backend() == sea_orm::DbBackend::MySql {
-        if let SimpleExpr::Binary(column, _, _) = &mut reselect {
-            super::query_compile::unqualify_column(column);
-        }
+    if db.get_database_backend() == sea_orm::DbBackend::MySql
+        && let SimpleExpr::Binary(column, _, _) = &mut reselect
+    {
+        super::query_compile::unqualify_column(column);
     }
     execute_returning_raw(db, query.query, reselect).await
 }
