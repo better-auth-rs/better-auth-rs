@@ -34,13 +34,10 @@ fn lock<T>(value: &Mutex<T>) -> AuthResult<std::sync::MutexGuard<'_, T>> {
 struct Unread(FieldObject);
 
 impl Unread {
-    fn new(fields: FieldMap) -> Self {
-        let mut properties = fields
-            .into_iter()
-            .map(|(name, value)| (name, FieldPropertyDescriptor::data(value)))
-            .collect::<indexmap::IndexMap<_, _>>();
-        let _ = properties.insert(
-            "unread".into(),
+    fn new(fields: FieldMap) -> AuthResult<Self> {
+        let properties = FieldObject::from(fields);
+        let _ = properties.define_own_property(
+            "unread",
             FieldPropertyDescriptor {
                 enumerable: true,
                 configurable: true,
@@ -50,9 +47,10 @@ impl Unread {
                     })),
                     set: None,
                 },
-            },
-        );
-        Self(properties.into())
+            }
+            .into(),
+        )?;
+        Ok(Self(properties))
     }
 }
 
@@ -136,7 +134,7 @@ impl Contract {
         let shared = FieldObject::from_source(Arc::new(Unread::new(FieldMap::from([
             ("ownUndefined".into(), FieldValue::Undefined),
             ("date".into(), date.clone()),
-        ]))))
+        ]))?))
         .into();
         let failure = AuthError::from_status(
             "CONFLICT",

@@ -64,40 +64,33 @@ pub(super) fn injected_user(
     if !case.starts_with("getter-") {
         return Ok(user);
     }
-    let fields = user
-        .enumerable_fields()?
-        .into_iter()
-        .map(|(name, value)| {
-            let descriptor = if matches!(name.as_str(), "id" | "unread") {
-                let state = state.clone();
-                let thrown = thrown.clone();
-                let unread = name == "unread";
-                let event = format!("user.{name}");
-                FieldPropertyDescriptor {
-                    enumerable: true,
-                    configurable: true,
-                    property: FieldProperty::Accessor {
-                        get: Some(FieldFunction::contextual(move |_, _| {
-                            lock(&state)?.events.push(event.clone());
-                            if unread
-                                || matches!(
-                                    case,
-                                    "getter-error" | "getter-no-fields" | "getter-email"
-                                )
-                            {
-                                return Err(AuthError::from_thrown(thrown.clone()));
-                            }
-                            Ok(value.clone())
-                        })),
-                        set: None,
-                    },
-                }
-            } else {
-                FieldPropertyDescriptor::data(value)
-            };
-            (name, descriptor)
-        })
-        .collect::<indexmap::IndexMap<_, _>>()
-        .into();
+    let fields = FieldObject::from(FieldMap::new());
+    for (name, value) in user.enumerable_fields()? {
+        let descriptor = if matches!(name.as_str(), "id" | "unread") {
+            let state = state.clone();
+            let thrown = thrown.clone();
+            let unread = name == "unread";
+            let event = format!("user.{name}");
+            FieldPropertyDescriptor {
+                enumerable: true,
+                configurable: true,
+                property: FieldProperty::Accessor {
+                    get: Some(FieldFunction::contextual(move |_, _| {
+                        lock(&state)?.events.push(event.clone());
+                        if unread
+                            || matches!(case, "getter-error" | "getter-no-fields" | "getter-email")
+                        {
+                            return Err(AuthError::from_thrown(thrown.clone()));
+                        }
+                        Ok(value.clone())
+                    })),
+                    set: None,
+                },
+            }
+        } else {
+            FieldPropertyDescriptor::data(value)
+        };
+        let _ = fields.define_own_property(name, descriptor.into())?;
+    }
     Ok(FieldObject::from_source(Arc::new(UserSource { fields })).into())
 }

@@ -276,6 +276,11 @@ pub(super) async fn verify_authentication_core(
                     "Authentication failed",
                 ));
             }
+            Err(webauthn_rs_core::error::WebauthnError::InvalidRPIDHash) => {
+                let error = AuthError::internal("Unexpected RP ID hash").into_thrown_value()?;
+                error.set_model_property("name", "UnexpectedRPIDHash".into())?;
+                return Err(AuthError::from_thrown(error));
+            }
             Err(webauthn_rs_core::error::WebauthnError::CredentialMayNotBeHardwareBound) => {
                 let error = AuthError::internal(
                     "Single-device credential indicated that it was backed up, which should be impossible.",
