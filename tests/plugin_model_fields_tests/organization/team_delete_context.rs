@@ -59,18 +59,13 @@ fn record(events: &Events, field: &str, phase: &str, value: FieldValue) -> AuthR
     Ok(())
 }
 
-fn settings(ids: Ids) -> AuthConfig {
+fn settings(ids: Ids) -> AuthResult<AuthConfig> {
     let mut settings = config();
     {
         let better_auth_core::LoggerSource::Config(logger_options) = &mut settings.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
+            return Err(AuthError::internal(
+                "Fixture requires authored logger options",
+            ));
         };
         logger_options.disabled = Some(true);
     }
@@ -78,7 +73,7 @@ fn settings(ids: Ids) -> AuthConfig {
         Some(IdGeneration::Custom(IdGenerator::new(move |_| {
             Ok(Some(trace_lock(&ids)?.clone()))
         })));
-    settings
+    Ok(settings)
 }
 
 async fn team_schema(database: &DatabaseConnection) -> AuthResult<Vec<FieldMap>> {
@@ -156,7 +151,7 @@ async fn make_original_owner_nullable(storage: &Storage) -> AuthResult<()> {
 async fn writer<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, ids: Ids) -> AuthResult<BetterAuth<S>> {
     let mut options = OrganizationConfig::default();
     options.teams.enabled = true;
-    BetterAuth::new(settings(ids))
+    BetterAuth::new(settings(ids)?)
         .store_arc(raw)
         .plugin(OrganizationPlugin::with_config(options))
         .plugin(Fields(vec![
@@ -411,7 +406,7 @@ async fn reader<S: AuthSchema>(
             ..Default::default()
         },
     )]);
-    BetterAuth::new(settings(ids))
+    BetterAuth::new(settings(ids)?)
         .store_arc(raw)
         .plugin(OrganizationPlugin::with_config(options))
         .plugin(Fields(vec![

@@ -269,7 +269,7 @@ async fn clone_failure<S: AuthSchema>(
             ..Default::default()
         },
     )]);
-    let auth = BetterAuth::new(settings())
+    let auth = BetterAuth::new(settings()?)
         .store_arc(raw)
         .plugin(OrganizationPlugin::with_config(plugin))
         .plugin(Fields(vec![
@@ -452,7 +452,7 @@ async fn after_hook<S: AuthSchema>(
         },
     )]);
     plugin.schema.team = plugin.schema.organization.clone();
-    let auth = BetterAuth::new(settings())
+    let auth = BetterAuth::new(settings()?)
         .store_arc(raw)
         .plugin(OrganizationPlugin::with_config(plugin))
         .hooks(EndpointHooks {
@@ -583,7 +583,7 @@ async fn delete_hooks<S: AuthSchema>(
             ..Default::default()
         },
     )]);
-    let auth = BetterAuth::new(settings())
+    let auth = BetterAuth::new(settings()?)
         .store_arc(raw)
         .plugin(OrganizationPlugin::with_config(plugin))
         .plugin(Fields(vec![

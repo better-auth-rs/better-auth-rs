@@ -338,16 +338,13 @@ async fn counter_and_backup_flags_preserve_validation_order_without_persistence(
                 })
                 .await;
             assert_authentication_error(response)?;
+            let origin_message = format!(
+                "Unexpected authentication response origin \"{origin}\", expected \"{ORIGIN}\""
+            );
             let (error_name, message) = if origin != ORIGIN {
-                (
-                    "Error",
-                    "The clients relying party origin does not match our servers information",
-                )
+                ("Error", origin_message.as_str())
             } else if rp_id != RP_ID {
-                (
-                    "Error",
-                    "The clients relying party id hash does not match the hash of our relying party id",
-                )
+                ("UnexpectedRPIDHash", "Unexpected RP ID hash")
             } else if counter_valid {
                 (
                     "InvalidBackupFlags",
@@ -371,8 +368,8 @@ async fn counter_and_backup_flags_preserve_validation_order_without_persistence(
                     "Failed to verify authentication",
                     error_name,
                     message,
-                    if error_name == "InvalidBackupFlags" {
-                        json!({"name":"InvalidBackupFlags"})
+                    if matches!(error_name, "InvalidBackupFlags" | "UnexpectedRPIDHash") {
+                        json!({"name":error_name})
                     } else {
                         json!({})
                     },

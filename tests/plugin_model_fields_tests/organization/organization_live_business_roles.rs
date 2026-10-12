@@ -13,7 +13,7 @@ async fn check<S: AuthSchema>(
 ) -> AuthResult<()> {
     let token = seed(raw.clone(), false, "user-a").await?;
     let _ = raw.update_member_role("owner-member", "custom").await?;
-    let writer = BetterAuth::new(settings())
+    let writer = BetterAuth::new(settings()?)
         .store_arc(raw.clone())
         .plugin(OrganizationPlugin::with_config(OrganizationConfig {
             dynamic_access_control: true,
@@ -119,7 +119,7 @@ async fn check<S: AuthSchema>(
             },
         ),
     ]);
-    let auth = BetterAuth::new(settings())
+    let auth = BetterAuth::new(settings()?)
         .store_arc(raw)
         .plugin(OrganizationPlugin::with_config(plugin))
         .plugin(Fields(vec![(EntityRole::OrganizationRole, policies)]))

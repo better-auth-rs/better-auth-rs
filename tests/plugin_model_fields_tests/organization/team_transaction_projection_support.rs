@@ -59,14 +59,9 @@ pub(super) async fn auth<S: AuthSchema>(
     let mut config = config();
     {
         let better_auth_core::LoggerSource::Config(logger_options) = &mut config.logger else {
-            #[allow(
-                clippy::panic,
-                clippy::panic_in_result_fn,
-                reason = "The fixture modifies its existing authored logger options."
-            )]
-            {
-                panic!("fixture requires authored logger options");
-            }
+            return Err(AuthError::internal(
+                "Fixture requires authored logger options",
+            ));
         };
         logger_options.disabled = Some(true);
     }

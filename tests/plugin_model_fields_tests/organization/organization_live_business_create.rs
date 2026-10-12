@@ -225,7 +225,7 @@ async fn check<S: AuthSchema>(
             },
         ),
     ]);
-    let auth = BetterAuth::new(settings())
+    let auth = BetterAuth::new(settings()?)
         .store_arc(raw)
         .plugin(OrganizationPlugin::with_config(plugin))
         .plugin(Fields(vec![
