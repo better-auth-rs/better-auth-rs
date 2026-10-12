@@ -53,6 +53,7 @@ on:
           - shared-column
           - postgres-driver
           - mysql-driver
+          - mysql-adapter
           - mysql-text
           - memory-joins
           - oauth-profile
@@ -133,7 +134,7 @@ jobs:
           --health-retries 10
     env:
       CHECK_STAGE: ${{ github.event_name == 'workflow_dispatch' && inputs.stage || 'all' }}
-      RUST_CACHE_STAGE: ${{ contains(fromJSON('["oauth-duration", "oauth-proxy"]'), inputs.stage) && 'provider-options' || inputs.stage == 'totp-period' && 'two-factor' || contains(fromJSON('["api-key-cache", "jwt", "atomic-updates"]'), inputs.stage) && 'plugin-fields' || contains(fromJSON('["id-input", "native-create", "native-json", "logger", "native-errors", "memory-query", "sql-cleanup", "organization-fields", "organization-details", "organization-transactions", "organization-team-delete", "organization-members", "field-projection", "validation-errors", "rate-limit-declarations"]'), inputs.stage) && 'user-fields' || inputs.stage == 'memory-sorting' && 'plugin-display-values' || contains(fromJSON('["credential-timing", "oauth-signin-order", "memory-joins", "oauth-profile"]'), inputs.stage) && 'account-user-auth' || github.event_name == 'workflow_dispatch' && inputs.stage || 'all' }}
+      RUST_CACHE_STAGE: ${{ inputs.stage == 'mysql-adapter' && 'mysql-driver' || contains(fromJSON('["oauth-duration", "oauth-proxy"]'), inputs.stage) && 'provider-options' || inputs.stage == 'totp-period' && 'two-factor' || contains(fromJSON('["api-key-cache", "jwt", "atomic-updates"]'), inputs.stage) && 'plugin-fields' || contains(fromJSON('["id-input", "native-create", "native-json", "logger", "native-errors", "memory-query", "sql-cleanup", "organization-fields", "organization-details", "organization-transactions", "organization-team-delete", "organization-members", "field-projection", "validation-errors", "rate-limit-declarations"]'), inputs.stage) && 'user-fields' || inputs.stage == 'memory-sorting' && 'plugin-display-values' || contains(fromJSON('["credential-timing", "oauth-signin-order", "memory-joins", "oauth-profile"]'), inputs.stage) && 'account-user-auth' || github.event_name == 'workflow_dispatch' && inputs.stage || 'all' }}
       BETTER_AUTH_TEST_POSTGRES_URL: postgres://better_auth:better_auth_ci@127.0.0.1:5432/better_auth_test
       BETTER_AUTH_TEST_MYSQL_URL: mysql://root:better_auth_ci@127.0.0.1:3306/mysql
     steps:
@@ -294,7 +295,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Preserve MySQL protocol results
-        if: always() && ((env.CHECK_STAGE == 'all' && steps.mysql-protocol.outcome != 'skipped') || (env.CHECK_STAGE == 'mysql-driver' && steps.focused.outcome != 'skipped'))
+        if: always() && ((env.CHECK_STAGE == 'all' && steps.mysql-protocol.outcome != 'skipped') || (contains(fromJSON('["mysql-driver", "mysql-adapter"]'), env.CHECK_STAGE) && steps.focused.outcome != 'skipped'))
         uses: actions/upload-artifact@v4
         with:
           name: mysql-driver-protocol-${{ github.sha }}-${{ github.run_attempt }}

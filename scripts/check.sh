@@ -63,12 +63,15 @@ run_stage() {
         --include-ignored --test-threads=1 || driver_status=1
       return "$driver_status"
       ;;
-    mysql-driver)
+    mysql-driver|mysql-adapter)
       cargo fmt --all -- --check
       local mysql_status=0
-      python3 scripts/check-mysql-error-codes.py || mysql_status=1
-      DATABASE_URL="${BETTER_AUTH_TEST_MYSQL_URL:?}" \
-        ./scripts/test-mysql-driver-errors.sh "${RUNNER_TEMP:?}/mysql-driver-protocol" || mysql_status=1
+      mkdir -p "${RUNNER_TEMP:?}/mysql-driver-protocol"
+      if [[ "$1" == mysql-driver ]]; then
+        python3 scripts/check-mysql-error-codes.py || mysql_status=1
+        DATABASE_URL="${BETTER_AUTH_TEST_MYSQL_URL:?}" \
+          ./scripts/test-mysql-driver-errors.sh "$RUNNER_TEMP/mysql-driver-protocol" || mysql_status=1
+      fi
       cargo clippy --locked -p better-auth-seaorm --lib -- -D warnings || mysql_status=1
       CARGO_TERM_COLOR=never cargo test --locked -p better-auth-seaorm --lib \
         2>&1 | tee "$RUNNER_TEMP/mysql-driver-protocol/adapter-unit.log" || mysql_status=1
