@@ -12,7 +12,7 @@ workspace = true
 [workspace]
 resolver = "2"
 members = ["crates/core", "crates/api", "crates/derive", "crates/seaorm", "crates/seaorm-macros", "crates/schema-registry", "crates/cli"]
-exclude = ["examples/sqlx-custom-entities", "examples/fullstack/backend", "compat-tests/rust-server", "vendor/sqlx-postgres", "vendor/sea-query", "vendor/sea-query-sqlx", "vendor/sea-orm"]
+exclude = ["examples/sqlx-custom-entities", "examples/fullstack/backend", "compat-tests/rust-server", "vendor/sqlx-postgres", "vendor/sea-query", "vendor/sea-query-sqlx", "vendor/sea-orm", "vendor/sqlx-mysql"]
 
 [workspace.package]
 version = "1.0.0-alpha.3"
@@ -224,6 +224,8 @@ lto = "thin"
 codegen-units = 16
 
 [patch.crates-io]
+sqlx-mysql = { path = "vendor/sqlx-mysql" }
+
 sea-query = { path = "vendor/sea-query" }
 sea-query-sqlx = { path = "vendor/sea-query-sqlx" }
 sea-orm = { path = "vendor/sea-orm" }

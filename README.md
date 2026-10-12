@@ -9,7 +9,7 @@ Configure model IDs and application-owned defaults through [database ID generati
 
 `DatabaseError` variants carry `DatabaseErrorCause`. Use `.into()` when constructing a cause from a string and `.as_str()` when reading its diagnostic. Driver errors retain their source and native callback identity; see [database errors](docs/content/docs/concepts/database.mdx#database-errors) for metadata and compatibility limits.
 
-For `seaorm2` builds from `codex/upstream-capture`, add the four coordinated [driver patches](docs/content/docs/concepts/database.mdx#postgresql-driver-patch) to your root manifest. The guide covers the new SeaQuery `Value` variant for downstream exhaustive matches.
+For `seaorm2` builds from `codex/upstream-capture`, add the five coordinated [driver patches](docs/content/docs/concepts/database.mdx#driver-source-patches) to your root manifest. The guide covers the new SeaQuery `Value` variant for downstream exhaustive matches.
 
 Derived entities can bind multiple native fields to one member with repeated `#[auth(alias = "native_field")]` attributes. The CLI emits these bindings when declarations share a column, including User and Session getters and typed writes. Configure each logical field's runtime mapping separately; see [adapter configuration](docs/content/docs/concepts/database.mdx#adapter-configuration).
 

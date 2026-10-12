@@ -59,7 +59,7 @@ run_stage() {
       cargo clippy --locked -p better-auth-seaorm --lib -- -D warnings || driver_status=1
       cargo test --locked -p better-auth-seaorm --lib -- \
         store::db_error::tests:: live_postgres_shared_column_contract postgres_protocol_tests:: \
-        increment_phase_tests:: store::record_write::tests:: store::value_predicate::tests:: \
+        increment_phase_tests:: store::record_write::tests:: store::value_filter::predicate::tests:: \
         --include-ignored --test-threads=1 || driver_status=1
       return "$driver_status"
       ;;
@@ -70,8 +70,9 @@ run_stage() {
       DATABASE_URL="${BETTER_AUTH_TEST_MYSQL_URL:?}" \
         ./scripts/test-mysql-driver-errors.sh "${RUNNER_TEMP:?}/mysql-driver-protocol" || mysql_status=1
       cargo clippy --locked -p better-auth-seaorm --lib -- -D warnings || mysql_status=1
-      cargo test --locked -p better-auth-seaorm --lib store::db_error::tests:: \
-        -- --include-ignored --test-threads=1 || mysql_status=1
+      cargo test --locked -p better-auth-seaorm --lib -- \
+        store::db_error::tests:: store::value_filter::predicate::tests:: \
+        --include-ignored --test-threads=1 || mysql_status=1
       return "$mysql_status"
       ;;
     shared-column)

@@ -219,8 +219,46 @@ async fn mysql_metadata(database: &DatabaseConnection) -> TestResult {
         value.model_property("message")?,
         value.model_property("sqlMessage")?
     );
-    assert!(!value.has_property("code")?);
-    assert!(!value.has_property("sql")?);
+    assert_eq!(
+        value.model_property("code")?,
+        "ER_TRUNCATED_WRONG_VALUE_FOR_FIELD".into()
+    );
+    assert_eq!(
+        value.model_property("sql")?,
+        "INSERT INTO ba_error_values VALUES (2, 'accepted')".into()
+    );
+    assert_eq!(
+        value
+            .enumerable_fields()?
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        ["code", "errno", "sqlState", "sqlMessage", "sql"],
+    );
+    let sql = "SIGNAL SQLSTATE '45000' SET MYSQL_ERRNO = 60000, MESSAGE_TEXT = 'unknown code'";
+    let source = database
+        .execute_unprepared(sql)
+        .await
+        .err()
+        .ok_or("SIGNAL must fail")?;
+    let error = map_db_err(source.clone());
+    let _ = check_source(&error, &source)?;
+    let unknown = error.into_thrown_value()?;
+    assert!(unknown.has_property("code")?);
+    assert!(unknown.model_property("code")?.is_undefined());
+    assert_eq!(unknown.model_property("sql")?, sql.into());
+    let source = database
+        .execute_unprepared("")
+        .await
+        .err()
+        .ok_or("An empty query must fail")?;
+    let error = map_db_err(source.clone());
+    let _ = check_source(&error, &source)?;
+    let empty = error.into_thrown_value()?;
+    assert_eq!(empty.model_property("code")?, "ER_EMPTY_QUERY".into());
+    assert_eq!(empty.model_property("errno")?, 1065.0.into());
+    assert!(empty.has_property("sql")?);
+    assert!(empty.model_property("sql")?.is_undefined());
     assert!(!value.enumerable_fields()?.contains_key("message"));
     Ok(())
 }

@@ -46,23 +46,24 @@ Use `AuthError::type_error_native` or `AuthError::better_auth_native` when a run
 
 PostgreSQL native properties retain SQLSTATE, detail, hint, context, object names, source location, and the original ErrorResponse `length`. The length includes the four-byte length field, every received field, and the final terminator; it excludes the message-type byte. `severity`, `position`, `internalPosition`, `internalQuery`, and `line` retain the original `S`, `P`, `p`, `q`, and `L` strings, including localized severity and leading zeros. Original and internal positions remain independent. Supported optional fields use undefined when absent and preserve empty strings. Unknown protocol fields remain available through `PgDatabaseError::field` and contribute to `length`; the native error object maps the supported properties.
 
-MySQL retains errno, SQLSTATE, and the driver message; SQLx does not expose mysql2's symbolic error code or interpolated SQL text. Those unavailable properties remain absent. SQLite and non-database SQLx failures retain their source and existing native diagnostic without claiming the JavaScript driver's metadata shape.
+MySQL projects errno, SQLSTATE, the driver message, the complete pinned mysql2 symbolic error-code table, and the SQL retained by the command that failed. Unknown symbolic codes and empty command SQL retain own undefined properties. Pending responses keep their command owner across cancellation, drain, and rollback; non-SQL Ping errors have no SQL. Prepared commands expose the actual prepared template, which still differs from mysql2's interpolated COM_QUERY text. SQLite and non-database SQLx failures retain their source and existing native diagnostic without claiming the JavaScript driver's metadata shape.
 
 PostgreSQL native field values use OID-unspecified text parameters through the existing SeaQuery expression and SQLx connection. Typed SQL values retain their declared OIDs and binary encoding. A statement can contain both formats and SQL NULL. Statement-cache reuse checks the requested parameter types separately from the server-inferred types. This replaces inline unknown literals, which could fail before pg's parameter-binding phase. MySQL statement preparation still differs from mysql2 interpolation. Driver query text, remaining error-shape differences, and JavaScript stack metadata remain open compatibility boundaries; strict server contracts retain these differences.
 
-### PostgreSQL driver patch
+### Driver source patches
 
-The coordinated PostgreSQL protocol patches are available on `codex/upstream-capture` and have not been released. Cargo does not inherit `[patch]` sections from dependency manifests. Applications using this development branch must add all four patches to their root `Cargo.toml`:
+The coordinated PostgreSQL protocol and MySQL error patches are available on `codex/upstream-capture` and have not been released. Cargo does not inherit `[patch]` sections from dependency manifests. Applications using this development branch must add all five patches to their root `Cargo.toml`:
 
 ```toml
 [patch.crates-io]
 sqlx-postgres = { git = "https://github.com/better-auth-rs/better-auth-rs", branch = "codex/upstream-capture" }
+sqlx-mysql = { git = "https://github.com/better-auth-rs/better-auth-rs", branch = "codex/upstream-capture" }
 sea-query = { git = "https://github.com/better-auth-rs/better-auth-rs", branch = "codex/upstream-capture" }
 sea-query-sqlx = { git = "https://github.com/better-auth-rs/better-auth-rs", branch = "codex/upstream-capture" }
 sea-orm = { git = "https://github.com/better-auth-rs/better-auth-rs", branch = "codex/upstream-capture" }
 ```
 
-Resolve `better-auth` and all four packages to the same repository revision in `Cargo.lock`. If you pin `better-auth` with `rev`, replace each `branch` above with the same `rev`. The patches also apply to other users of these package versions in the dependency graph. SQLx remains at 0.8.6; the SeaORM family remains at 2.0.0-rc.37. The patches retain the application's existing pool, streams, transactions, and atomic conditional updates.
+Resolve `better-auth` and all five packages to the same repository revision in `Cargo.lock`. If you pin `better-auth` with `rev`, replace each `branch` above with the same `rev`. The patches also apply to other users of these package versions in the dependency graph. SQLx remains at 0.8.6; the SeaORM family remains at 2.0.0-rc.37. The patches retain the application's existing pool, streams, transactions, and atomic conditional updates.
 
 The patched SeaQuery `Value` enum adds `PostgresUnspecifiedText(Option<String>)`. Downstream exhaustive matches must handle this variant. The carrier preserves text and SQL NULL until PostgreSQL binding; it is not a model field type. MySQL, SQLite, Any, JSON, and array conversions reject the carrier. Ordinary typed model fields and query parameters keep their existing APIs. The shared PostgreSQL binder propagates conversion and encoding errors through SQLx's existing query error path.
 

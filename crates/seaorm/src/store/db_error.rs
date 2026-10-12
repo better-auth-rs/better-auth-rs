@@ -1,6 +1,8 @@
 use better_auth_core::{AuthError, DatabaseError, DatabaseErrorCause, FieldMap, FieldValue};
 use sea_orm::{DbErr, RuntimeErr, SqlErr, sqlx};
 
+mod mysql_codes;
+
 pub(crate) fn map_db_err(error: DbErr) -> AuthError {
     let (category, message): (fn(DatabaseErrorCause) -> DatabaseError, String) =
         match error.sql_err() {
@@ -65,12 +67,20 @@ fn postgres_properties(error: &sqlx::postgres::PgDatabaseError) -> FieldMap {
 }
 
 fn mysql_properties(error: &sqlx::mysql::MySqlDatabaseError) -> FieldMap {
-    // SQLx exposes SQLSTATE and errno, but no mysql2 symbolic code or executed SQL text.
     FieldMap::from([
         ("message".into(), error.message().into()),
+        (
+            "code".into(),
+            optional_text(mysql_codes::name(error.number())),
+        ),
         ("errno".into(), f64::from(error.number()).into()),
-        ("sqlState".into(), optional_text(error.code())),
+        ("sqlState".into(), error.code().unwrap_or("").into()),
         ("sqlMessage".into(), error.message().into()),
+        // mysql2 assigns command.sql || command.query, so an empty SQL string is undefined.
+        (
+            "sql".into(),
+            optional_text(error.sql().filter(|sql| !sql.is_empty())),
+        ),
     ])
 }
 

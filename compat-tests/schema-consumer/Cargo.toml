@@ -16,6 +16,8 @@ totp-rs = { version = "5", features = ["otpauth"] }
 tower = { version = "0.5", features = ["util"] }
 
 [patch.crates-io]
+sqlx-mysql = { path = "../../vendor/sqlx-mysql" }
+
 sea-query = { path = "../../vendor/sea-query" }
 sea-query-sqlx = { path = "../../vendor/sea-query-sqlx" }
 sea-orm = { path = "../../vendor/sea-orm" }

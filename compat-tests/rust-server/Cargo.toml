@@ -28,6 +28,8 @@ josekit = "0.10.3"
 opt-level = 3
 
 [patch.crates-io]
+sqlx-mysql = { path = "../../vendor/sqlx-mysql" }
+
 sea-query = { path = "../../vendor/sea-query" }
 sea-query-sqlx = { path = "../../vendor/sea-query-sqlx" }
 sea-orm = { path = "../../vendor/sea-orm" }
