@@ -166,7 +166,10 @@ fn matching_references<'a>(
     let mut matching = Vec::new();
     for (name, field) in ordered_fields(source, fields) {
         if let Some(reference) = &field.references
-            && schema.resolve_model_name(&reference.model, table_matches)? == target
+            && schema
+                .resolve_model_key(&reference.model, table_matches)?
+                .logical_name()?
+                == target
         {
             matching.push((name, reference, field.unique == Some(true)));
         }

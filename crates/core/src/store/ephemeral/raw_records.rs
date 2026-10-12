@@ -5,7 +5,7 @@ use super::{
     rows::{RecordSource, RowRef},
 };
 use crate::{
-    AuthError, AuthResult, FieldMap, FieldValue, id::AdapterIdInput, store::schema::EntityRole,
+    AuthError, AuthResult, FieldMap, FieldValue, id::AdapterIdInput, plugin_runtime::ModelKey,
     user_fields::UserConfig,
 };
 
@@ -15,15 +15,19 @@ mod tests;
 
 pub(super) struct MemoryRecordModel<'a> {
     store: &'a EphemeralStore,
-    role: EntityRole,
+    model: ModelKey,
     fields: UserConfig,
 }
 
 impl<'a> MemoryRecordModel<'a> {
-    pub(super) fn new(store: &'a EphemeralStore, role: EntityRole, fields: UserConfig) -> Self {
+    pub(super) fn new(
+        store: &'a EphemeralStore,
+        model: impl Into<ModelKey>,
+        fields: UserConfig,
+    ) -> Self {
         Self {
             store,
-            role,
+            model: model.into(),
             fields,
         }
     }
@@ -38,7 +42,7 @@ impl<'a> MemoryRecordModel<'a> {
         self.store
             .model_fields
             .with_id_input(
-                self.role,
+                &self.model,
                 AdapterIdInput {
                     force_allow_id,
                     supports_native_uuid: false,
@@ -48,13 +52,13 @@ impl<'a> MemoryRecordModel<'a> {
                     |name| input.model_property(name).map(Some),
                     || {
                         let supplied = input.model_property("id")?;
-                        let Some(policy) = self.store.model_fields.id_input_policy(self.role)?
+                        let Some(policy) = self.store.model_fields.id_input_policy(&self.model)?
                         else {
                             return Ok(Some(supplied));
                         };
                         if create {
                             self.store
-                                .memory_create_id_input(self.role, Some(supplied), policy)
+                                .memory_create_id_input(&self.model, Some(supplied), policy)
                         } else {
                             self.store
                                 .config
@@ -66,7 +70,7 @@ impl<'a> MemoryRecordModel<'a> {
                     },
                     |name, field, value| {
                         self.store
-                            .memory_record_input(self.role, name, field, value, create)
+                            .memory_record_input(&self.model, name, field, value, create)
                     },
                 ),
             )
@@ -79,7 +83,7 @@ impl<'a> MemoryRecordModel<'a> {
     ) -> AuthResult<Vec<FieldMap>> {
         self.store
             .project_record_sources(
-                self.role,
+                &self.model,
                 &self.fields,
                 sources.into_iter().map(RecordSource::Live).collect(),
             )
@@ -88,11 +92,11 @@ impl<'a> MemoryRecordModel<'a> {
 
     fn query_id(&self, id: FieldValue) -> AuthResult<(String, FieldValue)> {
         self.store
-            .memory_query_field(self.role, &self.fields, "id", id)
+            .memory_query_field(&self.model, &self.fields, "id", id)
     }
 
-    fn model(&self) -> AuthResult<&'static str> {
-        crate::plugin_runtime::ModelFields::native_model_name(self.role)
+    fn model(&self) -> AuthResult<&str> {
+        self.model.logical_name()
     }
 
     pub(super) async fn create(
@@ -118,7 +122,7 @@ impl<'a> MemoryRecordModel<'a> {
         storage.extend(internal);
         self.store
             .raw(self.model()?, "create", |op| {
-                let table = op.create_table(self.role)?;
+                let table = op.create_table(&self.model)?;
                 if let Some(id) = self.store.next_serial_id(table.len()?) {
                     let _ = storage.insert("id".into(), id);
                 }
@@ -133,7 +137,7 @@ impl<'a> MemoryRecordModel<'a> {
             .store
             .raw(self.model()?, "findOne", |op| {
                 Ok(op
-                    .capture_table(self.role)?
+                    .capture_table(&self.model)?
                     .select_refs(|row| {
                         Ok(crate::query::field_matches_equality(
                             &row.field(&column)?.unwrap_or_default(),
@@ -168,7 +172,7 @@ impl<'a> MemoryRecordModel<'a> {
         patch.extend(internal);
         self.store
             .raw(self.model()?, "update", |op| {
-                let matches = op.capture_table(self.role)?.select_refs(|row| {
+                let matches = op.capture_table(&self.model)?.select_refs(|row| {
                     Ok(crate::query::field_matches_equality(
                         &row.field(&column)?.unwrap_or_default(),
                         &id,
@@ -186,14 +190,14 @@ impl<'a> MemoryRecordModel<'a> {
         let (column, id) = self.query_id(id)?;
         self.store
             .raw(self.model()?, "delete", |op| {
-                let table = op.capture_table(self.role)?;
+                let table = op.capture_table(&self.model)?;
                 let selected = table.select_refs(|row| {
                     Ok(crate::query::field_matches_equality(
                         &row.field(&column)?.unwrap_or_default(),
                         &id,
                     ))
                 })?;
-                op.replace_table(self.role, table.without_refs(&selected)?)
+                op.replace_table(&self.model, table.without_refs(&selected)?)
             })
             .await
     }

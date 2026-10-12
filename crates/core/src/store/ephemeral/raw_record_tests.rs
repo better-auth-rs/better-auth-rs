@@ -3,6 +3,7 @@ use crate::{
     FieldFunction, FieldObject, FieldPropertyDefinition, FieldPropertyDescriptor,
     FieldPropertyUpdate,
     field_value::FieldObjectSource,
+    store::schema::EntityRole,
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform},
 };
 use std::sync::{Arc, Mutex};
@@ -95,7 +96,7 @@ fn getter(input: &FieldValue, name: &str, source: &'static str, events: Events) 
     reason = "The regression compares declaration order, native identity, and persisted CRUD results."
 )]
 async fn native_input_reads_follow_prior_callbacks_through_create_and_update() -> AuthResult<()> {
-    for asynchronous in [false, true] {
+    for (asynchronous, custom) in [(false, false), (true, false), (false, true), (true, true)] {
         let events = Events::default();
         let original: FieldValue = FieldMap::from([("before".into(), true.into())]).into();
         let replacement: FieldValue = FieldMap::from([("after".into(), true.into())]).into();
@@ -159,8 +160,20 @@ async fn native_input_reads_follow_prior_callbacks_through_create_and_update() -
                 .into(),
             ),
         };
-        let store = EphemeralStore::default();
-        let records = MemoryRecordModel::new(&store, EntityRole::Jwk, fields);
+        let mut store = EphemeralStore::default();
+        let (model, fields) = if custom {
+            store
+                .model_fields
+                .register_custom_model("badge", Some("badges"), fields)?;
+            let model = store
+                .model_fields
+                .resolve_model_key("badges", &|_, _| false)?;
+            let fields = store.model_fields.declared_fields(&model)?.clone();
+            (model, fields)
+        } else {
+            (ModelKey::Native(EntityRole::Jwk), fields)
+        };
+        let records = MemoryRecordModel::new(&store, &model, fields);
         let created = records.create(input.clone(), FieldMap::new(), true).await?;
         assert_eq!(created.get("id"), Some(&FieldValue::from("after")));
         assert!(
@@ -191,7 +204,7 @@ async fn native_input_reads_follow_prior_callbacks_through_create_and_update() -
                 .map_err(|_| AuthError::internal("Raw record event lock poisoned"))?,
             ["transform:trigger", "read:payload", "read:id"]
         );
-        let stored = store.storage_rows(EntityRole::Jwk)?;
+        let stored = store.operation(|op| op.capture_table(&model)?.snapshot())?;
         assert_eq!(stored.len(), 1);
         let row = stored
             .first()
@@ -238,10 +251,96 @@ async fn native_input_reads_follow_prior_callbacks_through_create_and_update() -
                 .map_err(|_| AuthError::internal("Raw record event lock poisoned"))?,
             ["transform:trigger", "read:payload"]
         );
-        assert_eq!(store.storage_rows(EntityRole::Jwk)?, stored);
+        assert_eq!(
+            store.operation(|op| op.capture_table(&model)?.snapshot())?,
+            stored
+        );
         assert_eq!(records.find_by_id("after".into()).await?, Some(created));
         records.delete_by_id("after".into()).await?;
-        assert!(store.storage_rows(EntityRole::Jwk)?.is_empty());
+        assert!(
+            store
+                .operation(|op| op.capture_table(&model)?.snapshot())?
+                .is_empty()
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The regression compares serial root failure, physical rows, and logical generator names."
+)]
+async fn custom_alias_preserves_serial_root_failure_and_logical_generator_name() -> AuthResult<()> {
+    for serial in [false, true] {
+        let events = Events::default();
+        let mut config = crate::AuthConfig::default();
+        config.advanced.database.generate_id = Some(if serial {
+            crate::id::IdGeneration::Serial
+        } else {
+            crate::id::IdGeneration::Custom(crate::id::IdGenerator::new({
+                let events = events.clone();
+                move |request| {
+                    event(&events, request.model)?;
+                    Ok(Some("generated".into()))
+                }
+            }))
+        });
+        let mut runtime = crate::plugin_runtime::ModelFields::default();
+        runtime.register_custom_model("badge", Some("badges"), UserConfig::default())?;
+        let model = runtime.resolve_model_key("badges", &|_, _| false)?;
+        let store = EphemeralStore::from_schema(Arc::new(config), &runtime);
+        let records =
+            MemoryRecordModel::new(&store, &model, runtime.declared_fields(&model)?.clone());
+        let before = store.operation(|op| op.root_keys())?;
+        assert!(before.iter().any(|key| key == "badge"));
+        assert!(!before.iter().any(|key| key == "badges"));
+        if serial {
+            let error = records
+                .create(FieldMap::new().into(), FieldMap::new(), false)
+                .await
+                .err()
+                .ok_or_else(|| {
+                    AuthError::internal("Serial creation requires the physical table")
+                })?;
+            assert_eq!(
+                error.instrumentation_message()?,
+                "Cannot read properties of undefined (reading 'length')"
+            );
+            assert_eq!(store.operation(|op| op.root_keys())?, before);
+            store.operation(|op| {
+                op.replace_physical_table("badges".into(), Some(op.table_or_empty("badges")?))
+            })?;
+        }
+        let created = records
+            .create(FieldMap::new().into(), FieldMap::new(), false)
+            .await?;
+        let id = if serial { "1" } else { "generated" };
+        assert_eq!(created, FieldMap::from([("id".into(), id.into())]));
+        let stored = store.operation(|op| op.capture_table(&model)?.snapshot())?;
+        let stored_id = if serial {
+            FieldValue::Number(1.0)
+        } else {
+            "generated".into()
+        };
+        assert_eq!(stored, [FieldMap::from([("id".into(), stored_id)])]);
+        assert_eq!(
+            store.operation(|op| op
+                .capture_physical_table("badge")?
+                .ok_or_else(|| AuthError::internal("Logical table must remain present"))?
+                .snapshot())?,
+            Vec::<FieldMap>::new()
+        );
+        assert_eq!(
+            *events
+                .lock()
+                .map_err(|_| AuthError::internal("Raw record event lock poisoned"))?,
+            if serial {
+                Vec::<String>::new()
+            } else {
+                vec!["badge".to_owned()]
+            }
+        );
     }
     Ok(())
 }

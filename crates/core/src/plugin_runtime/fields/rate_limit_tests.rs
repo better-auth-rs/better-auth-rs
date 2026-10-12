@@ -99,14 +99,14 @@ async fn database_rate_limit_replaces_the_complete_declaration_without_resetting
                 rate_limit,
             });
             assert!(
-                matches!(fields.declarations.get_index(0), Some((ModelDeclaration::Custom(name), _)) if name == "before")
+                matches!(fields.declarations.get_index(0), Some((ModelKey::Custom(name), _)) if name == "before")
             );
             assert!(matches!(
                 fields.declarations.get_index(1),
-                Some((ModelDeclaration::Native(EntityRole::RateLimit), _))
+                Some((ModelKey::Native(EntityRole::RateLimit), _))
             ));
             assert!(
-                matches!(fields.declarations.get_index(2), Some((ModelDeclaration::Custom(name), _)) if name == "after")
+                matches!(fields.declarations.get_index(2), Some((ModelKey::Custom(name), _)) if name == "after")
             );
             let active = fields.id_input_policy(EntityRole::RateLimit)?;
             assert!(

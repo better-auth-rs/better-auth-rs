@@ -16,7 +16,7 @@ use crate::store::schema::{EntityRole, resolve_field_name};
 use crate::user_fields::{AdapterRecord, UserConfig, UserFieldType};
 use crate::{AuthConfig, AuthError, AuthResult, FieldMap, FieldValue as Value};
 use indexmap::{IndexMap, IndexSet};
-use models::ModelDeclaration;
+pub use models::ModelKey;
 use parking_lot::ReentrantMutex;
 use std::future::{Future, poll_fn};
 use std::sync::{Arc, LazyLock, Mutex, OnceLock};
@@ -26,8 +26,8 @@ use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 pub struct ModelFields {
     models: IndexMap<EntityRole, UserConfig>,
     schema_models: Option<Vec<(EntityRole, &'static str)>>,
-    declarations: IndexMap<ModelDeclaration, Option<String>>,
-    registered_declarations: Vec<(ModelDeclaration, Vec<String>)>,
+    declarations: IndexMap<ModelKey, Option<String>>,
+    registered_declarations: Vec<(ModelKey, Vec<String>)>,
     custom_models: IndexMap<String, UserConfig>,
     user_plugin_fields: Vec<&'static str>,
     session_plugin_fields: Vec<&'static str>,
@@ -39,8 +39,8 @@ pub struct ModelFields {
 
 #[derive(Default)]
 struct IdHistory {
-    canonical: IndexSet<EntityRole>,
-    input: IndexMap<EntityRole, AdapterIdInput>,
+    canonical: IndexSet<ModelKey>,
+    input: IndexMap<ModelKey, AdapterIdInput>,
 }
 
 impl ModelFields {
@@ -63,12 +63,12 @@ impl ModelFields {
     #[doc(hidden)]
     pub async fn with_id_input<T>(
         &self,
-        role: EntityRole,
+        model: impl Into<ModelKey>,
         policy: AdapterIdInput,
         convert: impl Future<Output = AuthResult<T>>,
     ) -> AuthResult<T> {
         let mut convert = std::pin::pin!(async {
-            self.begin_id_input(role, policy)?;
+            self.begin_id_input(model, policy)?;
             convert.await
         });
         poll_fn(|context| {
@@ -89,70 +89,79 @@ impl ModelFields {
 
     /// Retain the upstream primary-key replacement across calls on this adapter runtime.
     #[doc(hidden)]
-    pub fn canonicalize_id(&self, role: EntityRole) -> AuthResult<()> {
+    pub fn canonicalize_id(&self, model: impl Into<ModelKey>) -> AuthResult<()> {
         let _execution = self.execution_gate().lock();
         let _ = self
             .id_history
             .lock()
             .map_err(|_| AuthError::internal("Adapter schema history lock poisoned"))?
             .canonical
-            .insert(role);
+            .insert(model.into());
         Ok(())
     }
 
     /// Install the ID input policy before create or update field conversion.
     #[doc(hidden)]
-    pub fn begin_id_input(&self, role: EntityRole, policy: AdapterIdInput) -> AuthResult<()> {
+    pub fn begin_id_input(
+        &self,
+        model: impl Into<ModelKey>,
+        policy: AdapterIdInput,
+    ) -> AuthResult<()> {
         let _execution = self.execution_gate().lock();
         let mut history = self
             .id_history
             .lock()
             .map_err(|_| AuthError::internal("Adapter schema history lock poisoned"))?;
-        let _ = history.canonical.insert(role);
-        let _ = history.input.insert(role, policy);
+        let model = model.into();
+        let _ = history.canonical.insert(model.clone());
+        let _ = history.input.insert(model, policy);
         Ok(())
     }
 
     /// Field-attribute lookup installs an unforced ID policy without native UUID support.
     #[doc(hidden)]
-    pub fn begin_id_query(&self, role: EntityRole) -> AuthResult<()> {
-        self.begin_id_input(role, AdapterIdInput::default())
+    pub fn begin_id_query(&self, model: impl Into<ModelKey>) -> AuthResult<()> {
+        self.begin_id_input(model, AdapterIdInput::default())
     }
 
     /// Replace the ID input policy when a nonempty output conversion starts.
     #[doc(hidden)]
-    pub fn begin_id_output(&self, role: EntityRole) -> AuthResult<()> {
+    pub fn begin_id_output(&self, model: impl Into<ModelKey>) -> AuthResult<()> {
         let _execution = self.execution_gate().lock();
-        begin_id_output(&self.id_history, role)
+        begin_id_output(&self.id_history, model.into())
     }
 
     pub(crate) fn id_output_initializer(
         &self,
-        role: EntityRole,
+        model: impl Into<ModelKey>,
     ) -> Box<dyn FnOnce() -> AuthResult<()> + Send + Sync> {
+        let model = model.into();
         let history = self.id_history.clone();
         let execution = self.execution_gate().clone();
         Box::new(move || {
             let _execution = execution.lock();
-            begin_id_output(&history, role)
+            begin_id_output(&history, model)
         })
     }
 
     /// Read the current ID policy after preceding field callbacks have completed.
     #[doc(hidden)]
-    pub fn id_input_active(&self, role: EntityRole) -> AuthResult<bool> {
-        Ok(self.id_input_policy(role)?.is_some())
+    pub fn id_input_active(&self, model: impl Into<ModelKey>) -> AuthResult<bool> {
+        Ok(self.id_input_policy(model)?.is_some())
     }
 
     /// Read the complete input policy after preceding field callbacks have completed.
     #[doc(hidden)]
-    pub fn id_input_policy(&self, role: EntityRole) -> AuthResult<Option<AdapterIdInput>> {
+    pub fn id_input_policy(
+        &self,
+        model: impl Into<ModelKey>,
+    ) -> AuthResult<Option<AdapterIdInput>> {
         Ok(self
             .id_history
             .lock()
             .map_err(|_| AuthError::internal("Adapter schema history lock poisoned"))?
             .input
-            .get(&role)
+            .get(&model.into())
             .copied())
     }
 
@@ -160,7 +169,7 @@ impl ModelFields {
     #[doc(hidden)]
     pub fn runtime_fields(
         &self,
-        role: EntityRole,
+        model: impl Into<ModelKey>,
         configured: &UserConfig,
     ) -> AuthResult<UserConfig> {
         let mut fields = configured.clone();
@@ -169,7 +178,7 @@ impl ModelFields {
             .lock()
             .map_err(|_| AuthError::internal("Adapter schema history lock poisoned"))?
             .canonical
-            .contains(&role)
+            .contains(&model.into())
         {
             let _ = fields.fields_mut().insert("id".into(), Default::default());
         }
@@ -201,7 +210,7 @@ impl ModelFields {
             });
             let _ = self
                 .declarations
-                .insert(ModelDeclaration::Native(EntityRole::RateLimit), model_name);
+                .insert(ModelKey::Native(EntityRole::RateLimit), model_name);
         }
         self.schema_models = Some(config.core_models());
         self.set_plugin_metadata(&config.metadata);
@@ -257,18 +266,13 @@ impl ModelFields {
 
     pub(crate) fn register(&mut self, role: EntityRole, fields: UserConfig) {
         self.extend(role, fields);
-        let _ = self
-            .declarations
-            .insert(ModelDeclaration::Native(role), None);
+        let _ = self.declarations.insert(ModelKey::Native(role), None);
     }
 
     pub(crate) fn extend(&mut self, role: EntityRole, fields: UserConfig) {
-        let _ = self
-            .declarations
-            .entry(ModelDeclaration::Native(role))
-            .or_default();
+        let _ = self.declarations.entry(ModelKey::Native(role)).or_default();
         self.registered_declarations.push((
-            ModelDeclaration::Native(role),
+            ModelKey::Native(role),
             fields.fields().keys().cloned().collect(),
         ));
         if let Some(fields) = fields.additional_fields {
@@ -393,11 +397,11 @@ impl ModelFields {
     }
 }
 
-fn begin_id_output(history: &Mutex<IdHistory>, role: EntityRole) -> AuthResult<()> {
+fn begin_id_output(history: &Mutex<IdHistory>, model: ModelKey) -> AuthResult<()> {
     let mut history = history
         .lock()
         .map_err(|_| AuthError::internal("Adapter schema history lock poisoned"))?;
-    let _ = history.canonical.insert(role);
-    let _ = history.input.shift_remove(&role);
+    let _ = history.canonical.insert(model.clone());
+    let _ = history.input.shift_remove(&model);
     Ok(())
 }

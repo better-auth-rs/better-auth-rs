@@ -3,7 +3,7 @@
 use better_auth_core::{
     AuthResult, FieldMap, FieldValue,
     id::{AdapterIdInput, IdGeneration},
-    plugin_runtime::ModelFields,
+    plugin_runtime::{ModelFields, ModelKey},
     store::schema::EntityRole,
     user_fields::{UserConfig, UserFieldConfig},
 };
@@ -51,14 +51,15 @@ pub(super) async fn prepare_fields_from_source(
     schema: &UserConfig,
     input: FieldValue,
     (create_model, force_allow_id): (Option<&str>, bool),
-    (runtime, role): (&ModelFields, EntityRole),
+    (runtime, model): (&ModelFields, impl Into<ModelKey>),
     policy: &IdGeneration,
     backend: DbBackend,
     bind: impl Fn(&str, &UserFieldConfig, FieldValue) -> AuthResult<FieldValue>,
 ) -> AuthResult<FieldMap> {
+    let model = model.into();
     runtime
         .with_id_input(
-            role,
+            &model,
             AdapterIdInput {
                 force_allow_id,
                 supports_native_uuid: backend == DbBackend::Postgres,
@@ -69,7 +70,7 @@ pub(super) async fn prepare_fields_from_source(
                 || {
                     let supplied = Some(input.model_property("id")?);
                     // Earlier callbacks can replace the runtime ID policy before this declaration slot.
-                    let Some(current) = runtime.id_input_policy(role)? else {
+                    let Some(current) = runtime.id_input_policy(&model)? else {
                         return Ok(supplied);
                     };
                     match create_model {

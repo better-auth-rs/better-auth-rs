@@ -1,24 +1,27 @@
 //! Read each Memory field at its output-policy boundary without holding a row lock across callbacks.
 
 use super::{EphemeralStore, rows::RecordSource};
-use crate::store::schema::{EntityRole, resolve_field_name};
+use crate::store::schema::resolve_field_name;
 use crate::user_fields::{
     UserConfig, UserFieldConfig, project_adapter_value, project_owned_source_fields_batches_then,
 };
-use crate::{AuthResult, FieldMap, FieldValue, SchemaValue, plugin_runtime::ModelFields};
+use crate::{
+    AuthResult, FieldMap, FieldValue, SchemaValue,
+    plugin_runtime::{ModelFields, ModelKey},
+};
 use futures_util::future::BoxFuture;
 
 type ProjectionRow = (FieldMap, RecordSource, bool);
 
 fn read_field(
     runtime: &ModelFields,
-    role: EntityRole,
+    model: &ModelKey,
     (_, source, started): &mut ProjectionRow,
     name: &str,
     field: &UserFieldConfig,
 ) -> AuthResult<FieldValue> {
     if !*started {
-        runtime.begin_id_output(role)?;
+        runtime.begin_id_output(model)?;
         *started = true;
     }
     Ok(source
@@ -59,12 +62,12 @@ impl EphemeralStore {
 
     pub(super) async fn project_record_sources(
         &self,
-        role: EntityRole,
+        model: impl Into<ModelKey>,
         configured: &UserConfig,
         sources: Vec<RecordSource>,
     ) -> AuthResult<Vec<FieldMap>> {
         self.project_record_sources_owned_batches_then(
-            role,
+            model,
             configured,
             sources,
             |_, fields| Ok(fields),
@@ -79,7 +82,7 @@ impl EphemeralStore {
         F,
     >(
         &self,
-        role: EntityRole,
+        model: impl Into<ModelKey>,
         configured: &UserConfig,
         sources: Vec<RecordSource>,
         decode: impl Fn(usize, FieldMap) -> AuthResult<V> + Send + Sync + 'static,
@@ -88,6 +91,7 @@ impl EphemeralStore {
     where
         F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send + 'static,
     {
+        let model = model.into();
         let schema = configured.adapter_fields(&[]);
         let runtime = self.model_fields.clone();
         project_owned_source_fields_batches_then(
@@ -96,7 +100,7 @@ impl EphemeralStore {
                 .map(|source| (FieldMap::new(), source, false))
                 .collect(),
             schema.fields().clone(),
-            move |row, name, field| read_field(&runtime, role, row, name, field),
+            move |row, name, field| read_field(&runtime, &model, row, name, field),
             apply_field,
             move |index, (output, _, _)| decode(index, std::mem::take(output)),
             complete,

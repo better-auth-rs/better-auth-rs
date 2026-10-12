@@ -7,7 +7,7 @@ use crate::user_fields::UserConfig;
 use crate::{AuthContext, AuthError, AuthResult, AuthSchema};
 
 mod fields;
-pub use fields::ModelFields;
+pub use fields::{ModelFields, ModelKey};
 
 struct Binding<S: AuthSchema> {
     identity: RuntimeIdentity,

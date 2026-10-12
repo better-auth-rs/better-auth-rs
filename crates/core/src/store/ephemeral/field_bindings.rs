@@ -18,14 +18,15 @@ pub(super) fn memory_json_query_value(value: Value, original: &Value) -> AuthRes
 impl EphemeralStore {
     pub(super) fn memory_query_field(
         &self,
-        role: EntityRole,
+        model: impl Into<crate::plugin_runtime::ModelKey>,
         configured: &UserConfig,
         name: &str,
         value: Value,
     ) -> AuthResult<(String, Value)> {
-        let fields = self.model_fields.runtime_fields(role, configured)?;
+        let model = model.into();
+        let fields = self.model_fields.runtime_fields(&model, configured)?;
         let name = if name == "_id" { "id" } else { name };
-        let model = crate::plugin_runtime::ModelFields::native_model_name(role)?;
+        let logical_model = model.logical_name()?;
         let (logical, physical) = if name == "id" {
             (
                 "id",
@@ -40,14 +41,14 @@ impl EphemeralStore {
         } else {
             let (logical, field) =
                 crate::user_query::declared_field(name, &fields).ok_or_else(|| {
-                    AuthError::config(format!("Field {name} not found in model {model}"))
+                    AuthError::config(format!("Field {name} not found in model {logical_model}"))
                 })?;
             (
                 logical,
                 crate::store::schema::resolve_field_name(field.field_name.as_deref(), logical),
             )
         };
-        self.model_fields.begin_id_query(role)?;
+        self.model_fields.begin_id_query(&model)?;
         let value = self.memory_field_query(&fields, logical, value)?;
         Ok((physical.to_owned(), value))
     }

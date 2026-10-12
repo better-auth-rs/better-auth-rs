@@ -257,7 +257,14 @@ impl EphemeralStore {
 
     fn memory_model_name(&self, role: crate::store::schema::EntityRole) -> AuthResult<&str> {
         let logical = crate::plugin_runtime::ModelFields::native_model_name(role)?;
-        Ok(self.model_fields.storage_model_name(role, logical))
+        Ok(self.model_fields.storage_name(&role.into(), logical))
+    }
+
+    fn memory_storage_name<'a>(
+        &'a self,
+        model: &'a crate::plugin_runtime::ModelKey,
+    ) -> AuthResult<&'a str> {
+        Ok(self.model_fields.storage_name(model, model.logical_name()?))
     }
 
     fn snapshot_table<'a>(
@@ -270,25 +277,21 @@ impl EphemeralStore {
 
     fn memory_create_id_input(
         &self,
-        role: crate::store::schema::EntityRole,
+        model: &crate::plugin_runtime::ModelKey,
         supplied: Option<Value>,
         policy: crate::id::AdapterIdInput,
     ) -> AuthResult<Option<Value>> {
         let generation = self.config.advanced.database.generate_id();
-        let value = generation.adapter_create_id_input(
-            crate::plugin_runtime::ModelFields::native_model_name(role)?,
-            supplied,
-            policy,
-        )?;
+        let value = generation.adapter_create_id_input(model.logical_name()?, supplied, policy)?;
         if matches!(generation, crate::id::IdGeneration::Serial) {
-            return self.operation(|op| Ok(self.next_serial_id(op.table_length(role)?)));
+            return self.operation(|op| Ok(self.next_serial_id(op.table_length(model)?)));
         }
         Ok(value)
     }
 
     fn memory_record_input(
         &self,
-        role: crate::store::schema::EntityRole,
+        model: &crate::plugin_runtime::ModelKey,
         name: &str,
         field: &crate::user_fields::UserFieldConfig,
         value: Value,
@@ -302,7 +305,7 @@ impl EphemeralStore {
                 crate::id::IdGeneration::Serial
             )
         {
-            return self.operation(|op| Ok(Value::Number((op.table_length(role)? + 1) as f64)));
+            return self.operation(|op| Ok(Value::Number((op.table_length(model)? + 1) as f64)));
         }
         Ok(value)
     }

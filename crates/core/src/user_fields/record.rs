@@ -54,9 +54,9 @@ impl AdapterRecord {
     pub fn with_id_output(
         mut self,
         runtime: &crate::plugin_runtime::ModelFields,
-        role: crate::store::schema::EntityRole,
+        model: impl Into<crate::plugin_runtime::ModelKey>,
     ) -> Self {
-        self.output_initializer = Some(runtime.id_output_initializer(role));
+        self.output_initializer = Some(runtime.id_output_initializer(model));
         self
     }
 

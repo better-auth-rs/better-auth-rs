@@ -29,11 +29,13 @@ run_stage() {
       local id_status=0
       cargo clippy --locked -p better-auth-core -p better-auth-seaorm --lib -- -D warnings || id_status=1
       cargo test --locked -p better-auth-core --lib -- \
-        plugin_runtime::fields::id_scope_tests:: id_slot_tests:: \
+        plugin_runtime::fields::id_scope_tests:: plugin_runtime::fields::models::tests:: \
+        plugin_runtime::fields::availability_tests:: plugin_runtime::fields::rate_limit_tests:: \
+        store::ephemeral::raw_records::tests:: id_slot_tests:: \
         store::ephemeral::history_tests:: store::ephemeral::operation_contract_tests:: \
         store::ephemeral::graph_clone_contract_tests:: || id_status=1
       cargo test --locked -p better-auth-seaorm --lib -- \
-        store::user_verification_tests:: store::history_tests:: || id_status=1
+        store::user_verification_tests:: store::history_tests:: store::record_write::tests:: || id_status=1
       cargo clippy --locked --features axum,seaorm2,redis-cache \
         --test session_id_policy_tests --test user_id_generation_order_tests \
         --test plugin_id_slot_tests --test id_generation_tests -- -D warnings || id_status=1

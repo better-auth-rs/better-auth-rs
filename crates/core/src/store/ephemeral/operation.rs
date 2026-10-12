@@ -3,7 +3,7 @@
 use super::rows::RowRef;
 use super::table::TableRef;
 use super::{EphemeralStore, State};
-use crate::store::schema::EntityRole;
+use crate::plugin_runtime::ModelKey;
 use crate::{AuthError, AuthResult, FieldMap};
 use parking_lot::ReentrantMutex;
 use std::sync::{Arc, MutexGuard};
@@ -30,20 +30,26 @@ impl MemoryOperation<'_> {
             .map_err(|_| AuthError::internal("Ephemeral state lock poisoned"))
     }
 
-    pub(super) fn capture_table(&self, role: EntityRole) -> AuthResult<TableRef<FieldMap>> {
-        self.capture_model_table(role, "Model")
+    pub(super) fn capture_table(
+        &self,
+        model: impl Into<ModelKey>,
+    ) -> AuthResult<TableRef<FieldMap>> {
+        self.capture_model_table(model, "Model")
     }
 
-    pub(super) fn capture_join_table(&self, role: EntityRole) -> AuthResult<TableRef<FieldMap>> {
-        self.capture_model_table(role, "JoinOption model")
+    pub(super) fn capture_join_table(
+        &self,
+        model: impl Into<ModelKey>,
+    ) -> AuthResult<TableRef<FieldMap>> {
+        self.capture_model_table(model, "JoinOption model")
     }
 
     fn capture_model_table(
         &self,
-        role: EntityRole,
+        model: impl Into<ModelKey>,
         context: &str,
     ) -> AuthResult<TableRef<FieldMap>> {
-        let name = self.model_name(role)?;
+        let name = self.model_name(model)?;
         match self.capture_physical_table(&name)? {
             Some(table) => Ok(table),
             None => {
@@ -57,8 +63,10 @@ impl MemoryOperation<'_> {
         }
     }
 
-    pub(super) fn model_name(&self, role: EntityRole) -> AuthResult<String> {
-        self.store.memory_model_name(role).map(str::to_owned)
+    pub(super) fn model_name(&self, model: impl Into<ModelKey>) -> AuthResult<String> {
+        self.store
+            .memory_storage_name(&model.into())
+            .map(str::to_owned)
     }
 
     pub(super) fn root_keys(&self) -> AuthResult<Vec<String>> {
@@ -78,22 +86,26 @@ impl MemoryOperation<'_> {
             .unwrap_or_else(|| TableRef::new(self.store.operations.clone())))
     }
 
-    pub(super) fn table_length(&self, role: EntityRole) -> AuthResult<usize> {
-        self.capture_physical_table(&self.model_name(role)?)?
+    pub(super) fn table_length(&self, model: impl Into<ModelKey>) -> AuthResult<usize> {
+        self.capture_physical_table(&self.model_name(model)?)?
             .ok_or_else(|| {
                 AuthError::type_error("Cannot read properties of undefined (reading 'length')")
             })?
             .len()
     }
 
-    pub(super) fn create_table(&self, role: EntityRole) -> AuthResult<TableRef<FieldMap>> {
+    pub(super) fn create_table(
+        &self,
+        model: impl Into<ModelKey>,
+    ) -> AuthResult<TableRef<FieldMap>> {
+        let model = model.into();
         if matches!(
             self.store.config.advanced.database.generate_id(),
             crate::id::IdGeneration::Serial
         ) {
-            let _ = self.table_length(role)?;
+            let _ = self.table_length(&model)?;
         }
-        let name = self.model_name(role)?;
+        let name = self.model_name(model)?;
         Ok(self
             .state()?
             .tables
@@ -104,10 +116,10 @@ impl MemoryOperation<'_> {
 
     pub(super) fn replace_table(
         &self,
-        role: EntityRole,
+        model: impl Into<ModelKey>,
         replacement: TableRef<FieldMap>,
     ) -> AuthResult<()> {
-        self.replace_physical_table(self.model_name(role)?, Some(replacement))
+        self.replace_physical_table(self.model_name(model)?, Some(replacement))
     }
 
     pub(super) fn replace_physical_table(

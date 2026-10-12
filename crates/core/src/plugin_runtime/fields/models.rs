@@ -5,10 +5,34 @@ use crate::{
     user_fields::UserConfig,
 };
 
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub(super) enum ModelDeclaration {
+/// Logical model identity shared by declarations and adapter operation history.
+#[doc(hidden)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ModelKey {
     Native(EntityRole),
     Custom(String),
+}
+
+impl ModelKey {
+    /// Read the logical name without applying adapter table aliases.
+    pub fn logical_name(&self) -> AuthResult<&str> {
+        match self {
+            Self::Native(role) => ModelFields::native_model_name(*role),
+            Self::Custom(name) => Ok(name),
+        }
+    }
+}
+
+impl From<EntityRole> for ModelKey {
+    fn from(role: EntityRole) -> Self {
+        Self::Native(role)
+    }
+}
+
+impl From<&ModelKey> for ModelKey {
+    fn from(model: &ModelKey) -> Self {
+        model.clone()
+    }
 }
 
 const NATIVE_MODELS: &[(EntityRole, &str)] = &[
@@ -60,7 +84,7 @@ impl ModelFields {
             }
         }
         for declaration in self.declarations.keys() {
-            if let ModelDeclaration::Native(role) = declaration
+            if let ModelKey::Native(role) = declaration
                 && !is_core(*role)
                 && let Some((_, name)) = NATIVE_MODELS.iter().find(|(native, _)| native == role)
             {
@@ -74,10 +98,27 @@ impl ModelFields {
     /// Legacy field-only declarations retain the adapter's default model name.
     #[doc(hidden)]
     pub fn storage_model_name<'a>(&'a self, role: EntityRole, default: &'a str) -> &'a str {
+        self.storage_name(&ModelKey::Native(role), default)
+    }
+
+    /// Read the declared physical alias or the adapter's default table name.
+    #[doc(hidden)]
+    pub fn storage_name<'a>(&'a self, model: &ModelKey, default: &'a str) -> &'a str {
         self.declarations
-            .get(&ModelDeclaration::Native(role))
+            .get(model)
             .and_then(Option::as_deref)
             .unwrap_or(default)
+    }
+
+    /// Read registered declarations without adapter defaults or runtime ID replacement.
+    #[doc(hidden)]
+    pub fn declared_fields(&self, model: &ModelKey) -> AuthResult<&UserConfig> {
+        match model {
+            ModelKey::Native(role) => Ok(self.fields(*role)),
+            ModelKey::Custom(name) => self.custom_models.get(name).ok_or_else(|| {
+                AuthError::internal(format!("Custom model {name} has no field declaration"))
+            }),
+        }
     }
 
     pub(crate) fn set_model_name(
@@ -87,7 +128,7 @@ impl ModelFields {
     ) -> AuthResult<()> {
         let logical = Self::native_model_name(role)?;
         let _ = self.declarations.insert(
-            ModelDeclaration::Native(role),
+            ModelKey::Native(role),
             Some(resolve_field_name(model_name, logical).to_owned()),
         );
         Ok(())
@@ -110,9 +151,9 @@ impl ModelFields {
         let physical_name = resolve_field_name(model_name, &name).to_owned();
         let _ = self
             .declarations
-            .insert(ModelDeclaration::Custom(name.clone()), Some(physical_name));
+            .insert(ModelKey::Custom(name.clone()), Some(physical_name));
         self.registered_declarations.push((
-            ModelDeclaration::Custom(name.clone()),
+            ModelKey::Custom(name.clone()),
             fields.fields().keys().cloned().collect(),
         ));
         let declaration = self.custom_models.entry(name).or_default();
@@ -126,17 +167,11 @@ impl ModelFields {
     pub(crate) fn declared_models(&self) -> AuthResult<indexmap::IndexMap<String, UserConfig>> {
         self.declarations
             .keys()
-            .map(|declaration| match declaration {
-                ModelDeclaration::Native(role) => Ok((
-                    Self::native_model_name(*role)?.to_owned(),
-                    self.fields(*role).clone(),
-                )),
-                ModelDeclaration::Custom(name) => Ok((
-                    name.clone(),
-                    self.custom_models.get(name).cloned().ok_or_else(|| {
-                        AuthError::internal(format!("Custom model {name} has no field declaration"))
-                    })?,
-                )),
+            .map(|model| {
+                Ok((
+                    model.logical_name()?.to_owned(),
+                    self.declared_fields(model)?.clone(),
+                ))
             })
             .collect()
     }
@@ -148,8 +183,8 @@ impl ModelFields {
             .into_iter()
             .map(|(declaration, fields)| {
                 let name = match declaration {
-                    ModelDeclaration::Native(role) => Self::native_model_name(role)?.to_owned(),
-                    ModelDeclaration::Custom(name) => name,
+                    ModelKey::Native(role) => Self::native_model_name(role)?.to_owned(),
+                    ModelKey::Custom(name) => name,
                 };
                 Ok((name, fields))
             })
@@ -162,8 +197,8 @@ impl ModelFields {
         self.declarations
             .iter()
             .filter_map(move |(declaration, physical)| match declaration {
-                ModelDeclaration::Native(_) => None,
-                ModelDeclaration::Custom(name) => self
+                ModelKey::Native(_) => None,
+                ModelKey::Custom(name) => self
                     .custom_models
                     .get(name)
                     .map(|fields| (name.as_str(), physical.as_deref().unwrap_or(name), fields)),
@@ -180,30 +215,36 @@ impl ModelFields {
         self.ordered_models().into_keys().collect()
     }
 
-    fn ordered_models(&self) -> indexmap::IndexMap<&str, (Option<EntityRole>, Option<&str>)> {
+    fn ordered_models(&self) -> indexmap::IndexMap<&str, (ModelKey, Option<&str>)> {
         let active = self.active_models();
         let mut models = indexmap::IndexMap::new();
         for (role, name) in active.iter().filter(|(role, _)| is_core(*role)) {
-            let alias = self.declarations.get(&ModelDeclaration::Native(*role));
-            let _ = models.insert(*name, (Some(*role), alias.and_then(Option::as_deref)));
+            let alias = self.declarations.get(&ModelKey::Native(*role));
+            let _ = models.insert(
+                *name,
+                (ModelKey::Native(*role), alias.and_then(Option::as_deref)),
+            );
         }
         for (declaration, physical) in &self.declarations {
             match declaration {
-                ModelDeclaration::Native(role) => {
+                ModelKey::Native(role) => {
                     if let Some((_, name)) = active.iter().find(|(candidate, _)| candidate == role)
                     {
                         let _ = models
                             .entry(*name)
-                            .or_insert((Some(*role), physical.as_deref()));
+                            .or_insert((ModelKey::Native(*role), physical.as_deref()));
                     }
                 }
-                ModelDeclaration::Custom(name) => {
-                    let _ = models.insert(name.as_str(), (None, physical.as_deref()));
+                ModelKey::Custom(name) => {
+                    let _ = models.insert(
+                        name.as_str(),
+                        (ModelKey::Custom(name.clone()), physical.as_deref()),
+                    );
                 }
             }
         }
         for (role, name) in active {
-            let _ = models.entry(name).or_insert((Some(role), None));
+            let _ = models.entry(name).or_insert((ModelKey::Native(role), None));
         }
         models.sort_by_cached_key(|name, _| {
             crate::utils::json::array_index(name).map_or((true, 0), |index| (false, index))
@@ -211,26 +252,50 @@ impl ModelFields {
         models
     }
 
+    /// Resolve active logical names before physical aliases in schema declaration order.
+    #[doc(hidden)]
+    pub fn resolve_model_key(
+        &self,
+        candidate: &str,
+        table_matches: &impl Fn(EntityRole, &str) -> bool,
+    ) -> AuthResult<ModelKey> {
+        self.resolve_model_entry(candidate, table_matches)
+            .map(|(_, key)| key)
+    }
+
+    #[cfg(test)]
     pub(crate) fn resolve_model_name(
         &self,
         candidate: &str,
         table_matches: &impl Fn(EntityRole, &str) -> bool,
     ) -> AuthResult<&str> {
+        self.resolve_model_entry(candidate, table_matches)
+            .map(|(name, _)| name)
+    }
+
+    fn resolve_model_entry(
+        &self,
+        candidate: &str,
+        table_matches: &impl Fn(EntityRole, &str) -> bool,
+    ) -> AuthResult<(&str, ModelKey)> {
         let models = self.ordered_models();
         // Every logical name precedes physical aliases, including aliases of native models.
         models
             .get_key_value(candidate)
-            .map(|(name, _)| *name)
+            .map(|(name, (key, _))| (*name, key.clone()))
             .or_else(|| {
                 models
                     .iter()
-                    .find(|(name, (role, physical))| match physical {
+                    .find(|(name, (key, physical))| match physical {
                         Some(physical) => resolve_field_name(Some(physical), name) == candidate,
-                        None => role.is_some_and(|role| table_matches(role, candidate)),
+                        None => match key {
+                            ModelKey::Native(role) => table_matches(*role, candidate),
+                            ModelKey::Custom(_) => false,
+                        },
                     })
-                    .map(|(name, _)| *name)
+                    .map(|(name, (key, _))| (*name, key.clone()))
             })
-            .filter(|name| !name.is_empty())
+            .filter(|(name, _)| !name.is_empty())
             .ok_or_else(|| AuthError::config(format!("Model \"{candidate}\" not found in schema")))
     }
 }
