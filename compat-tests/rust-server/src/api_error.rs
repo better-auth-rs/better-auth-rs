@@ -259,6 +259,13 @@ async fn run(base_url: &str, input: Value) -> AuthResult<Value> {
     } else {
         auth.handle_request(req).await
     };
+    let result = result.and_then(|response| {
+        if native && !response.is_native() {
+            response.into_http_response()
+        } else {
+            Ok(response)
+        }
+    });
     let output = match result {
         Ok(response) => observe(response, &input, native),
         Err(error) if error.is_api_error()? => {

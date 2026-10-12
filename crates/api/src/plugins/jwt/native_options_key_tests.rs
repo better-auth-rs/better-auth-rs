@@ -255,11 +255,13 @@ async fn generated_keys_keep_rotation_truthiness_repeated_reads_and_failure_iden
 async fn unbound_native_adapter_requires_the_shared_endpoint_context_boundary() -> AuthResult<()> {
     let plugin = JwtPlugin::new();
     let mut context = context(&plugin, JwtCallbacks::default()).await?;
-    context.extensions.insert(Arc::new(EndpointDispatcher::new(
-        Arc::new(Vec::new()),
-        EndpointHooks::default(),
-        [],
-    )));
+    context
+        .extensions
+        .insert(Arc::new(EndpointDispatcher::<S>::new(
+            Arc::new(Vec::new()),
+            EndpointHooks::default(),
+            [],
+        )));
     let calls = Arc::new(AtomicUsize::new(0));
     let count = calls.clone();
     let options: FieldValue = FieldMap::from([(
