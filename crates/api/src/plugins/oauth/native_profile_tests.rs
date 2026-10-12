@@ -44,9 +44,9 @@ impl OAuthProfileMapper for MutableProfile {
         self.events.lock().unwrap().push("map");
         assert!(profile.strict_equals(&self.raw));
         let raw = profile.as_object().unwrap();
-        let _ = raw.set("email", FieldValue::Number(17.0))?;
-        let _ = raw.set("emailVerified", "truthy".into())?;
-        let _ = raw.set("image", self.image.clone())?;
+        raw.set("email", FieldValue::Number(17.0))?;
+        raw.set("emailVerified", "truthy".into())?;
+        raw.set("image", self.image.clone())?;
         Ok(FieldMap::from([
             ("id".into(), "mapped-id".into()),
             ("name".into(), false.into()),

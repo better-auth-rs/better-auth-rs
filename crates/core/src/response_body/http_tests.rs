@@ -18,7 +18,7 @@ struct Probe {
 
 impl FieldObjectSource for Probe {
     fn own_keys(&self) -> AuthResult<Vec<String>> {
-        Ok(self.fields.keys().cloned().collect())
+        crate::FieldObject::from(self.fields.clone()).own_keys()
     }
 
     fn own_property_descriptor(
@@ -27,11 +27,16 @@ impl FieldObjectSource for Probe {
     ) -> AuthResult<Option<crate::field_value::FieldPropertyDescriptor>> {
         Ok(self
             .fields
-            .contains_key(name)
-            .then_some(crate::field_value::FieldPropertyDescriptor { enumerable: true }))
+            .get(name)
+            .cloned()
+            .map(crate::field_value::FieldPropertyDescriptor::data))
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        _receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
         if ["buffer", "constructor", "toJSON", "toString", "valueOf"].contains(&name) {
             self.events
                 .lock()
@@ -50,11 +55,16 @@ impl FieldObjectSource for Probe {
         }
     }
 
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(
+        &self,
+        _: String,
+        _: FieldValue,
+        _receiver: &FieldValue,
+    ) -> AuthResult<bool> {
         Err(AuthError::internal("HTTP getter fixture is read-only"))
     }
 
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal("HTTP getter fixture is read-only"))
     }
 
@@ -64,6 +74,16 @@ impl FieldObjectSource for Probe {
 
     fn identity(&self) -> usize {
         std::ptr::from_ref(self) as usize
+    }
+
+    fn define_own_property(
+        &self,
+        _name: String,
+        _definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "This contract source does not define properties",
+        ))
     }
 }
 

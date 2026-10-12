@@ -872,6 +872,9 @@ PY_CHECK
       local json_status=0
       bun --no-install test \
         ./compat-tests/reference-server/contracts/native-json.test.ts \
+        ./compat-tests/reference-server/contracts/native-property-transition-capture.test.ts \
+        ./compat-tests/reference-server/contracts/native-property-clone-capture.test.ts \
+        ./compat-tests/reference-server/contracts/native-property-clone-array-boundaries-capture.test.ts \
         ./compat-tests/reference-server/contracts/native-named-properties.test.ts \
         ./compat-tests/reference-server/contracts/native-coercion-properties.test.ts \
         ./compat-tests/reference-server/contracts/invitation-claim-selector-values.test.ts \

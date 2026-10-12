@@ -29,7 +29,7 @@ fn native_revival_preserves_holes_and_uses_overridden_map_results() -> AuthResul
     let result = expected.clone();
     let original = FieldArray::new();
     let receiver = original.clone();
-    let _ = original.properties().set(
+    original.properties().set(
         "map",
         FieldFunction::contextual(move |value, arguments| {
             assert!(value.strict_equals(&receiver.clone().into()));
@@ -57,16 +57,16 @@ fn native_revival_reads_later_object_fields_after_recursive_callbacks() -> AuthR
     let object: FieldObject = FieldMap::new().into();
     let child = FieldArray::new();
     let original = object.clone();
-    let _ = child.properties().set(
+    child.properties().set(
         "map",
         FieldFunction::contextual(move |_, _| {
-            let _ = original.set("tail", "after".into())?;
+            original.set("tail", "after".into())?;
             Ok(FieldValue::Undefined)
         })
         .into(),
     )?;
-    let _ = object.set("child", child.clone().into())?;
-    let _ = object.set("tail", "before".into())?;
+    object.set("child", child.clone().into())?;
+    object.set("tail", "before".into())?;
     let revived = safe_parse_field(&object.clone().into())?;
     assert_eq!(
         revived.enumerable_fields()?,
@@ -112,7 +112,7 @@ async fn native_revival_catches_original_callback_errors_and_logs_the_error_prop
     let original: FieldValue = FieldMap::from([("original".into(), true.into())]).into();
     let thrown = original.clone();
     let input = FieldArray::new();
-    let _ = input.properties().set(
+    input.properties().set(
         "map",
         FieldFunction::contextual(move |_, _| Err(AuthError::from_thrown(thrown.clone()))).into(),
     )?;

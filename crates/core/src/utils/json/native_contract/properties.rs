@@ -1,27 +1,20 @@
 use super::*;
-use crate::field_value::{FieldObjectSource, FieldPropertyDescriptor};
+use crate::field_value::{
+    FieldObjectSource, FieldProperty, FieldPropertyDefinition, FieldPropertyDescriptor,
+};
 use std::{any::Any, sync::Weak};
 
-#[derive(Clone)]
-enum Property {
-    Data(FieldValue),
-    Getter {
-        callback: FieldFunction,
-        enumerable: bool,
-    },
-}
-
 pub(super) struct Properties {
-    fields: Mutex<indexmap::IndexMap<String, Property>>,
-    receiver: Mutex<Weak<FieldValue>>,
+    fields: FieldObject,
+    receiver: Arc<Mutex<Weak<FieldValue>>>,
     observer: Observer,
 }
 
 impl Properties {
     pub(super) fn new(observer: &Observer) -> Arc<Self> {
         Arc::new(Self {
-            fields: Mutex::default(),
-            receiver: Mutex::default(),
+            fields: FieldMap::new().into(),
+            receiver: Arc::default(),
             observer: observer.clone(),
         })
     }
@@ -40,89 +33,80 @@ impl Properties {
     }
 
     pub(super) fn getter(&self, name: &str, callback: FieldFunction, enumerable: bool) {
-        let _ = self.fields.lock().insert(
-            name.into(),
-            Property::Getter {
-                callback,
-                enumerable,
-            },
-        );
+        let expected = self.receiver.clone();
+        let observer = self.observer.clone();
+        let event_name = name.to_owned();
+        let getter = FieldFunction::contextual(move |receiver, _| {
+            let expected = expected
+                .lock()
+                .upgrade()
+                .ok_or_else(|| AuthError::internal("Native getter receiver is absent"))?;
+            observer.lock().record(
+                &format!("get:{event_name}"),
+                [(
+                    "sameReceiver".into(),
+                    receiver.strict_equals(&expected).into(),
+                )],
+            );
+            callback.call_with(receiver, &[])
+        });
+        self.fields
+            .define_own_property(
+                name,
+                FieldPropertyDescriptor {
+                    enumerable,
+                    configurable: true,
+                    property: FieldProperty::Accessor {
+                        get: Some(getter),
+                        set: None,
+                    },
+                }
+                .into(),
+            )
+            .unwrap();
     }
 }
 
 impl FieldObjectSource for Properties {
     fn own_keys(&self) -> AuthResult<Vec<String>> {
-        Ok(self.fields.lock().keys().cloned().collect())
+        self.fields.own_keys()
     }
-
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
-        Ok(self
-            .fields
-            .lock()
-            .get(name)
-            .map(|property| FieldPropertyDescriptor {
-                enumerable: match property {
-                    Property::Data(_) => true,
-                    Property::Getter { enumerable, .. } => *enumerable,
-                },
-            }))
+        self.fields.own_property_descriptor(name)
     }
-
-    fn get(&self, _: &str) -> AuthResult<Option<FieldValue>> {
-        Err(AuthError::internal(
-            "Native getters require the original receiver",
-        ))
-    }
-
     fn get_with_receiver(
         &self,
         name: &str,
         receiver: &FieldValue,
     ) -> AuthResult<Option<FieldValue>> {
-        let property = self.fields.lock().get(name).cloned();
-        match property {
-            None => Ok(None),
-            Some(Property::Data(value)) => Ok(Some(value)),
-            Some(Property::Getter { callback, .. }) => {
-                let expected = self.receiver()?;
-                self.observer.lock().record(
-                    &format!("get:{name}"),
-                    [(
-                        "sameReceiver".into(),
-                        receiver.strict_equals(&expected).into(),
-                    )],
-                );
-                callback.call_with(receiver, &[]).map(Some)
-            }
-        }
+        self.fields.get_with_receiver(name, receiver)
     }
-
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        Ok(
-            match self.fields.lock().insert(name, Property::Data(value)) {
-                Some(Property::Data(previous)) => Some(previous),
-                _ => None,
-            },
-        )
+    fn set_with_receiver(
+        &self,
+        name: String,
+        value: FieldValue,
+        receiver: &FieldValue,
+    ) -> AuthResult<bool> {
+        self.fields.set_with_receiver(&name, value, receiver)
     }
-
-    fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        Ok(match self.fields.lock().shift_remove(name) {
-            Some(Property::Data(previous)) => Some(previous),
-            _ => None,
-        })
+    fn define_own_property(
+        &self,
+        name: String,
+        definition: FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        self.fields.define_own_property(name, definition)
     }
-
+    fn delete(&self, name: &str) -> AuthResult<bool> {
+        self.fields.delete(name)
+    }
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
         Err(AuthError::internal(
             "Native revival must read properties individually",
         ))
     }
-
     fn identity(&self) -> usize {
         std::ptr::from_ref(self) as usize
     }
-
     fn as_any(&self) -> Option<&dyn Any> {
         Some(self)
     }

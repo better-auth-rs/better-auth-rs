@@ -192,7 +192,7 @@ async fn api_key_numeric_id_sort_keeps_unordered_subtractions_equal() -> AuthRes
                 } else {
                     right
                 });
-                let _ = row.set_field("id".into(), id)?;
+                row.set_field("id".into(), id)?;
             }
             Ok(())
         })?;

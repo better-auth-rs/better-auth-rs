@@ -5,7 +5,7 @@
 
 use crate::{
     AuthError, AuthResult, FieldArray, FieldDate, FieldFunction, FieldMap, FieldObject, FieldValue,
-    field_value::{FieldObjectSource, FieldPropertyDescriptor},
+    field_value::{FieldObjectSource, FieldProperty, FieldPropertyDescriptor},
 };
 use serde_json::{Value as Json, json};
 use std::sync::{Arc, Mutex};
@@ -18,8 +18,6 @@ struct Observation {
 
 struct Properties {
     fields: FieldObject,
-    observation: Arc<Observation>,
-    getter_failure: Option<&'static str>,
 }
 
 fn lock<T>(value: &Mutex<T>) -> AuthResult<std::sync::MutexGuard<'_, T>> {
@@ -43,33 +41,24 @@ impl FieldObjectSource for Properties {
         self.fields.own_property_descriptor(name)
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        self.fields.get(name)
-    }
-
     fn get_with_receiver(
         &self,
         name: &str,
         receiver: &FieldValue,
     ) -> AuthResult<Option<FieldValue>> {
-        let value = self.fields.get(name)?;
-        if value.is_some() {
-            lock(&self.observation.events)?.push(format!(
-                "get:{name}:{}",
-                same_receiver(&self.observation, receiver)?
-            ));
-            if self.getter_failure == Some(name) {
-                return Err(AuthError::from_thrown(self.observation.original.clone()));
-            }
-        }
-        Ok(value)
+        self.fields.get_with_receiver(name, receiver)
     }
 
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        self.fields.set(name, value)
+    fn set_with_receiver(
+        &self,
+        name: String,
+        value: FieldValue,
+        receiver: &FieldValue,
+    ) -> AuthResult<bool> {
+        self.fields.set_with_receiver(&name, value, receiver)
     }
 
-    fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn delete(&self, name: &str) -> AuthResult<bool> {
         self.fields.delete(name)
     }
 
@@ -81,6 +70,14 @@ impl FieldObjectSource for Properties {
 
     fn identity(&self) -> usize {
         std::ptr::from_ref(self) as usize
+    }
+
+    fn define_own_property(
+        &self,
+        name: String,
+        definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        self.fields.define_own_property(name, definition)
     }
 }
 
@@ -185,10 +182,36 @@ fn scenario(kind: &str, mode: &str) -> AuthResult<Json> {
             method("toString", Return::Value(text.into()), &observation),
         );
     }
+    let fields = fields
+        .into_iter()
+        .map(|(name, value)| {
+            let observation = observation.clone();
+            let key = name.clone();
+            let get = FieldFunction::contextual(move |receiver, _| {
+                lock(&observation.events)?.push(format!(
+                    "get:{key}:{}",
+                    same_receiver(&observation, receiver)?
+                ));
+                if getter_failure == Some(key.as_str()) {
+                    return Err(AuthError::from_thrown(observation.original.clone()));
+                }
+                Ok(value.clone())
+            });
+            (
+                name,
+                FieldPropertyDescriptor {
+                    enumerable: false,
+                    configurable: true,
+                    property: FieldProperty::Accessor {
+                        get: Some(get),
+                        set: None,
+                    },
+                },
+            )
+        })
+        .collect::<indexmap::IndexMap<_, _>>();
     let properties = FieldObject::from_source(Arc::new(Properties {
         fields: fields.into(),
-        observation: observation.clone(),
-        getter_failure,
     }));
     let value: FieldValue = match kind {
         "array" => FieldArray::from_values_with_properties(vec![1.into()], properties).into(),

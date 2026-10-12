@@ -16,7 +16,9 @@ use crate::plugins::{
 use better_auth_core::{
     AuthError, AuthRequest, AuthResult, FieldArray, FieldDate, FieldFunction, FieldMap,
     FieldObject, FieldValue, FromFieldMap, HttpMethod, RequestMeta,
-    field_value::{FieldObjectSource, FieldPropertyDescriptor},
+    field_value::{
+        FieldObjectSource, FieldProperty, FieldPropertyDefinition, FieldPropertyDescriptor,
+    },
     session::NativeSessionData,
     store::{
         EphemeralStore, StatelessSchema,
@@ -92,13 +94,16 @@ impl FieldObjectSource for Properties {
         Ok(vec!["id".into()])
     }
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
-        Ok((name == "id").then_some(FieldPropertyDescriptor { enumerable: true }))
+        Ok((name == "id").then(|| FieldPropertyDescriptor {
+            enumerable: true,
+            configurable: true,
+            property: FieldProperty::Accessor {
+                get: Some(self.getter.clone()),
+                set: None,
+            },
+        }))
     }
-    fn get(&self, _: &str) -> AuthResult<Option<FieldValue>> {
-        Err(AuthError::internal(
-            "The selected User getter requires its native receiver",
-        ))
-    }
+
     fn get_with_receiver(
         &self,
         name: &str,
@@ -109,12 +114,18 @@ impl FieldObjectSource for Properties {
         }
         self.getter.call_with(receiver, &[]).map(Some)
     }
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(&self, _: String, _: FieldValue, _: &FieldValue) -> AuthResult<bool> {
         Err(AuthError::internal(
             "The route must not overwrite its selected User",
         ))
     }
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(&self, _: String, _: FieldPropertyDefinition) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "The route must not overwrite its selected User",
+        ))
+    }
+
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal(
             "The route must not delete selected User properties",
         ))

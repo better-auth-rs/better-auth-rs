@@ -6,7 +6,9 @@
 use better_auth::{AuthConfig, AuthError, AuthResult, BetterAuth, plugins::JwtPlugin};
 use better_auth_core::{
     FieldFunction, FieldMap, FieldObject, FieldValue,
-    field_value::{FieldObjectSource, FieldPropertyDescriptor},
+    field_value::{
+        FieldObjectSource, FieldProperty, FieldPropertyDefinition, FieldPropertyDescriptor,
+    },
 };
 use std::sync::{
     Arc, Mutex,
@@ -14,9 +16,24 @@ use std::sync::{
 };
 
 struct ChangingSigner {
-    events: Arc<Mutex<Vec<&'static str>>>,
-    reads: AtomicUsize,
-    next: FieldValue,
+    reads: Arc<AtomicUsize>,
+    getter: FieldFunction,
+}
+
+impl ChangingSigner {
+    fn new(events: Arc<Mutex<Vec<&'static str>>>, next: FieldValue) -> Self {
+        let reads = Arc::new(AtomicUsize::new(0));
+        let observed = reads.clone();
+        let getter = FieldFunction::contextual(move |_, _| {
+            let first = observed.fetch_add(1, Ordering::SeqCst) == 0;
+            events
+                .lock()
+                .map_err(|_| AuthError::internal("Signer trace lock poisoned"))?
+                .push(if first { "sign.get:1" } else { "sign.get:2" });
+            Ok(if first { false.into() } else { next.clone() })
+        });
+        Self { reads, getter }
+    }
 }
 
 impl FieldObjectSource for ChangingSigner {
@@ -25,29 +42,36 @@ impl FieldObjectSource for ChangingSigner {
     }
 
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
-        Ok((name == "sign").then_some(FieldPropertyDescriptor { enumerable: true }))
-    }
-
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        if name != "sign" {
-            return Ok(None);
-        }
-        let first = self.reads.fetch_add(1, Ordering::SeqCst) == 0;
-        self.events
-            .lock()
-            .map_err(|_| AuthError::internal("Signer trace lock poisoned"))?
-            .push(if first { "sign.get:1" } else { "sign.get:2" });
-        Ok(Some(if first {
-            false.into()
-        } else {
-            self.next.clone()
+        Ok((name == "sign").then(|| FieldPropertyDescriptor {
+            enumerable: true,
+            configurable: true,
+            property: FieldProperty::Accessor {
+                get: Some(self.getter.clone()),
+                set: None,
+            },
         }))
     }
 
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
+        if name == "sign" {
+            self.getter.call_with(receiver, &[]).map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn set_with_receiver(&self, _: String, _: FieldValue, _: &FieldValue) -> AuthResult<bool> {
         Err(AuthError::internal("Signing must not mutate JWT options"))
     }
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(&self, _: String, _: FieldPropertyDefinition) -> AuthResult<bool> {
+        Err(AuthError::internal("Signing must not mutate JWT options"))
+    }
+
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal("Signing must not remove JWT options"))
     }
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
@@ -86,11 +110,7 @@ async fn changing_sign_truthiness_rejects_the_null_resolved_key_before_storage()
         } else {
             FieldMap::from([("delegated".into(), true.into())]).into()
         };
-        let signer = Arc::new(ChangingSigner {
-            events: events.clone(),
-            reads: AtomicUsize::new(0),
-            next,
-        });
+        let signer = Arc::new(ChangingSigner::new(events.clone(), next));
         let result = auth
             .jwt()?
             .sign_value_with_overrides(

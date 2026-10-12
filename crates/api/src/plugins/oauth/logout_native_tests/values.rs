@@ -1,5 +1,8 @@
 use super::*;
-use better_auth_core::field_value::{FieldObjectSource, FieldPropertyDescriptor};
+use better_auth_core::FieldFunction;
+use better_auth_core::field_value::{
+    FieldObjectSource, FieldProperty, FieldPropertyDefinition, FieldPropertyDescriptor,
+};
 use std::sync::{
     Weak,
     atomic::{AtomicUsize, Ordering},
@@ -15,9 +18,9 @@ struct Method {
 }
 
 struct Properties {
-    method: Method,
-    receiver: Weak<FieldValue>,
-    callback: FieldFunction,
+    fields: FieldMap,
+    name: &'static str,
+    getter: FieldFunction,
 }
 
 impl Method {
@@ -34,10 +37,34 @@ impl Method {
                 lock(&observer)?.call(&phase, receiver, &expected, arguments)?;
                 invoke.call_with(receiver, arguments)
             });
+            let expected = receiver.clone();
+            let observer = self.observer.clone();
+            let name = self.name;
+            let label = self.label;
+            let failure = self.getter_failure;
+            let getter = FieldFunction::contextual(move |receiver, _| {
+                let expected = expected
+                    .upgrade()
+                    .ok_or_else(|| AuthError::internal("Native getter receiver is absent"))?;
+                lock(&observer)?.record(
+                    &format!("get:{name}:{label}"),
+                    [(
+                        "sameReceiver".into(),
+                        receiver.strict_equals(&expected).into(),
+                    )],
+                );
+                if name == "getTime" {
+                    assert_ne!(label, "excluded");
+                }
+                if let Some(error) = &failure {
+                    return Err(AuthError::from_thrown(error.clone()));
+                }
+                Ok(callback.clone().into())
+            });
             let source = FieldObject::from_source(Arc::new(Properties {
-                method: self,
-                receiver: receiver.clone(),
-                callback,
+                fields: self.fields,
+                name,
+                getter,
             }));
             match milliseconds {
                 Some(milliseconds) => {
@@ -51,62 +78,51 @@ impl Method {
 
 impl FieldObjectSource for Properties {
     fn own_keys(&self) -> AuthResult<Vec<String>> {
-        Ok(self
-            .method
-            .fields
-            .keys()
-            .cloned()
-            .chain(std::iter::once(self.method.name.into()))
-            .collect())
+        let mut keys = FieldObject::from(self.fields.clone()).own_keys()?;
+        keys.push(self.name.into());
+        Ok(keys)
     }
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
-        Ok(if name == self.method.name {
-            Some(FieldPropertyDescriptor { enumerable: false })
+        Ok(if name == self.name {
+            Some(FieldPropertyDescriptor {
+                enumerable: false,
+                configurable: true,
+                property: FieldProperty::Accessor {
+                    get: Some(self.getter.clone()),
+                    set: None,
+                },
+            })
         } else {
-            self.method
-                .fields
-                .contains_key(name)
-                .then_some(FieldPropertyDescriptor { enumerable: true })
+            self.fields
+                .get(name)
+                .cloned()
+                .map(FieldPropertyDescriptor::data)
         })
     }
-    fn get(&self, _: &str) -> AuthResult<Option<FieldValue>> {
-        Err(AuthError::internal(
-            "Native getter requires its original receiver",
-        ))
-    }
+
     fn get_with_receiver(
         &self,
         name: &str,
         receiver: &FieldValue,
     ) -> AuthResult<Option<FieldValue>> {
-        if name != self.method.name {
-            return Ok(self.method.fields.get(name).cloned());
+        if name == self.name {
+            self.getter.call_with(receiver, &[]).map(Some)
+        } else {
+            Ok(self.fields.get(name).cloned())
         }
-        let expected = self
-            .receiver
-            .upgrade()
-            .ok_or_else(|| AuthError::internal("Native getter receiver is absent"))?;
-        lock(&self.method.observer)?.record(
-            &format!("get:{name}:{}", self.method.label),
-            [(
-                "sameReceiver".into(),
-                receiver.strict_equals(&expected).into(),
-            )],
-        );
-        if self.method.name == "getTime" {
-            assert_ne!(self.method.label, "excluded");
-        }
-        if let Some(error) = &self.method.getter_failure {
-            return Err(AuthError::from_thrown(error.clone()));
-        }
-        Ok(Some(self.callback.clone().into()))
     }
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(&self, _: String, _: FieldValue, _: &FieldValue) -> AuthResult<bool> {
         Err(AuthError::internal(
             "Logout must not mutate projected timestamp properties",
         ))
     }
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(&self, _: String, _: FieldPropertyDefinition) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "Logout must not mutate projected timestamp properties",
+        ))
+    }
+
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal(
             "Logout must not delete projected timestamp properties",
         ))

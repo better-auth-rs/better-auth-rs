@@ -73,7 +73,7 @@ fn input_reads_and_request_clones_share_one_live_projection() -> AuthResult<()> 
                 Some("typed")
             );
         }
-        let _ = object(&first)?.set("name", "after".into())?;
+        object(&first)?.set("name", "after".into())?;
         let expected = if mode == "http-form" {
             json!({"name": "after", "metadata": "raw"})
         } else {
@@ -96,7 +96,7 @@ fn raw_replacement_detaches_cached_input_without_invalidating_other_clones() -> 
         let mut request = request(mode)?;
         let unchanged = request.clone();
         let initial = request.input_field_value()?;
-        let _ = object(&initial)?.set("name", "mutated".into())?;
+        object(&initial)?.set("name", "mutated".into())?;
         request.body = Some(br#"{"name":"replacement"}"#.to_vec());
         let replacement = request.input_field_value()?;
         assert!(!initial.strict_equals(&replacement), "{mode}");
@@ -150,13 +150,18 @@ impl FieldObjectSource for ReadProbe {
     fn own_property_descriptor(&self, _: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
         self.reject()
     }
-    fn get(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(&self, _: &str, _receiver: &FieldValue) -> AuthResult<Option<FieldValue>> {
         self.reject()
     }
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(
+        &self,
+        _: String,
+        _: FieldValue,
+        _receiver: &FieldValue,
+    ) -> AuthResult<bool> {
         self.reject()
     }
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         self.reject()
     }
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
@@ -164,6 +169,16 @@ impl FieldObjectSource for ReadProbe {
     }
     fn identity(&self) -> usize {
         std::ptr::from_ref(self) as usize
+    }
+
+    fn define_own_property(
+        &self,
+        _name: String,
+        _definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "This contract source does not define properties",
+        ))
     }
 }
 
@@ -216,7 +231,7 @@ fn query_clones_share_identity_until_the_raw_source_changes() -> AuthResult<()> 
     let before_read = request.clone();
     let input = request.input_query_field_value()?;
     assert!(input.strict_equals(&before_read.input_query_field_value()?));
-    let _ = object(&input)?.set("name", "live".into())?;
+    object(&input)?.set("name", "live".into())?;
     assert_eq!(request.query_string("name")?, Some("live".to_owned()));
     assert_eq!(
         before_read.input_query()?,

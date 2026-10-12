@@ -143,7 +143,7 @@ mod tests {
             .as_object()
             .ok_or_else(|| AuthError::internal("Expected a native Headers object"))?;
         let marker: FieldValue = crate::FieldMap::from([("kept".into(), true.into())]).into();
-        let _ = object.set("location", marker.clone())?;
+        object.set("location", marker.clone())?;
         assert!(value.model_property("location")?.strict_equals(&marker));
         assert_eq!(object.enumerable_keys()?, ["location"]);
         assert_eq!(

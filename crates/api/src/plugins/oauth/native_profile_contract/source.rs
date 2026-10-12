@@ -1,9 +1,10 @@
 use super::*;
 use better_auth_core::{
-    FieldObject,
-    field_value::{FieldObjectSource, FieldPropertyDescriptor},
+    FieldFunction, FieldObject,
+    field_value::{
+        FieldObjectSource, FieldProperty, FieldPropertyDefinition, FieldPropertyDescriptor,
+    },
 };
-use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Default)]
 pub(super) struct Log(Arc<Mutex<(String, Vec<Value>)>>);
@@ -16,7 +17,7 @@ impl Log {
     pub fn event(&self, event: Value) {
         let mut log = self.0.lock().unwrap();
         let mut fields = serde_json::Map::new();
-        fields.insert("phase".into(), log.0.clone().into());
+        let _ = fields.insert("phase".into(), log.0.clone().into());
         fields.extend(event.as_object().unwrap().clone());
         log.1.push(Value::Object(fields));
     }
@@ -34,12 +35,9 @@ pub(super) enum Getter {
 }
 
 pub(super) struct Source {
-    fields: Mutex<FieldMap>,
-    hidden: HashSet<String>,
-    getters: HashMap<String, Getter>,
+    fields: FieldObject,
     label: Option<&'static str>,
     log: Log,
-    failure: FieldValue,
 }
 
 impl Source {
@@ -51,16 +49,57 @@ impl Source {
         hidden: &[&str],
         getters: &[(&str, Getter)],
     ) -> FieldValue {
+        let fields = fields
+            .into_iter()
+            .map(|(name, value)| {
+                let property =
+                    if let Some((_, getter)) = getters.iter().find(|(key, _)| *key == name) {
+                        let getter = *getter;
+                        let log = log.clone();
+                        let failure = failure.clone();
+                        let key = name.clone();
+                        FieldProperty::Accessor {
+                            get: Some(FieldFunction::contextual(move |_, _| {
+                                if let Some(label) = label {
+                                    let kind = if matches!(getter, Getter::Throw) {
+                                        "getter-throw"
+                                    } else {
+                                        "getter"
+                                    };
+                                    log.event(json!({"kind": kind, "object": label, "key": key}));
+                                }
+                                match getter {
+                                    Getter::Throw | Getter::ThrowingTail => {
+                                        Err(AuthError::from_thrown(failure.clone()))
+                                    }
+                                    Getter::Tail => Ok(object([("kept", true.into())])),
+                                }
+                            })),
+                            set: None,
+                        }
+                    } else {
+                        FieldProperty::Data {
+                            value,
+                            writable: !hidden.contains(&name.as_str()),
+                        }
+                    };
+                let configurable = !hidden.contains(&name.as_str())
+                    && !getters.iter().any(|(key, getter)| {
+                        *key == name && matches!(getter, Getter::Tail | Getter::ThrowingTail)
+                    });
+                let descriptor = FieldPropertyDescriptor {
+                    enumerable: !hidden.contains(&name.as_str()),
+                    configurable,
+                    property,
+                };
+                (name, descriptor)
+            })
+            .collect::<indexmap::IndexMap<_, _>>()
+            .into();
         FieldValue::Object(FieldObject::from_source(Arc::new(Self {
-            fields: Mutex::new(fields),
-            hidden: hidden.iter().map(|name| (*name).into()).collect(),
-            getters: getters
-                .iter()
-                .map(|(name, value)| ((*name).into(), *value))
-                .collect(),
+            fields,
             label,
             log,
-            failure,
         })))
     }
 
@@ -74,7 +113,7 @@ impl Source {
 
 impl FieldObjectSource for Source {
     fn own_keys(&self) -> AuthResult<Vec<String>> {
-        let keys: Vec<_> = self.fields.lock().unwrap().keys().cloned().collect();
+        let keys = self.fields.own_keys()?;
         if let Some(label) = self.label {
             self.log
                 .event(json!({"kind": "own-keys", "object": label, "keys": keys}));
@@ -84,51 +123,44 @@ impl FieldObjectSource for Source {
 
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
         self.event("descriptor", name);
-        Ok(self
-            .fields
-            .lock()
-            .unwrap()
-            .contains_key(name)
-            .then(|| FieldPropertyDescriptor {
-                enumerable: !self.hidden.contains(name),
-            }))
+        self.fields.own_property_descriptor(name)
     }
 
     fn has_property(&self, name: &str) -> AuthResult<bool> {
-        Ok(self.fields.lock().unwrap().contains_key(name))
+        self.fields.has_property(name)
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        let value = self.fields.lock().unwrap().get(name).cloned();
-        if value.is_none() {
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
+        if !self.fields.has_property(name)? {
             return Ok(None);
         }
         self.event("get", name);
-        match self.getters.get(name) {
-            Some(Getter::Throw) => {
-                self.event("getter-throw", name);
-                Err(AuthError::from_thrown(self.failure.clone()))
-            }
-            Some(Getter::Tail | Getter::ThrowingTail) => {
-                self.event("getter", name);
-                if matches!(self.getters.get(name), Some(Getter::ThrowingTail)) {
-                    Err(AuthError::from_thrown(self.failure.clone()))
-                } else {
-                    Ok(Some(object([("kept", true.into())])))
-                }
-            }
-            None => Ok(value),
-        }
+        self.fields.get_with_receiver(name, receiver)
     }
 
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        // Proxy [[Set]] checks the receiver descriptor before defining an own property.
-        let _ = self.own_property_descriptor(&name)?;
-        Ok(self.fields.lock().unwrap().insert(name, value))
+    fn set_with_receiver(
+        &self,
+        name: String,
+        value: FieldValue,
+        receiver: &FieldValue,
+    ) -> AuthResult<bool> {
+        self.fields.set_with_receiver(&name, value, receiver)
     }
 
-    fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        Ok(self.fields.lock().unwrap().remove(name))
+    fn define_own_property(
+        &self,
+        name: String,
+        definition: FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        self.fields.define_own_property(name, definition)
+    }
+
+    fn delete(&self, name: &str) -> AuthResult<bool> {
+        self.fields.delete(name)
     }
 
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
@@ -138,8 +170,8 @@ impl FieldObjectSource for Source {
                 .own_property_descriptor(&name)?
                 .is_some_and(|descriptor| descriptor.enumerable)
             {
-                if let Some(value) = self.get(&name)? {
-                    fields.insert(name, value);
+                if let Some(value) = self.get_with_receiver(&name, &FieldValue::Undefined)? {
+                    let _ = fields.insert(name, value);
                 }
             }
         }

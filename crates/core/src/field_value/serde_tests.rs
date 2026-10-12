@@ -31,7 +31,7 @@ impl Source {
 
 impl FieldObjectSource for Source {
     fn own_keys(&self) -> AuthResult<Vec<String>> {
-        Ok(self.fields()?.keys().cloned().collect())
+        FieldObject::from(self.fields()?.clone()).own_keys()
     }
 
     fn own_property_descriptor(
@@ -40,11 +40,16 @@ impl FieldObjectSource for Source {
     ) -> AuthResult<Option<super::super::FieldPropertyDescriptor>> {
         Ok(self
             .fields()?
-            .contains_key(name)
-            .then_some(super::super::FieldPropertyDescriptor { enumerable: true }))
+            .get(name)
+            .cloned()
+            .map(super::super::FieldPropertyDescriptor::data))
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        _receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
         if !self.fields()?.contains_key(name) {
             return Ok(None);
         }
@@ -52,12 +57,19 @@ impl FieldObjectSource for Source {
         Ok(self.fields()?.get(name).cloned())
     }
 
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        Ok(self.fields()?.insert(name, value))
+    fn set_with_receiver(
+        &self,
+        name: String,
+        value: FieldValue,
+        _receiver: &FieldValue,
+    ) -> AuthResult<bool> {
+        let _ = self.fields()?.insert(name, value);
+        Ok(true)
     }
 
-    fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        Ok(self.fields()?.remove(name))
+    fn delete(&self, name: &str) -> AuthResult<bool> {
+        let _ = self.fields()?.remove(name);
+        Ok(true)
     }
 
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
@@ -68,6 +80,16 @@ impl FieldObjectSource for Source {
 
     fn identity(&self) -> usize {
         std::ptr::from_ref(self) as usize
+    }
+
+    fn define_own_property(
+        &self,
+        _name: String,
+        _definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "This contract source does not define properties",
+        ))
     }
 }
 

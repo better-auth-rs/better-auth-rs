@@ -12,10 +12,14 @@ use crate::plugins::{
 };
 use async_trait::async_trait;
 use better_auth_core::{
-    ApiErrorClass, AuthPlugin, AuthRoute, BeforeRequestAction, FieldMap, FieldValue, HttpMethod,
+    ApiErrorClass, AuthPlugin, AuthRoute, BeforeRequestAction, FieldFunction, FieldMap, FieldValue,
+    HttpMethod,
     endpoint_dispatch::EndpointDispatcher,
     endpoint_input::ValidatedBody,
-    field_value::{FieldObject, FieldObjectSource, FieldPropertyDescriptor},
+    field_value::{
+        FieldObject, FieldObjectSource, FieldProperty, FieldPropertyDefinition,
+        FieldPropertyDescriptor,
+    },
     observability::{AfterEndpointHook, EndpointHooks, LogArgument, LogLevel, LogSink},
     store::{EphemeralStore, StatelessSchema as S, schema::EntityRole},
 };
@@ -84,6 +88,21 @@ struct BodySource {
     case: &'static str,
     trace: Arc<Trace>,
     sentinel: FieldValue,
+    unread: FieldFunction,
+}
+
+impl BodySource {
+    fn new(case: &'static str, trace: Arc<Trace>, sentinel: FieldValue) -> Self {
+        let thrown = sentinel.clone();
+        Self {
+            case,
+            trace,
+            sentinel,
+            unread: FieldFunction::contextual(move |_, _| {
+                Err(AuthError::from_thrown(thrown.clone()))
+            }),
+        }
+    }
 }
 
 impl FieldObjectSource for BodySource {
@@ -96,8 +115,16 @@ impl FieldObjectSource for BodySource {
     }
 
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
-        Ok((self.case == "unread" && name == "unread")
-            .then_some(FieldPropertyDescriptor { enumerable: true }))
+        Ok(
+            (self.case == "unread" && name == "unread").then(|| FieldPropertyDescriptor {
+                enumerable: true,
+                configurable: true,
+                property: FieldProperty::Accessor {
+                    get: Some(self.unread.clone()),
+                    set: None,
+                },
+            }),
+        )
     }
 
     fn has_property(&self, name: &str) -> AuthResult<bool> {
@@ -111,10 +138,14 @@ impl FieldObjectSource for BodySource {
         Ok(true)
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
         if self.case == "unread" {
             if name == "unread" {
-                return Err(AuthError::from_thrown(self.sentinel.clone()));
+                return self.unread.call_with(receiver, &[]).map(Some);
             }
             return Ok(None);
         }
@@ -122,18 +153,28 @@ impl FieldObjectSource for BodySource {
         Err(AuthError::from_thrown(self.sentinel.clone()))
     }
 
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(&self, _: String, _: FieldValue, _: &FieldValue) -> AuthResult<bool> {
         Err(AuthError::type_error("The matcher input is read-only"))
     }
 
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(&self, _: String, _: FieldPropertyDefinition) -> AuthResult<bool> {
+        Err(AuthError::type_error("The matcher input is read-only"))
+    }
+
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::type_error("The matcher input is read-only"))
     }
 
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
         self.own_keys()?
             .into_iter()
-            .map(|name| Ok((name.clone(), self.get(&name)?.unwrap_or_default())))
+            .map(|name| {
+                Ok((
+                    name.clone(),
+                    self.get_with_receiver(&name, &FieldValue::Undefined)?
+                        .unwrap_or_default(),
+                ))
+            })
             .collect()
     }
 
@@ -250,11 +291,11 @@ async fn native_phone_matcher_retains_input_presence_and_getter_order() -> AuthR
                 FieldMap::from([("phoneNumber".into(), FieldValue::Undefined)]).into()
             }
             "phone-value" => FieldMap::from([("phoneNumber".into(), "+15550000001".into())]).into(),
-            _ => FieldObject::from_source(Arc::new(BodySource {
+            _ => FieldObject::from_source(Arc::new(BodySource::new(
                 case,
-                trace: trace.clone(),
-                sentinel: sentinel.clone(),
-            }))
+                trace.clone(),
+                sentinel.clone(),
+            )))
             .into(),
         };
         let following = Following {

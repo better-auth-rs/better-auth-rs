@@ -351,7 +351,7 @@ async fn native_user_update_preserves_undefined_null_and_string_selectors() -> A
             Some("null") => Value::Null,
             _ => Value::from("undefined"),
         };
-        let _ = source.set_field("id".into(), id)?;
+        source.set_field("id".into(), id)?;
     }
     for (id, name, expected_names) in [
         (
@@ -417,7 +417,7 @@ async fn serial_user_batches_convert_the_whole_array_once() -> AuthResult<()> {
             Some("one") => 1.0,
             _ => f64::NAN,
         });
-        let _ = source.set_field("id".into(), id)?;
+        source.set_field("id".into(), id)?;
     }
     for (ids, expected) in [
         (
@@ -466,7 +466,7 @@ async fn native_user_batches_distinguish_stored_primitive_ids() -> AuthResult<()
         let user = source.snapshot()?;
         let name = required(user.get("name"))?.as_str();
         let (_, id) = required(cases.iter().find(|(candidate, _)| Some(*candidate) == name))?;
-        let _ = source.set_field("id".into(), id.clone())?;
+        source.set_field("id".into(), id.clone())?;
     }
     for (name, id) in cases {
         let rows = store

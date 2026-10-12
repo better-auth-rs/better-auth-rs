@@ -4,7 +4,6 @@
 )]
 
 use super::*;
-use crate::field_value::FieldObjectSource;
 use crate::store::ephemeral::EphemeralStore;
 use crate::store::ephemeral::table::TableRef;
 use crate::store::schema::EntityRole;
@@ -38,11 +37,14 @@ fn detached(
         ]
         .into(),
     )?;
-    assert_eq!(handle.set("name", false.into())?, Some("original".into()));
-    assert_eq!(handle.delete("id")?, Some("same-id".into()));
-    assert_eq!(handle.set("id", FieldValue::Undefined)?, None);
+    assert_eq!(handle.get("name")?, Some("original".into()));
+    handle.set("name", false.into())?;
+    assert_eq!(handle.get("id")?, Some("same-id".into()));
+    assert!(handle.delete("id")?);
+    assert_eq!(handle.get("id")?, None);
+    handle.set("id", FieldValue::Undefined)?;
     assert_eq!(handle.get("id")?, Some(FieldValue::Undefined));
-    assert_eq!(handle.delete("id")?, Some(FieldValue::Undefined));
+    assert!(handle.delete("id")?);
     assert_eq!(handle.get("id")?, None);
     assert_eq!(
         original.shallow_fields()?,
@@ -160,7 +162,7 @@ fn user_row_clone_preserves_presence_order_and_interleaved_native_shadows() -> A
 fn ordinary_row_writes_discard_hidden_user_state_even_without_field_changes() -> AuthResult<()> {
     type Write = fn(&RowRef<FieldMap>) -> AuthResult<()>;
     let writes: [Write; 5] = [
-        |row| row.set_field("id".into(), "user".into()).map(|_| ()),
+        |row| row.set_field("id".into(), "user".into()),
         |row| row.delete_field("absent").map(|_| ()),
         |row| row.apply_patch(FieldMap::new()),
         |row| row.increment_number_fields(&[]),
@@ -198,7 +200,7 @@ fn memoized_rows_retain_the_first_clone_origin_for_ownership_checks() -> AuthRes
     let source = table.push(original.clone())?;
     let mut context = crate::StructuredCloneContext::new();
     let nested = context.clone_value(&source.field_value())?;
-    let _ = source.set_field("userId".into(), "reassigned-owner".into())?;
+    source.set_field("userId".into(), "reassigned-owner".into())?;
     let mut origins = Vec::new();
     let cloned = table.deep_clone_with(&mut context, |live, isolated, before| {
         origins.push((live, isolated, before));
@@ -235,10 +237,10 @@ async fn mutable_handles_keep_transaction_rollback_and_commit_ownership() -> Aut
     let retained = row.field_value();
     let object = required(retained.as_object())?;
     let payload = required(object.get("payload")?)?;
-    let _ = required(payload.as_object())?.set("value", 1.into())?;
-    let _ = object.set("phase", "rolled-back".into())?;
+    required(payload.as_object())?.set("value", 1.into())?;
+    object.set("phase", "rolled-back".into())?;
     drop((base, rollback, queue));
-    let _ = object.set("phase", "retained-after-rollback".into())?;
+    object.set("phase", "retained-after-rollback".into())?;
     assert_eq!(live.shallow_fields()?, original);
 
     let (base, commit, queue) = store.begin_adapter_transaction()?;
@@ -246,14 +248,14 @@ async fn mutable_handles_keep_transaction_rollback_and_commit_ownership() -> Aut
         required(commit.operation(|op| op.capture_table(EntityRole::Account)?.row_at(0))?)?;
     let value = committed.field_value();
     let payload = required(required(value.as_object())?.get("payload")?)?;
-    let _ = required(payload.as_object())?.set("value", 2.into())?;
+    required(payload.as_object())?.set("value", 2.into())?;
     store.commit_transaction(base, commit, queue).await?;
     assert!(store.operation(|op| {
         op.capture_table(EntityRole::Account)?
             .contains_ref(&committed)
     })?);
     assert!(!store.operation(|op| op.capture_table(EntityRole::Account)?.contains_ref(&live))?);
-    let _ = required(value.as_object())?.set("phase", "after-commit".into())?;
+    required(value.as_object())?.set("phase", "after-commit".into())?;
     assert_eq!(
         required(store.operation(|op| op.capture_table(EntityRole::Account)?.row_at(0))?)?
             .shallow_fields()?,
@@ -278,32 +280,25 @@ struct InvitationGraphSource {
     failure: Mutex<Option<AuthError>>,
 }
 
-impl FieldObjectSource for InvitationGraphSource {
-    fn own_property_descriptor(
-        &self,
-        name: &str,
-    ) -> AuthResult<Option<crate::field_value::FieldPropertyDescriptor>> {
-        Ok((name == "name")
-            .then_some(crate::field_value::FieldPropertyDescriptor { enumerable: true }))
+impl InvitationGraphSource {
+    fn object(self: &Arc<Self>) -> crate::FieldObject {
+        let source = self.clone();
+        crate::FieldObject::from(indexmap::IndexMap::from([(
+            "name".into(),
+            crate::field_value::FieldPropertyDescriptor {
+                enumerable: true,
+                configurable: true,
+                property: crate::field_value::FieldProperty::Accessor {
+                    get: Some(crate::FieldFunction::contextual(move |_receiver, _| {
+                        Ok(source.read()?.get("name").cloned().unwrap_or_default())
+                    })),
+                    set: None,
+                },
+            },
+        )]))
     }
 
-    fn own_keys(&self) -> AuthResult<Vec<String>> {
-        Ok(vec!["name".into()])
-    }
-
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        Ok(self.snapshot_fields()?.get(name).cloned())
-    }
-
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
-        Err(AuthError::internal("Clone probe fields are immutable"))
-    }
-
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
-        Err(AuthError::internal("Clone probe fields are immutable"))
-    }
-
-    fn snapshot_fields(&self) -> AuthResult<FieldMap> {
+    fn read(&self) -> AuthResult<FieldMap> {
         let source = required(self.row.upgrade())?;
         // A failed try_lock reports the regression without blocking the test process.
         let row = source
@@ -315,15 +310,13 @@ impl FieldObjectSource for InvitationGraphSource {
         {
             return Err(error);
         }
-        Ok([(
-            "name".into(),
-            row.value.get("name").cloned().unwrap_or_default(),
-        )]
-        .into())
-    }
-
-    fn identity(&self) -> usize {
-        std::ptr::from_ref(self) as usize
+        let value = row.value.clone();
+        drop(row);
+        let name = match value {
+            RowValue::Typed(fields) => fields.get("name").cloned(),
+            RowValue::Properties(object) => object.get("name")?,
+        };
+        Ok([("name".into(), name.unwrap_or_default())].into())
     }
 }
 
@@ -372,7 +365,7 @@ async fn invitation_graph_copies_release_rows_and_preserve_aliases_and_failure_o
             failure_at,
             failure: Mutex::new(fail_copy.then_some(AuthError::Internal(failure))),
         });
-        let shared = FieldValue::Object(crate::FieldObject::from_source(graph.clone()));
+        let shared = FieldValue::Object(graph.object());
         for row in &sources {
             row.apply_patch(
                 [

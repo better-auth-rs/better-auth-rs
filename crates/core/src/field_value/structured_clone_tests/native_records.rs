@@ -234,7 +234,7 @@ fn hidden_retry<T: AuthRecordFields + FromFieldMap>(
         let source = visible
             .as_object()
             .ok_or_else(|| AuthError::internal("Expected live visible object"))?;
-        let _ = source.set("value", 2.into())?;
+        source.set("value", 2.into())?;
         recover(
             &mut record,
             observed(
@@ -265,7 +265,7 @@ fn hidden_retry<T: AuthRecordFields + FromFieldMap>(
                 "get:recovered.alias"
             ]
         );
-        let _ = source.set("value", 3.into())?;
+        source.set("value", 3.into())?;
         assert_eq!(copied_visible.model_property("value")?, 2.into());
     }
     Ok(())

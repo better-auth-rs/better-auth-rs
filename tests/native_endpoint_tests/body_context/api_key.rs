@@ -12,7 +12,7 @@ struct Mutate {
 impl ApiKeyGetter for Mutate {
     fn get(&self, endpoint: ApiKeyEndpoint<'_>) -> AuthResult<Option<String>> {
         *lock(&self.calls)? += 1;
-        let _ = endpoint
+        endpoint
             .body
             .as_object()
             .ok_or_else(|| AuthError::internal("Expected API Key body object"))?
@@ -110,7 +110,7 @@ impl ApiKeyGetter for Metadata {
     fn get(&self, endpoint: ApiKeyEndpoint<'_>) -> AuthResult<Option<String>> {
         self.0.record("getter")?;
         lock(&self.0.observed)?.body = endpoint.body.clone();
-        let _ = endpoint
+        endpoint
             .body
             .as_object()
             .ok_or_else(|| AuthError::internal("Expected API Key body object"))?

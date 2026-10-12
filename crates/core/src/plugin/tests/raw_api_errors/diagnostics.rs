@@ -185,11 +185,20 @@ impl FieldObjectSource for AccessProbe {
         self.inner.has_property(name)
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        self.inner.get(name)
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
+        self.inner.get_with_receiver(name, receiver)
     }
 
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(
+        &self,
+        name: String,
+        value: FieldValue,
+        receiver: &FieldValue,
+    ) -> AuthResult<bool> {
         if name == "stack"
             && let Some((expected, failed_at, failure)) = &self.stack
         {
@@ -198,12 +207,12 @@ impl FieldObjectSource for AccessProbe {
             if *failed_at == Some("set") {
                 return Err(AuthError::from_thrown(failure.clone()));
             }
-            return Ok(None);
+            return Ok(true);
         }
-        self.inner.set(name, value)
+        self.inner.set_with_receiver(&name, value, receiver)
     }
 
-    fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn delete(&self, name: &str) -> AuthResult<bool> {
         self.inner.delete(name)
     }
 
@@ -213,6 +222,14 @@ impl FieldObjectSource for AccessProbe {
 
     fn identity(&self) -> usize {
         std::ptr::from_ref(self) as usize
+    }
+
+    fn define_own_property(
+        &self,
+        name: String,
+        definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        self.inner.define_own_property(name, definition)
     }
 }
 

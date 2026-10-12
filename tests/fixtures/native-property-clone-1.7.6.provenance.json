@@ -1,0 +1,46 @@
+{
+  "contract": "native-property-clone",
+  "version": "1.7.6",
+  "status": "Two upstream captures are byte-identical. Rust replay is pending.",
+  "run": "38278378631",
+  "runURL": "https://github.com/better-auth-rs/better-auth-rs/actions/runs/38278378631",
+  "commit": "6a371f41fda0a3e9250c967b81afd3bfe9463c2c",
+  "runConclusion": "success",
+  "artifactName": "upstream-native-property-clone-6a371f41fda0a3e9250c967b81afd3bfe9463c2c-1",
+  "runtime": {
+    "bun": "1.4.2"
+  },
+  "observations": 8,
+  "sources": [
+    {
+      "path": "compat-tests/reference-server/contracts/native-property-clone-capture.mjs",
+      "bytes": 3207,
+      "sha256": "841824bf6ce777d7328adb28e5f7d25b8fd5ea3521b65cca2edfbfad1484e1fd"
+    },
+    {
+      "path": "compat-tests/reference-server/contracts/secondary-native-shared.mjs",
+      "bytes": 3625,
+      "sha256": "7f708484df4fec8a65d920d12a44fdce06278154e63b484d891f47e396b3193f"
+    },
+    {
+      "path": "compat-tests/reference-server/contracts/protected-function-shared.mjs",
+      "bytes": 20940,
+      "sha256": "4b833be668fe0e40075695641ac9593a9314a63babe98064ca4a4bf2475e7dea"
+    }
+  ],
+  "fixture": {
+    "path": "tests/fixtures/native-property-clone-1.7.6.json",
+    "bytes": 139684,
+    "sha256": "0ce0a6ec46ccfea69ba40b2e458d35b70a0c48d614ba3ed0f607eff9882a6ef2",
+    "uncompressedBytes": 139684,
+    "uncompressedSha256": "0ce0a6ec46ccfea69ba40b2e458d35b70a0c48d614ba3ed0f607eff9882a6ef2"
+  },
+  "normalizations": [],
+  "boundary": "Complete descriptor graphs, callback order, receiver identity, original thrown values and retained mutations for Bun structuredClone. Object and array selection use distinct source schedules. Function reflection and general prototype traversal require separate contracts.",
+  "coverage": {
+    "path": "tests/fixtures/native-property-clone-1.7.6.coverage.json",
+    "cases": 8,
+    "unpairedReflectionPaths": 226,
+    "status": "Rust replay is pending. The coverage ledger retains exact unpaired function reflection paths."
+  }
+}

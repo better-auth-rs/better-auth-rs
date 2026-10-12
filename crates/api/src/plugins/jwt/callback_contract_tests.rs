@@ -72,12 +72,11 @@ async fn callbacks_retain_one_root_and_sample_both_clock_boundaries() -> AuthRes
                 trace.record("payload");
                 assert!(data.strict_equals(&root));
                 assert!(data.model_property("extra")?.strict_equals(&child));
-                let _ = data
-                    .model_property("session")?
+                data.model_property("session")?
                     .as_object()
                     .unwrap()
                     .set("token", "after".into())?;
-                let _ = data.as_object().unwrap().set("user", user.clone())?;
+                data.as_object().unwrap().set("user", user.clone())?;
                 Ok(user)
             })
         }))
@@ -89,7 +88,7 @@ async fn callbacks_retain_one_root_and_sample_both_clock_boundaries() -> AuthRes
                 trace.record("subject");
                 assert!(data.strict_equals(&root));
                 assert!(data.model_property("user")?.strict_equals(&user));
-                let _ = user.as_object().unwrap().set("id", "final".into())?;
+                user.as_object().unwrap().set("id", "final".into())?;
                 Ok(FieldValue::Null)
             })
         }))
@@ -236,7 +235,7 @@ async fn callback_failures_keep_identity_order_and_completed_mutations() -> Auth
                 let trace = payload_trace.clone();
                 Box::pin(async move {
                     trace.record("payload");
-                    let _ = data.as_object().unwrap().set("changed", true.into())?;
+                    data.as_object().unwrap().set("changed", true.into())?;
                     if phase == "payload" {
                         return Err(AuthError::from_thrown(failure));
                     }

@@ -350,14 +350,14 @@ async fn account_write_errors_keep_raw_identity_until_callback_url_conversion() 
                         .map_err(|_| AuthError::internal("OAuth conversion trace lock poisoned"))?
                         .push(field);
                     if field == "code" {
-                        let _ = body_for_code.set("message", "changed description".into())?;
+                        body_for_code.set("message", "changed description".into())?;
                     }
                     Ok(result.into())
                 })
                 .into(),
             )])
             .into();
-            let _ = body.set(field, value)?;
+            body.set(field, value)?;
         }
         let stop = if matches!(seed, Seed::Account) {
             "account.update"

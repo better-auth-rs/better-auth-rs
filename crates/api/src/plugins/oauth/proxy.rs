@@ -443,7 +443,7 @@ impl OAuthProxyPlugin {
         let object = body
             .as_object()
             .ok_or_else(|| AuthError::type_error("Cannot assign callbackURL to this body"))?;
-        let _ = object.set("callbackURL", callback.clone())?;
+        object.set("callbackURL", callback.clone())?;
         req.set_server_context(CALLBACK_CONTEXT, callback)?;
         Ok(None)
     }

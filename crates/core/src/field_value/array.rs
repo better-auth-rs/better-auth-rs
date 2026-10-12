@@ -1,5 +1,6 @@
 use super::{
-    FieldMap, FieldObject, FieldValue,
+    FieldMap, FieldObject, FieldProperty, FieldPropertyDefinition, FieldPropertyDescriptor,
+    FieldValue,
     structured_clone::{ArrayCloneSeed, CloneWrite},
 };
 use crate::{AuthError, AuthResult};
@@ -13,6 +14,7 @@ use std::{
 };
 
 mod methods;
+mod properties;
 
 /// A stable array handle. Live arrays read each index from their current source.
 /// Use `snapshot` only when an independent list of shallow values is required.
@@ -35,30 +37,22 @@ enum ArrayStorage {
 #[derive(Clone)]
 struct ArrayValues {
     length: usize,
-    entries: BTreeMap<usize, FieldValue>,
+    entries: BTreeMap<usize, FieldPropertyDescriptor>,
+    length_writable: bool,
 }
 
 pub(crate) trait FieldArraySource: Send + Sync {
     fn len(&self) -> AuthResult<usize>;
     fn own_indices(&self) -> AuthResult<Vec<usize>>;
-    fn get(&self, index: usize) -> AuthResult<Option<FieldValue>>;
+    fn get(&self, index: usize, receiver: &FieldValue) -> AuthResult<Option<FieldValue>>;
     fn identity(&self) -> usize;
     fn properties(&self) -> &FieldObject;
-    fn set(&self, _index: usize, _value: FieldValue) -> AuthResult<()> {
-        Err(AuthError::type_error(
-            "The live array source does not support index assignment",
-        ))
-    }
-    fn set_length(&self, _length: usize) -> AuthResult<()> {
-        Err(AuthError::type_error(
-            "The live array source does not support length assignment",
-        ))
-    }
-    fn delete(&self, _index: usize) -> AuthResult<()> {
-        Err(AuthError::type_error(
-            "The live array source does not support index deletion",
-        ))
-    }
+    fn own_property_descriptor(&self, index: usize) -> AuthResult<Option<FieldPropertyDescriptor>>;
+    fn length_descriptor(&self) -> AuthResult<FieldPropertyDescriptor>;
+    fn set(&self, index: usize, value: FieldValue, receiver: &FieldValue) -> AuthResult<bool>;
+    fn define_index(&self, index: usize, definition: FieldPropertyDefinition) -> AuthResult<bool>;
+    fn define_length(&self, definition: FieldPropertyDefinition) -> AuthResult<bool>;
+    fn delete(&self, index: usize) -> AuthResult<bool>;
     fn clone_seed(&self) -> AuthResult<Option<ArrayCloneSeed>> {
         Ok(None)
     }
@@ -90,6 +84,7 @@ impl FieldArray {
             storage: ArrayStorage::Owned(Arc::new(Mutex::new(Some(ArrayValues {
                 length: length as usize,
                 entries: BTreeMap::new(),
+                length_writable: true,
             })))),
             properties,
         }
@@ -102,7 +97,12 @@ impl FieldArray {
         Self {
             storage: ArrayStorage::Owned(Arc::new(Mutex::new(Some(ArrayValues {
                 length: values.len(),
-                entries: values.into_iter().enumerate().collect(),
+                entries: values
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, value)| (index, FieldPropertyDescriptor::data(value)))
+                    .collect(),
+                length_writable: true,
             })))),
             properties,
         }
@@ -123,50 +123,6 @@ impl FieldArray {
             }
         }
         Ok(names)
-    }
-
-    pub(crate) fn set(&self, index: usize, value: FieldValue) -> AuthResult<()> {
-        match &self.storage {
-            ArrayStorage::Owned(values) => {
-                let mut guard = values.lock();
-                let values = guard.get_or_insert_with(|| ArrayValues {
-                    length: 0,
-                    entries: BTreeMap::new(),
-                });
-                values.length = values.length.max(index + 1);
-                let _ = values.entries.insert(index, value);
-                Ok(())
-            }
-            ArrayStorage::Live(source) => source.set(index, value),
-        }
-    }
-
-    pub(crate) fn set_length(&self, length: usize) -> AuthResult<()> {
-        match &self.storage {
-            ArrayStorage::Owned(values) => {
-                let mut guard = values.lock();
-                let values = guard.get_or_insert_with(|| ArrayValues {
-                    length: 0,
-                    entries: BTreeMap::new(),
-                });
-                values.length = length;
-                values.entries.retain(|index, _| *index < length);
-                Ok(())
-            }
-            ArrayStorage::Live(source) => source.set_length(length),
-        }
-    }
-
-    pub(crate) fn delete(&self, index: usize) -> AuthResult<()> {
-        match &self.storage {
-            ArrayStorage::Owned(values) => {
-                if let Some(values) = values.lock().as_mut() {
-                    let _ = values.entries.remove(&index);
-                }
-                Ok(())
-            }
-            ArrayStorage::Live(source) => source.delete(index),
-        }
     }
 
     pub(crate) fn from_source(source: Arc<dyn FieldArraySource>) -> Self {
@@ -193,13 +149,26 @@ impl FieldArray {
 
     /// Read one current index. `None` is a hole or an index outside the array.
     pub fn get(&self, index: usize) -> AuthResult<Option<FieldValue>> {
+        self.get_with_receiver(index, &FieldValue::Array(self.clone()))
+    }
+
+    pub(crate) fn get_with_receiver(
+        &self,
+        index: usize,
+        receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
         match &self.storage {
-            ArrayStorage::Owned(values) => Ok(values
-                .lock()
-                .as_ref()
-                .and_then(|values| values.entries.get(&index))
-                .cloned()),
-            ArrayStorage::Live(source) => source.get(index),
+            ArrayStorage::Owned(values) => {
+                let descriptor = values
+                    .lock()
+                    .as_ref()
+                    .and_then(|values| values.entries.get(&index))
+                    .cloned();
+                descriptor
+                    .map(|descriptor| descriptor.read(receiver))
+                    .transpose()
+            }
+            ArrayStorage::Live(source) => source.get(index, receiver),
         }
     }
 
@@ -284,7 +253,11 @@ impl FieldArray {
         Ok(Self {
             storage: ArrayStorage::Owned(Arc::new(Mutex::new(Some(ArrayValues {
                 length,
-                entries,
+                entries: entries
+                    .into_iter()
+                    .map(|(index, value)| (index, FieldPropertyDescriptor::data(value)))
+                    .collect(),
+                length_writable: true,
             })))),
             properties: FieldMap::new().into(),
         })
@@ -350,14 +323,25 @@ impl FieldArray {
         };
         let values = values.lock();
         let values = values.as_ref()?;
-        if values.entries.len() != values.length {
+        if values.entries.len() != values.length || !values.length_writable {
             return None;
         }
-        Some(
-            (0..values.length)
-                .map(|index| values.entries.get(&index).cloned().unwrap_or_default())
-                .collect(),
-        )
+        values
+            .entries
+            .values()
+            .map(|descriptor| match descriptor {
+                FieldPropertyDescriptor {
+                    enumerable: true,
+                    configurable: true,
+                    property:
+                        FieldProperty::Data {
+                            value,
+                            writable: true,
+                        },
+                } => Some(value.clone()),
+                _ => None,
+            })
+            .collect()
     }
 
     pub(crate) fn clone_seed(&self) -> AuthResult<ArrayCloneSeed> {
@@ -379,7 +363,11 @@ impl FieldArray {
                     .fold(length, usize::max);
                 let mut values = Some(ArrayValues {
                     length,
-                    entries: entries.into_iter().collect(),
+                    entries: entries
+                        .into_iter()
+                        .map(|(index, value)| (index, FieldPropertyDescriptor::data(value)))
+                        .collect(),
+                    length_writable: true,
                 });
                 Ok(CloneWrite::new(move || {
                     std::mem::swap(&mut *target.lock(), &mut values);
@@ -451,6 +439,7 @@ impl PartialEq for FieldArray {
                 match (left, right) {
                     (Some(left), Some(right)) => {
                         left.length == right.length
+                            && left.length_writable == right.length_writable
                             && left.entries == right.entries
                             && self.properties == other.properties
                     }

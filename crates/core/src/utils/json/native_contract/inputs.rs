@@ -150,7 +150,7 @@ impl Input {
             array.set(2, FieldValue::Undefined)?;
             array.set(3, date.clone())?;
             array.set(4, function.clone())?;
-            let _ = array.properties().set("ignoredNamedField", ISO.into())?;
+            array.properties().set("ignoredNamedField", ISO.into())?;
             Arc::new(array.into())
         } else if name == "object-key-snapshot-and-late-getters" {
             let value = fields.bind(properties.into());

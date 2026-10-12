@@ -225,12 +225,12 @@ fn user_input_lowercase_method_preserves_native_results_and_original_errors() ->
     let native: Value = FieldMap::from([("result".into(), true.into())]).into();
     let email: Value = FieldMap::from([("identity".into(), "email".into())]).into();
     let calls = Arc::new(Mutex::new(0));
-    let _ = email.as_object().unwrap().set("toLowerCase", {
+    email.as_object().unwrap().set("toLowerCase", {
         let result = native.clone();
         let calls = calls.clone();
         crate::FieldFunction::contextual(move |receiver, arguments| {
             assert!(arguments.is_empty());
-            let _ = receiver.as_object().unwrap().set("observed", true.into())?;
+            receiver.as_object().unwrap().set("observed", true.into())?;
             *calls.lock().unwrap() += 1;
             Ok(result.clone())
         })
@@ -253,7 +253,7 @@ fn user_input_lowercase_method_preserves_native_results_and_original_errors() ->
     assert_eq!(email.model_property("observed")?, Value::Bool(true));
 
     let thrown: Value = FieldMap::from([("message".into(), "lowercase failed".into())]).into();
-    let _ = email.as_object().unwrap().set("toLowerCase", {
+    email.as_object().unwrap().set("toLowerCase", {
         let thrown = thrown.clone();
         crate::FieldFunction::contextual(move |_, _| Err(AuthError::from_thrown(thrown.clone())))
             .into()

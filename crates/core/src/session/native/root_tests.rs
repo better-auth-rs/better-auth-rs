@@ -21,19 +21,28 @@ impl FieldObjectSource for RootSource {
         self.fields.own_property_descriptor(name)
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
         self.reads
             .lock()
             .map_err(|_| AuthError::internal("Read trace poisoned"))?
             .push(name.into());
-        self.fields.get(name)
+        self.fields.get_with_receiver(name, receiver)
     }
 
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        self.fields.set(name, value)
+    fn set_with_receiver(
+        &self,
+        name: String,
+        value: FieldValue,
+        receiver: &FieldValue,
+    ) -> AuthResult<bool> {
+        self.fields.set_with_receiver(&name, value, receiver)
     }
 
-    fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn delete(&self, name: &str) -> AuthResult<bool> {
         self.fields.delete(name)
     }
 
@@ -45,6 +54,14 @@ impl FieldObjectSource for RootSource {
 
     fn identity(&self) -> usize {
         std::ptr::from_ref(self) as usize
+    }
+
+    fn define_own_property(
+        &self,
+        name: String,
+        definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        self.fields.define_own_property(name, definition)
     }
 }
 

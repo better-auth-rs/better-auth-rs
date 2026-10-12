@@ -54,7 +54,7 @@ impl Observation {
         let mut config = AuthConfig::default();
         let owner: FieldObject = FieldMap::from([("level".into(), "error".into())]).into();
         let expected: FieldValue = owner.clone().into();
-        let _ = owner.set(
+        owner.set(
             "log",
             FieldFunction::contextual({
                 let state = self.clone();

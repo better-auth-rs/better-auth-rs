@@ -2,7 +2,6 @@
 
 use super::*;
 use crate::FieldArray;
-use crate::field_value::FieldArraySource;
 
 fn assert_tree(actual: &FieldValue, expected: &FieldValue) -> AuthResult<()> {
     match (actual, expected) {
@@ -60,7 +59,7 @@ async fn table_array_fields_share_transaction_writes_and_commit_row_identities()
         let count = tx.operation(|op| op.capture_table(EntityRole::Account)?.len())?;
         assert_eq!(count, if shared_table { 2 } else { 0 });
         let first = required(selected_array.first()?)?;
-        let _ = required(first.as_object())?.set("remaining", 7.0.into())?;
+        required(first.as_object())?.set("remaining", 7.0.into())?;
         record(&trace, "graph:mutate-target")?;
         let updated = decrement(&tx).await?;
         record(&trace, "transaction:return")?;
@@ -182,7 +181,6 @@ fn payload(stage: usize) -> FieldValue {
 }
 
 struct ArrayProbe {
-    properties: crate::FieldObject,
     owner: RowRef<FieldMap>,
     trace: Events,
     reads: AtomicUsize,
@@ -192,19 +190,30 @@ struct ArrayProbe {
     payloads: Mutex<Vec<FieldValue>>,
 }
 
-impl FieldArraySource for ArrayProbe {
-    fn properties(&self) -> &crate::FieldObject {
-        &self.properties
-    }
-    fn len(&self) -> AuthResult<usize> {
-        Ok(2)
+impl ArrayProbe {
+    fn array(self: &Arc<Self>) -> AuthResult<FieldArray> {
+        let array = FieldArray::with_length(2);
+        for index in [0, 1] {
+            let source = self.clone();
+            FieldValue::Array(array.clone()).define_model_property(
+                &index.to_string(),
+                crate::field_value::FieldPropertyDescriptor {
+                    enumerable: true,
+                    configurable: true,
+                    property: crate::field_value::FieldProperty::Accessor {
+                        get: Some(FieldFunction::contextual(move |_, _| {
+                            Ok(source.read(index)?.unwrap_or_default())
+                        })),
+                        set: None,
+                    },
+                }
+                .into(),
+            )?;
+        }
+        Ok(array)
     }
 
-    fn own_indices(&self) -> AuthResult<Vec<usize>> {
-        Ok(vec![0, 1])
-    }
-
-    fn get(&self, index: usize) -> AuthResult<Option<FieldValue>> {
+    fn read(&self, index: usize) -> AuthResult<Option<FieldValue>> {
         if index > 1 {
             return Ok(None);
         }
@@ -221,8 +230,7 @@ impl FieldArraySource for ArrayProbe {
         }
         let read = self.reads.fetch_add(1, Ordering::SeqCst) + 1;
         record(&self.trace, format!("clone:{read}:index0"))?;
-        let _ = self
-            .owner
+        self.owner
             .set_field("name".into(), format!("Live side effect {read}").into())?;
         record(&self.trace, format!("side-effect:{read}"))?;
         if read == self.fail_at {
@@ -242,10 +250,6 @@ impl FieldArraySource for ArrayProbe {
             .push(payload(read));
         Ok(Some(format!("copied {read}").into()))
     }
-
-    fn identity(&self) -> usize {
-        std::ptr::from_ref(self) as usize
-    }
 }
 
 fn probe(
@@ -256,7 +260,6 @@ fn probe(
 ) -> Arc<ArrayProbe> {
     let calls = trace.clone();
     Arc::new(ArrayProbe {
-        properties: FieldMap::new().into(),
         owner,
         trace: trace.clone(),
         reads: AtomicUsize::new(0),
@@ -280,8 +283,8 @@ async fn array_clone_reads_later_indices_after_earlier_getter_writes() -> AuthRe
     let owner = captured_users.push(user("Before".into()))?;
     let target = captured_keys.push(key("target", 5.0))?;
     let source = probe(owner.clone(), &trace, 0, None);
-    let live: FieldValue = FieldArray::from_source(source.clone()).into();
-    let _ = target.set_field("name".into(), live.clone())?;
+    let live: FieldValue = source.array()?.into();
+    target.set_field("name".into(), live.clone())?;
     let (base, tx, queue) = store.begin_adapter_transaction()?;
     record(&trace, "transaction:enter")?;
     let selected = required(tx.get_api_key_record(&"target".to_owned().into()).await?)?;
@@ -394,8 +397,8 @@ fn array_clone_failures_stop_later_indices_and_preserve_original_storage() -> Au
                 fail_at,
                 throws.then_some(AuthError::Internal(message)),
             );
-            let live: FieldValue = FieldArray::from_source(source.clone()).into();
-            let _ = target.set_field("name".into(), live.clone())?;
+            let live: FieldValue = source.array()?.into();
+            target.set_field("name".into(), live.clone())?;
             let error = match store.begin_adapter_transaction() {
                 Ok(_) => {
                     return Err(AuthError::internal(

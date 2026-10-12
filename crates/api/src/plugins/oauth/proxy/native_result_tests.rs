@@ -225,7 +225,7 @@ async fn native_result_shallow_copy_preserves_values_order_identity_and_status()
         })
         .into();
         let shared = FieldObject::from(FieldMap::new());
-        let _ = shared.set("self", FieldValue::Object(shared.clone()))?;
+        shared.set("self", FieldValue::Object(shared.clone()))?;
         let original: FieldValue = FieldMap::from([
             ("9".into(), "nine".into()),
             ("url".into(), URL.into()),

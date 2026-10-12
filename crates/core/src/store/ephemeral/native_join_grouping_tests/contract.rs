@@ -239,6 +239,22 @@ async fn capture(scenario: &Scenario) -> AuthResult<Json> {
 
 #[tokio::test]
 async fn memory_native_join_grouping_matches_upstream_1_7_6() -> AuthResult<()> {
+    let ordered = objects::object(
+        FieldMap::from([
+            ("label".into(), true.into()),
+            ("9".into(), Value::Undefined),
+            ("01".into(), Value::Undefined),
+        ]),
+        FieldMap::from([("2".into(), Value::Null), ("hidden".into(), Value::Null)]),
+    );
+    assert_eq!(
+        ordered.own_property_keys()?,
+        ["2", "9", "label", "01", "hidden"]
+    );
+    assert_eq!(
+        required(ordered.as_object())?.enumerable_keys()?,
+        ["9", "label", "01"]
+    );
     let fixture: Fixture = serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../tests/fixtures/memory-native-join-grouping-1.7.6.json"

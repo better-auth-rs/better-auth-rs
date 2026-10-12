@@ -1,7 +1,9 @@
 use super::*;
 use better_auth_core::{
-    FieldArray, FieldDate, FieldObject, FromFieldMap,
-    field_value::{FieldObjectSource, FieldPropertyDescriptor},
+    FieldArray, FieldDate, FieldFunction, FieldObject, FromFieldMap,
+    field_value::{
+        FieldObjectSource, FieldProperty, FieldPropertyDefinition, FieldPropertyDescriptor,
+    },
 };
 use std::sync::{OnceLock, Weak};
 
@@ -29,9 +31,25 @@ impl Receiver {
 
 struct Accessor {
     name: &'static str,
-    method: FieldFunction,
-    observer: Observer,
-    receiver: Receiver,
+    getter: FieldFunction,
+}
+
+impl Accessor {
+    fn new(
+        name: &'static str,
+        method: FieldFunction,
+        observer: Observer,
+        receiver: Receiver,
+    ) -> Self {
+        let getter = FieldFunction::contextual(move |this, _| {
+            observer
+                .lock()
+                .unwrap()
+                .call(&format!("get:{name}"), this, &receiver.get(), &[])?;
+            Ok(method.clone().into())
+        });
+        Self { name, getter }
+    }
 }
 
 impl FieldObjectSource for Accessor {
@@ -40,11 +58,14 @@ impl FieldObjectSource for Accessor {
     }
 
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
-        Ok((name == self.name).then_some(FieldPropertyDescriptor { enumerable: false }))
-    }
-
-    fn get(&self, _: &str) -> AuthResult<Option<FieldValue>> {
-        Err(AuthError::internal("Native getter requires its receiver"))
+        Ok((name == self.name).then(|| FieldPropertyDescriptor {
+            enumerable: false,
+            configurable: true,
+            property: FieldProperty::Accessor {
+                get: Some(self.getter.clone()),
+                set: None,
+            },
+        }))
     }
 
     fn get_with_receiver(
@@ -52,23 +73,22 @@ impl FieldObjectSource for Accessor {
         name: &str,
         receiver: &FieldValue,
     ) -> AuthResult<Option<FieldValue>> {
-        if name != self.name {
-            return Ok(None);
+        if name == self.name {
+            self.getter.call_with(receiver, &[]).map(Some)
+        } else {
+            Ok(None)
         }
-        self.observer.lock().unwrap().call(
-            &format!("get:{name}"),
-            receiver,
-            &self.receiver.get(),
-            &[],
-        )?;
-        Ok(Some(self.method.clone().into()))
     }
 
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(&self, _: String, _: FieldValue, _: &FieldValue) -> AuthResult<bool> {
         Err(AuthError::internal("Contract accessor has no setter"))
     }
 
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(&self, _: String, _: FieldPropertyDefinition) -> AuthResult<bool> {
+        Err(AuthError::internal("Contract accessor has no setter"))
+    }
+
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal(
             "Contract does not delete named accessors",
         ))
@@ -232,12 +252,12 @@ fn omitted_array(
     expected.bind(
         FieldArray::from_values_with_properties(
             values,
-            FieldObject::from_source(Arc::new(Accessor {
-                name: "toJSON",
+            FieldObject::from_source(Arc::new(Accessor::new(
+                "toJSON",
                 method,
-                observer: observer.clone(),
-                receiver: expected.clone(),
-            })),
+                observer.clone(),
+                expected.clone(),
+            ))),
         )
         .into(),
     )
@@ -289,12 +309,12 @@ fn reference_roots(
     let index = expected.bind(
         FieldArray::from_values_with_properties(
             vec!["keep".into(), id.clone()],
-            FieldObject::from_source(Arc::new(Accessor {
-                name: "filter",
+            FieldObject::from_source(Arc::new(Accessor::new(
+                "filter",
                 method,
-                observer: observer.clone(),
-                receiver: expected.clone(),
-            })),
+                observer.clone(),
+                expected.clone(),
+            ))),
         )
         .into(),
     );

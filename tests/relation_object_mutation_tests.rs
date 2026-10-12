@@ -2,7 +2,8 @@
 
 use better_auth_core::{
     AuthConfig, AuthError, AuthRecordFields, AuthResult, AuthSchema, AuthStore, CreateAccount,
-    CreateTeam, CreateUser, FieldDate, FieldMap, FieldValue, StructuredCloneContext,
+    CreateTeam, CreateUser, FieldDate, FieldMap, FieldObject, FieldProperty, FieldValue,
+    StructuredCloneContext,
     organization_fields::OrganizationFields,
     plugin_runtime::ModelFields,
     store::{EphemeralStore, JoinValue, RuntimeStore, StatelessSchema, schema::EntityRole},
@@ -28,6 +29,18 @@ use support::*;
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 type Events = Arc<Mutex<Vec<(&'static str, FieldValue)>>>;
 const COLLISION: &str = "stored-parent-property";
+
+fn data_property(object: &FieldObject, name: &str) -> AuthResult<Option<FieldValue>> {
+    object
+        .own_property_descriptor(name)?
+        .map(|descriptor| match descriptor.property {
+            FieldProperty::Data { value, .. } => Ok(value),
+            FieldProperty::Accessor { .. } => Err(AuthError::internal(
+                "Relation mutation requires a stored data property",
+            )),
+        })
+        .transpose()
+}
 
 #[derive(Clone, Copy, Debug)]
 enum Target {
@@ -179,19 +192,26 @@ async fn check<S: AuthSchema>(
                     .as_object()
                     .ok_or_else(|| AuthError::internal("Expected child object"))?;
                 let initial = object.snapshot_fields()?;
-                assert_eq!(object.set("id", 9.into())?, initial.get("id").cloned());
+                assert_eq!(data_property(object, "id")?, initial.get("id").cloned());
+                object.set("id", 9.into())?;
                 assert_eq!(
-                    object.set(target.changed(), 7.into())?,
+                    data_property(object, target.changed())?,
                     initial.get(target.changed()).cloned()
                 );
+                object.set(target.changed(), 7.into())?;
                 assert_eq!(
-                    object.delete(target.deleted())?,
+                    data_property(object, target.deleted())?,
                     initial.get(target.deleted()).cloned()
                 );
-                assert_eq!(object.set("mutationTail", "first".into())?, None);
-                assert_eq!(object.set("mutationOwn", FieldValue::Undefined)?, None);
-                assert_eq!(object.delete("mutationTail")?, Some("first".into()));
-                assert_eq!(object.set("mutationTail", "last".into())?, None);
+                assert!(object.delete(target.deleted())?);
+                assert_eq!(data_property(object, "mutationTail")?, None);
+                object.set("mutationTail", "first".into())?;
+                assert_eq!(data_property(object, "mutationOwn")?, None);
+                object.set("mutationOwn", FieldValue::Undefined)?;
+                assert_eq!(data_property(object, "mutationTail")?, Some("first".into()));
+                assert!(object.delete("mutationTail")?);
+                assert_eq!(data_property(object, "mutationTail")?, None);
+                object.set("mutationTail", "last".into())?;
                 assert_eq!(object.get(target.deleted())?, None);
                 assert_eq!(object.get("mutationOwn")?, Some(FieldValue::Undefined));
                 let expected_keys = initial

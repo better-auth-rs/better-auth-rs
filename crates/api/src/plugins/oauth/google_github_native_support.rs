@@ -1,8 +1,10 @@
 use super::*;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use better_auth_core::{
-    FieldObject,
-    field_value::{FieldObjectSource, FieldPropertyDescriptor},
+    FieldFunction, FieldObject,
+    field_value::{
+        FieldObjectSource, FieldProperty, FieldPropertyDefinition, FieldPropertyDescriptor,
+    },
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -58,11 +60,11 @@ impl OAuthProfileMapper for Probe {
             .push(profile.enumerable_fields()?.into());
         match self.action {
             Action::Throw => Err(AuthError::from_thrown(self.failure.clone())),
-            Action::SpreadThrow => Ok(FieldObject::from_source(Arc::new(FailingSpread {
-                shared: self.shared.clone(),
-                failure: self.failure.clone(),
-                events: self.events.clone(),
-            }))
+            Action::SpreadThrow => Ok(FieldObject::from_source(Arc::new(FailingSpread::new(
+                self.shared.clone(),
+                self.failure.clone(),
+                self.events.clone(),
+            )))
             .into()),
             Action::Mutate => {
                 let raw = profile.as_object().unwrap();
@@ -108,47 +110,77 @@ impl OAuthProfileMapper for Probe {
 }
 
 struct FailingSpread {
-    shared: FieldValue,
-    failure: FieldValue,
-    events: Arc<Mutex<Vec<&'static str>>>,
+    fields: FieldObject,
+}
+
+impl FailingSpread {
+    fn new(shared: FieldValue, failure: FieldValue, events: Arc<Mutex<Vec<&'static str>>>) -> Self {
+        let extra_events = events.clone();
+        let extra = FieldFunction::contextual(move |_, _| {
+            extra_events.lock().unwrap().push("spread:extra");
+            Ok(shared.clone())
+        });
+        let email = FieldFunction::contextual(move |_, _| {
+            events.lock().unwrap().push("spread:email");
+            Err(AuthError::from_thrown(failure.clone()))
+        });
+        let fields = [("extra", extra), ("email", email)]
+            .into_iter()
+            .map(|(name, get)| {
+                (
+                    name.into(),
+                    FieldPropertyDescriptor {
+                        enumerable: true,
+                        configurable: true,
+                        property: FieldProperty::Accessor {
+                            get: Some(get),
+                            set: None,
+                        },
+                    },
+                )
+            })
+            .collect::<indexmap::IndexMap<_, _>>()
+            .into();
+        Self { fields }
+    }
 }
 
 impl FieldObjectSource for FailingSpread {
     fn own_keys(&self) -> AuthResult<Vec<String>> {
-        Ok(vec!["extra".into(), "email".into()])
+        self.fields.own_keys()
     }
 
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
-        Ok(matches!(name, "extra" | "email")
-            .then_some(FieldPropertyDescriptor { enumerable: true }))
+        self.fields.own_property_descriptor(name)
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        match name {
-            "extra" => {
-                self.events.lock().unwrap().push("spread:extra");
-                Ok(Some(self.shared.clone()))
-            }
-            "email" => {
-                self.events.lock().unwrap().push("spread:email");
-                Err(AuthError::from_thrown(self.failure.clone()))
-            }
-            _ => Ok(None),
-        }
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
+        self.fields.get_with_receiver(name, receiver)
     }
 
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(&self, _: String, _: FieldValue, _: &FieldValue) -> AuthResult<bool> {
         Err(AuthError::internal("Mapper result must not be mutated"))
     }
 
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(&self, _: String, _: FieldPropertyDefinition) -> AuthResult<bool> {
+        Err(AuthError::internal("Mapper result must not be mutated"))
+    }
+
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal("Mapper result must not be mutated"))
     }
 
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
         self.own_keys()?
             .into_iter()
-            .map(|key| self.get(&key).map(|value| (key, value.unwrap())))
+            .map(|key| {
+                self.get_with_receiver(&key, &FieldValue::Undefined)
+                    .map(|value| (key, value.unwrap()))
+            })
             .collect()
     }
 

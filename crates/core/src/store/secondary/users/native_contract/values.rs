@@ -102,8 +102,8 @@ impl Values {
         if let Some(kind) = scenario["root"].as_str() {
             let extra = retained.model_property("extra")?;
             let extra = extra.as_object().unwrap();
-            let _ = extra.set("native", empty_function())?;
-            let _ = extra.set("date", date(-5_000))?;
+            extra.set("native", empty_function())?;
+            extra.set("date", date(-5_000))?;
             values.update_chain(kind, observer)?;
         } else if scenario["operation"] == "update" && scenario["failure"].is_string() {
             values.update_failure(scenario, observer)?;
@@ -294,8 +294,7 @@ impl Root {
     pub(super) fn new(kind: &str, offset: i64, observer: Observer) -> Self {
         let expected = Arc::new(OnceLock::new());
         let properties = Arc::new(Properties {
-            data: Mutex::default(),
-            methods: Mutex::default(),
+            fields: FieldMap::new().into(),
             observer,
             expected: Arc::downgrade(&expected),
         });
@@ -320,7 +319,12 @@ impl Root {
     }
 
     fn data(&self, data: FieldMap) {
-        self.properties.data.lock().unwrap().extend(data);
+        for (name, value) in data {
+            self.properties
+                .fields
+                .define_own_property(name, crate::FieldPropertyDescriptor::data(value).into())
+                .unwrap();
+        }
     }
 
     pub(super) fn receiver(&self) -> Weak<OnceLock<FieldValue>> {
@@ -339,21 +343,11 @@ impl Root {
             call(&events, &phase, receiver, &expected, arguments)?;
             callback(arguments)
         });
-        let _ = self
-            .properties
-            .methods
-            .lock()
-            .unwrap()
-            .insert(name.into(), Ok(method.into()));
+        self.properties.method(name, Ok(method.into()));
     }
 
     fn failing_getter(&self, name: &str, error: FieldValue) {
-        let _ = self
-            .properties
-            .methods
-            .lock()
-            .unwrap()
-            .insert(name.into(), Err(error));
+        self.properties.method(name, Err(error));
     }
 }
 
@@ -374,62 +368,71 @@ fn call(
 }
 
 struct Properties {
-    data: Mutex<FieldMap>,
-    methods: Mutex<indexmap::IndexMap<String, Result<FieldValue, FieldValue>>>,
+    fields: FieldObject,
     observer: Observer,
     expected: Receiver,
 }
 
+impl Properties {
+    fn method(&self, name: &str, value: Result<FieldValue, FieldValue>) {
+        let observer = self.observer.clone();
+        let expected = self.expected.clone();
+        let phase = format!("get:{name}");
+        let getter = FieldFunction::contextual(move |receiver, _| {
+            call(&observer, &phase, receiver, &expected, &[])?;
+            value.clone().map_err(AuthError::from_thrown)
+        });
+        self.fields
+            .define_own_property(
+                name,
+                crate::FieldPropertyDescriptor {
+                    enumerable: false,
+                    configurable: true,
+                    property: crate::FieldProperty::Accessor {
+                        get: Some(getter),
+                        set: None,
+                    },
+                }
+                .into(),
+            )
+            .unwrap();
+    }
+}
+
 impl FieldObjectSource for Properties {
     fn own_keys(&self) -> AuthResult<Vec<String>> {
-        Ok(self
-            .data
-            .lock()
-            .unwrap()
-            .keys()
-            .cloned()
-            .chain(self.methods.lock().unwrap().keys().cloned())
-            .collect())
+        self.fields.own_keys()
     }
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
-        Ok(if self.data.lock().unwrap().contains_key(name) {
-            Some(FieldPropertyDescriptor { enumerable: true })
-        } else {
-            self.methods
-                .lock()
-                .unwrap()
-                .contains_key(name)
-                .then_some(FieldPropertyDescriptor { enumerable: false })
-        })
-    }
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        self.get_with_receiver(name, &FieldValue::Undefined)
+        self.fields.own_property_descriptor(name)
     }
     fn get_with_receiver(
         &self,
         name: &str,
         receiver: &FieldValue,
     ) -> AuthResult<Option<FieldValue>> {
-        if let Some(method) = self.methods.lock().unwrap().get(name).cloned() {
-            call(
-                &self.observer,
-                &format!("get:{name}"),
-                receiver,
-                &self.expected,
-                &[],
-            )?;
-            return method.map(Some).map_err(AuthError::from_thrown);
-        }
-        Ok(self.data.lock().unwrap().get(name).cloned())
+        self.fields.get_with_receiver(name, receiver)
     }
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        Ok(self.data.lock().unwrap().insert(name, value))
+    fn set_with_receiver(
+        &self,
+        name: String,
+        value: FieldValue,
+        receiver: &FieldValue,
+    ) -> AuthResult<bool> {
+        self.fields.set_with_receiver(&name, value, receiver)
     }
-    fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        Ok(self.data.lock().unwrap().remove(name))
+    fn define_own_property(
+        &self,
+        name: String,
+        definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        self.fields.define_own_property(name, definition)
+    }
+    fn delete(&self, name: &str) -> AuthResult<bool> {
+        self.fields.delete(name)
     }
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
-        Ok(self.data.lock().unwrap().clone())
+        FieldValue::Object(self.fields.clone()).enumerable_fields()
     }
     fn identity(&self) -> usize {
         std::ptr::from_ref(self).addr()

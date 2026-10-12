@@ -6,7 +6,7 @@
 use super::{native_object, native_record};
 use better_auth_core::{
     AuthError, AuthResult, FieldDate, FieldFunction, FieldMap, FieldObject, FieldValue,
-    field_value::{FieldObjectSource, FieldPropertyDescriptor},
+    field_value::{FieldObjectSource, FieldPropertyDefinition, FieldPropertyDescriptor},
 };
 use std::sync::{Arc, Mutex};
 
@@ -54,16 +54,18 @@ impl Observed {
 impl FieldObjectSource for Observed {
     fn own_keys(&self) -> AuthResult<Vec<String>> {
         self.record("keys")?;
-        Ok(self.fields.keys().cloned().collect())
+        FieldObject::from(self.fields.clone()).own_keys()
     }
 
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
         self.record(&format!("descriptor:{name}"))?;
         Ok(self
             .fields
-            .contains_key(name)
-            .then_some(FieldPropertyDescriptor {
+            .get(name)
+            .cloned()
+            .map(|value| FieldPropertyDescriptor {
                 enumerable: !self.hidden.contains(&name),
+                ..FieldPropertyDescriptor::data(value)
             }))
     }
 
@@ -72,7 +74,7 @@ impl FieldObjectSource for Observed {
         Ok(self.fields.contains_key(name) || self.inherited.contains_key(name))
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(&self, name: &str, _: &FieldValue) -> AuthResult<Option<FieldValue>> {
         self.record(&format!("get:{name}"))?;
         Ok(self
             .fields
@@ -81,11 +83,15 @@ impl FieldObjectSource for Observed {
             .cloned())
     }
 
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(&self, _: String, _: FieldValue, _: &FieldValue) -> AuthResult<bool> {
         Err(AuthError::type_error("The record input is read-only"))
     }
 
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(&self, _: String, _: FieldPropertyDefinition) -> AuthResult<bool> {
+        Err(AuthError::type_error("The record input is read-only"))
+    }
+
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::type_error("The record input is read-only"))
     }
 

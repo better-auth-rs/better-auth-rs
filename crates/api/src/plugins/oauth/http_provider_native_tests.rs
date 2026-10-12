@@ -2,8 +2,10 @@
 
 use super::*;
 use better_auth_core::{
-    FieldMap, FieldObject, FieldValue,
-    field_value::{FieldObjectSource, FieldPropertyDescriptor},
+    FieldFunction, FieldMap, FieldObject, FieldValue,
+    field_value::{
+        FieldObjectSource, FieldProperty, FieldPropertyDefinition, FieldPropertyDescriptor,
+    },
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -49,9 +51,9 @@ impl OAuthProfileMapper for NativeMapper {
         let raw = profile.as_object().unwrap();
         match self.id {
             "cloudflare" => {
-                let _ = raw.set("first_name", "Mutated".into())?;
-                let _ = raw.set("last_name", "Name".into())?;
-                let _ = raw.set("email", self.shared.clone())?;
+                raw.set("first_name", "Mutated".into())?;
+                raw.set("last_name", "Name".into())?;
+                raw.set("email", self.shared.clone())?;
                 Ok(object([
                     ("emailVerified", "verified".into()),
                     ("nativeExtra", FieldValue::Undefined),
@@ -63,29 +65,27 @@ impl OAuthProfileMapper for NativeMapper {
                 } else {
                     ("display_name", "pic_url")
                 };
-                let _ = raw.set(name, self.shared.clone())?;
-                let _ = raw.set(image, FieldValue::Undefined)?;
+                raw.set(name, self.shared.clone())?;
+                raw.set(image, FieldValue::Undefined)?;
                 if self.id == "zoom" {
-                    let _ = raw.set("email", self.shared.clone())?;
-                    let _ = raw.set("verified", Vec::<FieldValue>::new().into())?;
+                    raw.set("email", self.shared.clone())?;
+                    raw.set("verified", Vec::<FieldValue>::new().into())?;
                 }
-                let _ = raw.set("child", self.shared.clone())?;
-                let _ = raw.set("ownUndefined", FieldValue::Undefined)?;
+                raw.set("child", self.shared.clone())?;
+                raw.set("ownUndefined", FieldValue::Undefined)?;
                 Ok(object([
                     ("mappedExtra", self.shared.clone()),
                     ("mappedUndefined", FieldValue::Undefined),
                 ]))
             }
             "reddit" => {
-                let _ = raw.set("id", "mutated-reddit".into())?;
-                let _ = raw.set("name", self.shared.clone())?;
-                let _ = raw.set("icon_img", FieldValue::Undefined)?;
-                Ok(FieldObject::from_source(Arc::new(RedditMapped {
-                    shared: self.shared.clone(),
-                    events: self.events.clone(),
-                    email_reads: AtomicUsize::new(0),
-                    verified_reads: AtomicUsize::new(0),
-                }))
+                raw.set("id", "mutated-reddit".into())?;
+                raw.set("name", self.shared.clone())?;
+                raw.set("icon_img", FieldValue::Undefined)?;
+                Ok(FieldObject::from_source(Arc::new(RedditMapped::new(
+                    self.shared.clone(),
+                    self.events.clone(),
+                )))
                 .into())
             }
             _ => Err(AuthError::internal(
@@ -96,67 +96,96 @@ impl OAuthProfileMapper for NativeMapper {
 }
 
 struct RedditMapped {
-    shared: FieldValue,
-    events: Arc<Mutex<Vec<&'static str>>>,
-    email_reads: AtomicUsize,
-    verified_reads: AtomicUsize,
+    fields: FieldObject,
+}
+
+impl RedditMapped {
+    fn new(shared: FieldValue, events: Arc<Mutex<Vec<&'static str>>>) -> Self {
+        let email_reads = AtomicUsize::new(0);
+        let email_events = events.clone();
+        let email = FieldFunction::contextual(move |_, _| {
+            let read = email_reads.fetch_add(1, Ordering::SeqCst);
+            email_events.lock().unwrap().push(match read {
+                0 => "email:1",
+                1 => "email:2",
+                _ => "email:extra",
+            });
+            Ok(if read == 0 { "" } else { "spread@reddit.test" }.into())
+        });
+        let verified_reads = AtomicUsize::new(0);
+        let verified = shared.clone();
+        let email_verified = FieldFunction::contextual(move |_, _| {
+            let read = verified_reads.fetch_add(1, Ordering::SeqCst);
+            events.lock().unwrap().push(match read {
+                0 => "verified:1",
+                1 => "verified:2",
+                _ => "verified:extra",
+            });
+            Ok(if read == 0 {
+                verified.clone()
+            } else {
+                FieldValue::Null
+            })
+        });
+        let mut fields = [("email", email), ("emailVerified", email_verified)]
+            .into_iter()
+            .map(|(name, get)| {
+                (
+                    name.into(),
+                    FieldPropertyDescriptor {
+                        enumerable: true,
+                        configurable: true,
+                        property: FieldProperty::Accessor {
+                            get: Some(get),
+                            set: None,
+                        },
+                    },
+                )
+            })
+            .collect::<indexmap::IndexMap<_, _>>();
+        let _ = fields.insert("nativeExtra".into(), FieldPropertyDescriptor::data(shared));
+        Self {
+            fields: fields.into(),
+        }
+    }
 }
 
 impl FieldObjectSource for RedditMapped {
     fn own_keys(&self) -> AuthResult<Vec<String>> {
-        Ok(["email", "emailVerified", "nativeExtra"]
-            .map(String::from)
-            .into())
+        self.fields.own_keys()
     }
 
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
-        Ok(matches!(name, "email" | "emailVerified" | "nativeExtra")
-            .then_some(FieldPropertyDescriptor { enumerable: true }))
+        self.fields.own_property_descriptor(name)
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        match name {
-            "email" => {
-                let read = self.email_reads.fetch_add(1, Ordering::SeqCst);
-                self.events.lock().unwrap().push(match read {
-                    0 => "email:1",
-                    1 => "email:2",
-                    _ => "email:extra",
-                });
-                Ok(Some(
-                    if read == 0 { "" } else { "spread@reddit.test" }.into(),
-                ))
-            }
-            "emailVerified" => {
-                let read = self.verified_reads.fetch_add(1, Ordering::SeqCst);
-                self.events.lock().unwrap().push(match read {
-                    0 => "verified:1",
-                    1 => "verified:2",
-                    _ => "verified:extra",
-                });
-                Ok(Some(if read == 0 {
-                    self.shared.clone()
-                } else {
-                    FieldValue::Null
-                }))
-            }
-            "nativeExtra" => Ok(Some(self.shared.clone())),
-            _ => Ok(None),
-        }
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
+        self.fields.get_with_receiver(name, receiver)
     }
 
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(&self, _: String, _: FieldValue, _: &FieldValue) -> AuthResult<bool> {
         Err(AuthError::internal("Mapper result must not be mutated"))
     }
 
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(&self, _: String, _: FieldPropertyDefinition) -> AuthResult<bool> {
+        Err(AuthError::internal("Mapper result must not be mutated"))
+    }
+
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal("Mapper result must not be mutated"))
     }
 
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
         self.own_keys()?
             .into_iter()
-            .map(|key| self.get(&key).map(|value| (key, value.unwrap())))
+            .map(|key| {
+                self.get_with_receiver(&key, &FieldValue::Undefined)
+                    .map(|value| (key, value.unwrap()))
+            })
             .collect()
     }
 
@@ -218,9 +247,9 @@ async fn cloudflare_keeps_pre_mapper_name_and_reads_mutated_native_email() {
         .clone()
         .into();
     let raw = expected.as_object().unwrap();
-    let _ = raw.set("first_name", "Mutated".into()).unwrap();
-    let _ = raw.set("last_name", "Name".into()).unwrap();
-    let _ = raw.set("email", email).unwrap();
+    raw.set("first_name", "Mutated".into()).unwrap();
+    raw.set("last_name", "Name".into()).unwrap();
+    raw.set("email", email).unwrap();
     assert_eq!(data, expected);
     assert_eq!(
         profile_test_support::subject(&resolved.providers["cloudflare"], &tokens, &response).await,
@@ -293,8 +322,7 @@ async fn assert_shallow_profile(id: &'static str) {
             "zoom-owner"
         })
     );
-    let _ = raw
-        .model_property("child")
+    raw.model_property("child")
         .unwrap()
         .as_object()
         .unwrap()
@@ -363,9 +391,9 @@ async fn reddit_reads_mapped_getters_around_spread_and_retains_earlier_email_fal
     assert!(data.strict_equals(&mapper.raw()));
     let expected: FieldValue = fixture()["providers"]["reddit"]["profile"].clone().into();
     let raw = expected.as_object().unwrap();
-    let _ = raw.set("id", "mutated-reddit".into()).unwrap();
-    let _ = raw.set("name", shared).unwrap();
-    let _ = raw.set("icon_img", FieldValue::Undefined).unwrap();
+    raw.set("id", "mutated-reddit".into()).unwrap();
+    raw.set("name", shared).unwrap();
+    raw.set("icon_img", FieldValue::Undefined).unwrap();
     assert_eq!(data, expected);
     assert_eq!(
         profile_test_support::subject(&resolved.providers["reddit"], &tokens, &response).await,

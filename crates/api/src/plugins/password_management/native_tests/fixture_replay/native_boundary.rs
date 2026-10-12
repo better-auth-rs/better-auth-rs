@@ -91,7 +91,7 @@ fn projected_hash(
         })
         .into()
     };
-    let _ = projected.as_object().unwrap().set("split", split)?;
+    projected.as_object().unwrap().set("split", split)?;
     Ok(projected)
 }
 

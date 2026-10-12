@@ -36,5 +36,12 @@
     "uncompressedSha256": "f2583ed368945ca2946d5e71475a13a39233d4d0ba87f78602e242880a254d3c"
   },
   "normalizations": [],
-  "boundary": "Complete own-property transition graphs and callback events. SameValue records the zero sign explicitly. Prototype lookup and Symbols require separate contracts."
+  "boundary": "Complete own-property transition graphs and callback events. SameValue records the zero sign explicitly. Prototype lookup and Symbols require separate contracts.",
+  "coverage": {
+    "path": "tests/fixtures/native-property-transition-1.7.6.coverage.json",
+    "ordinaryTransitions": 10,
+    "recordedStates": 25,
+    "unpairedReflectionPaths": 43,
+    "status": "Rust replay is pending. The coverage ledger retains exact unpaired function reflection paths."
+  }
 }

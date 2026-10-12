@@ -129,7 +129,7 @@ fn set_driver_encoding_precedes_where_driver_encoding() -> AuthResult<()> {
         let allocation = Arc::new(AtomicUsize::new(0));
         let object = FieldObject::from(FieldMap::from([("toString".into(), FieldValue::Null)]));
         if backend == DbBackend::Postgres {
-            let _ = object.set("self", FieldValue::Object(object.clone()))?;
+            object.set("self", FieldValue::Object(object.clone()))?;
         }
         let mut write = RecordWrite::<user::Entity>::default();
         if backend == DbBackend::Sqlite {

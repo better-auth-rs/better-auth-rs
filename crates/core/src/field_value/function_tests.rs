@@ -29,12 +29,15 @@ fn contextual_calls_preserve_handles_and_expose_callback_mutations() -> AuthResu
         let FieldValue::Object(receiver) = receiver else {
             return Err(AuthError::internal("Expected an object receiver"));
         };
-        assert_eq!(receiver.delete("remove")?, Some(true.into()));
+        assert_eq!(receiver.get("remove")?, Some(true.into()));
+        assert!(receiver.delete("remove")?);
         let [FieldValue::Object(object), result, _, next, ..] = arguments else {
             return Err(AuthError::internal("Expected the original arguments"));
         };
-        assert!(receiver.set("next", next.clone())?.is_none());
-        assert!(object.set("visited", true.into())?.is_none());
+        assert_eq!(receiver.get("next")?, None);
+        receiver.set("next", next.clone())?;
+        assert_eq!(object.get("visited")?, None);
+        object.set("visited", true.into())?;
         Ok(result.clone())
     });
     let cloned = function.clone();
@@ -158,7 +161,7 @@ async fn awaited_calls_observe_mutations_through_original_handles() -> AuthResul
                 let FieldValue::Object(object) = value else {
                     return Err(AuthError::internal("Expected an object handle"));
                 };
-                let _ = object.set("visited", true.into())?;
+                object.set("visited", true.into())?;
             }
             AuthResult::Ok(())
         },);

@@ -15,7 +15,7 @@ use better_auth_core::{
     HttpMethod,
     endpoint_dispatch::EndpointDispatcher,
     endpoint_input::ValidatedBody,
-    field_value::{FieldObjectSource, FieldPropertyDescriptor},
+    field_value::{FieldObjectSource, FieldPropertyDefinition, FieldPropertyDescriptor},
     observability::{BeforeEndpointHook, EndpointHooks},
     store::{EphemeralStore, StatelessSchema as S, schema::EntityRole},
 };
@@ -97,7 +97,7 @@ impl FieldObjectSource for ObservedBody {
         ))
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(&self, name: &str, _: &FieldValue) -> AuthResult<Option<FieldValue>> {
         if name == "child" {
             return Ok(Some(self.child.clone()));
         }
@@ -121,7 +121,12 @@ impl FieldObjectSource for ObservedBody {
         }
     }
 
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(
+        &self,
+        name: String,
+        value: FieldValue,
+        _: &FieldValue,
+    ) -> AuthResult<bool> {
         self.trace
             .events
             .lock()
@@ -132,10 +137,14 @@ impl FieldObjectSource for ObservedBody {
             return Err(AuthError::from_thrown(self.sentinel.clone()));
         }
         *self.trace.written.lock().unwrap() = Some(value);
-        Ok(None)
+        Ok(true)
     }
 
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(&self, _: String, _: FieldPropertyDefinition) -> AuthResult<bool> {
+        Err(AuthError::internal("The probe does not define properties"))
+    }
+
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal(
             "Proxy initiation must not delete properties",
         ))

@@ -204,7 +204,7 @@ async fn check(relation: Relation, native: bool, alias: bool, reject: bool) -> A
                                 .capture_table(EntityRole::TeamMember)?
                                 .get_ref("membership")?
                                 .ok_or_else(|| AuthError::internal("Expected membership"))?;
-                            let _ = row.set_field("userId".into(), "After".into())?;
+                            row.set_field("userId".into(), "After".into())?;
                             Ok(())
                         })?;
                     }

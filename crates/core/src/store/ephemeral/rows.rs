@@ -3,6 +3,7 @@
 use crate::user_fields::UserRowState;
 use crate::{
     AuthError, AuthRecordFields, AuthResult, FieldMap, FieldObject, FieldValue, FromFieldMap,
+    field_value::{FieldObjectSource, FieldPropertyDefinition, FieldPropertyDescriptor},
 };
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -19,15 +20,21 @@ pub(super) fn same_field_value(actual: Option<&FieldValue>, before: Option<&Fiel
 }
 
 #[derive(Clone)]
+pub(super) enum RowValue<T> {
+    Typed(T),
+    Properties(FieldObject),
+}
+
+#[derive(Clone)]
 pub(super) struct RowCell<T> {
-    pub(super) value: T,
+    pub(super) value: RowValue<T>,
     user_state: Option<UserRowState>,
 }
 
 impl<T> RowCell<T> {
     pub(super) fn new(value: T) -> Self {
         Self {
-            value,
+            value: RowValue::Typed(value),
             user_state: None,
         }
     }
@@ -38,7 +45,7 @@ impl RowCell<FieldMap> {
     pub(super) fn from_user_state(user: crate::UserView) -> Self {
         let (value, state) = user.into_row_parts();
         Self {
-            value,
+            value: RowValue::Typed(value),
             user_state: Some(state),
         }
     }
@@ -141,41 +148,70 @@ impl ObjectRow for FieldMap {
     }
 }
 
-impl<T: ObjectRow> crate::field_value::FieldObjectSource for RowRef<T> {
+impl<T: ObjectRow> FieldObjectSource for RowRef<T> {
     fn own_keys(&self) -> AuthResult<Vec<String>> {
-        match &self.storage {
-            RowStorage::Native(object) => object.own_keys(),
-            RowStorage::Record(_) => Ok(self.shallow_fields()?.keys().cloned().collect()),
-        }
+        let _operation = self.gate.lock();
+        self.with_storage(
+            |value| {
+                let mut fields = value.field_values()?;
+                fields.sort_property_order();
+                Ok(fields.keys().cloned().collect())
+            },
+            FieldObject::own_keys,
+        )
     }
 
-    fn own_property_descriptor(
+    fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
+        let _operation = self.gate.lock();
+        self.with_storage(
+            |value| Ok(value.property(name)?.map(FieldPropertyDescriptor::data)),
+            |object| object.own_property_descriptor(name),
+        )
+    }
+
+    fn get_with_receiver(
         &self,
         name: &str,
-    ) -> AuthResult<Option<crate::field_value::FieldPropertyDescriptor>> {
-        match &self.storage {
-            RowStorage::Native(object) => object.own_property_descriptor(name),
-            RowStorage::Record(_) => Ok(self
-                .shallow_fields()?
-                .contains_key(name)
-                .then_some(crate::field_value::FieldPropertyDescriptor { enumerable: true })),
-        }
-    }
-
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        self.field(name)
+        receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
+        let _operation = self.gate.lock();
+        self.with_storage(
+            |value| value.property(name),
+            |object| object.get_with_receiver(name, receiver),
+        )
     }
 
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
         self.shallow_fields()
     }
 
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        self.set_field(name, value)
+    fn set_with_receiver(
+        &self,
+        name: String,
+        value: FieldValue,
+        receiver: &FieldValue,
+    ) -> AuthResult<bool> {
+        let _operation = self.gate.lock();
+        self.discard_user_state()?;
+        self.property_storage()?
+            .set_with_receiver(&name, value, receiver)
     }
 
-    fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        self.delete_field(name)
+    fn define_own_property(
+        &self,
+        name: String,
+        definition: FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        let _operation = self.gate.lock();
+        self.discard_user_state()?;
+        self.property_storage()?
+            .define_own_property(name, definition)
+    }
+
+    fn delete(&self, name: &str) -> AuthResult<bool> {
+        let _operation = self.gate.lock();
+        self.discard_user_state()?;
+        self.property_storage()?.delete(name)
     }
 
     fn identity(&self) -> usize {
@@ -210,113 +246,127 @@ impl<T: ObjectRow> crate::field_value::FieldObjectSource for RowRef<T> {
             storage: RowStorage::Record(target_cell.clone()),
             gate: self.gate.clone(),
         };
-        let object = crate::FieldObject::from_source(Arc::new(target.clone()));
+        let object = FieldObject::from_source(Arc::new(target));
         Ok(Some(crate::field_value::ObjectCloneSeed {
             object,
             state,
             original_record: Some(before.clone()),
-            prepare: Box::new(move |fields, state| {
+            prepare: Box::new(move |fields, state, original_fields| {
                 let user_state = before
                     .user_state
                     .as_ref()
-                    .map(|user| {
-                        user.with_cloned_fields(&before.value.field_values()?, &fields, state)
-                    })
+                    .map(|user| user.with_cloned_fields(&original_fields, &fields, state))
                     .transpose()?;
-                let row = RowCell {
-                    value: T::from_field_values(fields)?,
-                    user_state,
+                let value = match &before.value {
+                    RowValue::Typed(_) => RowValue::Typed(T::from_field_values(fields)?),
+                    RowValue::Properties(_) => RowValue::Properties(fields.into()),
                 };
-                Ok(crate::field_value::prepare_clone(target_cell, row))
+                Ok(crate::field_value::prepare_clone(
+                    target_cell,
+                    RowCell { value, user_state },
+                ))
             }),
         }))
     }
 }
 
 impl<T: ObjectRow> RowRef<T> {
-    pub(super) fn field(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        let _operation = self.gate.lock();
+    fn with_storage<R>(
+        &self,
+        typed: impl FnOnce(&T) -> AuthResult<R>,
+        properties: impl FnOnce(&FieldObject) -> AuthResult<R>,
+    ) -> AuthResult<R> {
+        let object = match &self.storage {
+            RowStorage::Record(source) => {
+                let row = lock(source)?;
+                match &row.value {
+                    RowValue::Typed(value) => return typed(value),
+                    RowValue::Properties(object) => object.clone(),
+                }
+            }
+            RowStorage::Native(object) => object.clone(),
+        };
+        properties(&object)
+    }
+
+    fn current_value(&self) -> AuthResult<RowValue<T>> {
         match &self.storage {
-            RowStorage::Record(row) => lock(row)?.value.property(name),
-            RowStorage::Native(object) => object.get(name),
+            RowStorage::Record(row) => Ok(lock(row)?.value.clone()),
+            RowStorage::Native(object) => Ok(RowValue::Properties(object.clone())),
         }
+    }
+
+    // Promotion changes property storage, while the public row retains its original identity.
+    fn property_storage(&self) -> AuthResult<FieldObject> {
+        let source = match &self.storage {
+            RowStorage::Record(source) => source,
+            RowStorage::Native(object) => return Ok(object.clone()),
+        };
+        let mut row = lock(source)?;
+        let object = match &row.value {
+            RowValue::Properties(object) => return Ok(object.clone()),
+            RowValue::Typed(value) => FieldObject::from(value.field_values()?),
+        };
+        let previous = std::mem::replace(&mut row.value, RowValue::Properties(object.clone()));
+        drop(row);
+        drop(previous);
+        Ok(object)
+    }
+
+    fn discard_user_state(&self) -> AuthResult<()> {
+        if let RowStorage::Record(source) = &self.storage {
+            let previous = lock(source)?.user_state.take();
+            drop(previous);
+        }
+        Ok(())
+    }
+
+    pub(super) fn field(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+        self.get_with_receiver(name, &self.field_value())
     }
 
     pub(super) fn shallow_fields(&self) -> AuthResult<FieldMap> {
         let _operation = self.gate.lock();
-        match &self.storage {
-            RowStorage::Record(row) => lock(row)?.value.field_values(),
-            RowStorage::Native(object) => FieldValue::Object(object.clone()).enumerable_fields(),
-        }
+        self.field_value().enumerable_fields()
     }
 
-    pub(super) fn set_field(
-        &self,
-        name: String,
-        value: FieldValue,
-    ) -> AuthResult<Option<FieldValue>> {
+    pub(super) fn set_field(&self, name: String, value: FieldValue) -> AuthResult<()> {
         let _operation = self.gate.lock();
-        if let RowStorage::Native(object) = &self.storage {
-            return object.set(name, value);
-        }
-        let mut fields = self.shallow_fields()?;
-        let previous = fields.insert(name, value);
-        fields.sort_property_order();
-        self.replace(T::from_field_values(fields)?)?;
-        Ok(previous)
+        self.discard_user_state()?;
+        self.field_value().set_model_property(&name, value)
     }
 
-    pub(super) fn delete_field(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        let _operation = self.gate.lock();
-        if let RowStorage::Native(object) = &self.storage {
-            return object.delete(name);
-        }
-        let mut fields = self.shallow_fields()?;
-        let previous = fields.remove(name);
-        self.replace(T::from_field_values(fields)?)?;
-        Ok(previous)
+    pub(super) fn delete_field(&self, name: &str) -> AuthResult<bool> {
+        self.delete(name)
     }
 
     pub(super) fn apply_patch(&self, mut patch: FieldMap) -> AuthResult<()> {
         let _operation = self.gate.lock();
+        self.discard_user_state()?;
         patch.sort_property_order();
-        if let RowStorage::Native(object) = &self.storage {
-            let receiver = FieldValue::Object(object.clone());
-            for (name, value) in patch {
-                receiver.set_model_property(&name, value)?;
-            }
-            return Ok(());
+        let receiver = self.field_value();
+        for (name, value) in patch {
+            receiver.set_model_property(&name, value)?;
         }
-        let mut fields = self.shallow_fields()?;
-        fields.extend(patch);
-        fields.sort_property_order();
-        self.replace(T::from_field_values(fields)?)
+        Ok(())
     }
 
     pub(super) fn increment_number_fields(&self, increments: &[(String, f64)]) -> AuthResult<()> {
         let _operation = self.gate.lock();
-        if let RowStorage::Native(object) = &self.storage {
-            let receiver = FieldValue::Object(object.clone());
-            for (name, delta) in increments {
-                let previous = if self.field(name)?.is_some_and(|value| value.is_number()) {
-                    self.field(name)?.unwrap_or_default()
-                } else {
-                    FieldValue::Number(0.0)
-                };
-                receiver.set_model_property(
-                    name,
-                    crate::query::field_add(&previous, &FieldValue::Number(*delta))?,
-                )?;
-            }
-            return Ok(());
-        }
-        let mut fields = self.shallow_fields()?;
+        self.discard_user_state()?;
+        let receiver = self.field_value();
         for (name, delta) in increments {
-            let previous = fields.get(name).and_then(FieldValue::as_f64).unwrap_or(0.0);
-            let _ = fields.insert(name.clone(), (previous + delta).into());
+            let previous = if self.field(name)?.is_some_and(|value| value.is_number()) {
+                self.field(name)?.unwrap_or_default()
+            } else {
+                FieldValue::Number(0.0)
+            };
+            receiver.set_model_property(
+                name,
+                crate::query::field_add(&previous, &FieldValue::Number(*delta))?,
+            )?;
         }
-        fields.sort_property_order();
-        self.replace(T::from_field_values(fields)?)
+        Ok(())
     }
 }
 
@@ -339,13 +389,23 @@ impl<T: ObjectRow> RowRef<T> {
                 T::from_field_values(before)?,
             ));
         }
-        let (value, before) = context.clone_record::<RowCell<T>>(&self.field_value())?;
+        let original = self.field_value();
+        let (value, before) = context.clone_record::<RowCell<T>>(&original)?;
         let row = value
             .as_object()
             .and_then(crate::FieldObject::source::<Self>)
             .cloned()
             .ok_or_else(|| AuthError::internal("Structured clone lost its native row type"))?;
-        Ok((row, before.value))
+        let before = match before.value {
+            RowValue::Typed(value) => value,
+            RowValue::Properties(_) => {
+                let object = original.as_object().ok_or_else(|| {
+                    AuthError::internal("Structured clone lost its native row object")
+                })?;
+                T::from_field_values(context.clone_object_fields(object)?.1)?
+            }
+        };
+        Ok((row, before))
     }
 }
 
@@ -393,25 +453,32 @@ impl<T> RowRef<T> {
 impl<T: ObjectRow> RowRef<T> {
     fn replace_cell(&self, value: RowCell<T>) -> AuthResult<()> {
         let _operation = self.gate.lock();
-        match &self.storage {
-            RowStorage::Record(target) => {
-                let previous = {
-                    let mut row = lock(target)?;
-                    std::mem::replace(&mut *row, value)
-                };
+        if let RowStorage::Record(target) = &self.storage {
+            let mut row = lock(target)?;
+            if matches!(row.value, RowValue::Typed(_)) {
+                let previous = std::mem::replace(&mut *row, value);
+                drop(row);
                 drop(previous);
-                Ok(())
-            }
-            RowStorage::Native(object) => {
-                let fields = value.value.field_values()?;
-                for name in object.own_keys()? {
-                    if !fields.contains_key(&name) {
-                        let _ = object.delete(&name)?;
-                    }
-                }
-                self.apply_patch(fields)
+                return Ok(());
             }
         }
+        self.discard_user_state()?;
+        let fields = match value.value {
+            RowValue::Typed(value) => value.field_values()?,
+            RowValue::Properties(object) => FieldValue::Object(object).enumerable_fields()?,
+        };
+        let receiver = self.field_value();
+        for name in self.own_keys()? {
+            if !fields.contains_key(&name) {
+                receiver.delete_model_property(&name)?;
+            }
+        }
+        self.apply_patch(fields)?;
+        if let RowStorage::Record(target) = &self.storage {
+            let previous = std::mem::replace(&mut lock(target)?.user_state, value.user_state);
+            drop(previous);
+        }
+        Ok(())
     }
 
     pub(super) fn replace(&self, value: T) -> AuthResult<()> {
@@ -420,9 +487,9 @@ impl<T: ObjectRow> RowRef<T> {
 
     pub(super) fn snapshot(&self) -> AuthResult<T> {
         let _operation = self.gate.lock();
-        match &self.storage {
-            RowStorage::Record(row) => Ok(lock(row)?.value.clone()),
-            RowStorage::Native(_) => T::from_field_values(self.shallow_fields()?),
+        match self.current_value()? {
+            RowValue::Typed(value) => Ok(value),
+            RowValue::Properties(_) => T::from_field_values(self.shallow_fields()?),
         }
     }
 
@@ -451,9 +518,13 @@ impl RowRef<FieldMap> {
             let _operation = self.gate.lock();
             lock(source)?.clone()
         };
+        let fields = match cell.value {
+            RowValue::Typed(fields) => fields,
+            RowValue::Properties(_) => self.shallow_fields()?,
+        };
         match cell.user_state {
-            Some(state) => state.into_user(cell.value),
-            None => crate::UserView::from_field_values(cell.value),
+            Some(state) => state.into_user(fields),
+            None => crate::UserView::from_field_values(fields),
         }
     }
 }
@@ -501,6 +572,9 @@ impl Hash for TransactionId {
 }
 #[cfg(test)]
 mod object_tests;
+
+#[cfg(test)]
+mod descriptor_tests;
 
 #[cfg(test)]
 mod tests {
@@ -675,7 +749,7 @@ mod tests {
             let working = base.deep_clone(&mut StructuredCloneContext::new())?;
             for row in working.snapshot_refs()? {
                 if row.field("label")?.as_ref().and_then(FieldValue::as_str) == Some("Last") {
-                    let _ = row.set_field("label".into(), "Updated".into())?;
+                    row.set_field("label".into(), "Updated".into())?;
                 }
             }
             live = live.reconcile(&base, &working)?;

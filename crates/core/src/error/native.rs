@@ -1,9 +1,12 @@
 use super::{AuthError, AuthResult};
-use crate::{FieldFunction, FieldMap, FieldObject, FieldValue};
+use crate::{
+    FieldFunction, FieldMap, FieldObject, FieldPropertyDefinition, FieldPropertyDescriptor,
+    FieldValue,
+};
 use std::{
     any::Any,
     collections::HashSet,
-    sync::{Arc, LazyLock, Mutex},
+    sync::{Arc, LazyLock},
 };
 
 /// The constructor family used by an API error instance.
@@ -106,31 +109,39 @@ pub(super) fn construct(mut init: ApiErrorInit) -> AuthResult<FieldValue> {
     ] {
         let _ = fields.insert(name.into(), value);
     }
-    Ok(error_object(fields.into(), Some(init.class), hidden))
+    Ok(error_object(error_fields(fields, hidden), Some(init.class)))
 }
 
 pub(super) fn better_auth(message: crate::Utf16String) -> FieldValue {
     error_object(
-        FieldMap::from([
-            ("message".into(), message.into()),
-            ("stack".into(), "".into()),
-            ("name".into(), "BetterAuthError".into()),
-        ])
-        .into(),
+        error_fields(
+            FieldMap::from([
+                ("message".into(), message.into()),
+                ("stack".into(), "".into()),
+                ("name".into(), "BetterAuthError".into()),
+            ]),
+            HashSet::from(["message".into(), "stack".into()]),
+        ),
         None,
-        HashSet::from(["message".into(), "stack".into()]),
     )
 }
 
-fn error_object(
-    fields: FieldObject,
-    class: Option<ApiErrorClass>,
-    hidden: HashSet<String>,
-) -> FieldValue {
+fn error_fields(fields: FieldMap, hidden: HashSet<String>) -> FieldObject {
+    fields
+        .into_iter()
+        .map(|(name, value)| {
+            let mut descriptor = FieldPropertyDescriptor::data(value);
+            descriptor.enumerable = !hidden.contains(&name);
+            (name, descriptor)
+        })
+        .collect::<indexmap::IndexMap<_, _>>()
+        .into()
+}
+
+fn error_object(fields: FieldObject, class: Option<ApiErrorClass>) -> FieldValue {
     FieldObject::from_source(Arc::new(ErrorObject {
         fields,
         class,
-        hidden: Mutex::new(hidden),
         inherited_name: "Error",
     }))
     .into()
@@ -138,9 +149,11 @@ fn error_object(
 
 pub(super) fn runtime_error(name: &'static str, message: FieldValue) -> FieldValue {
     FieldObject::from_source(Arc::new(ErrorObject {
-        fields: FieldMap::from([("message".into(), message)]).into(),
+        fields: error_fields(
+            FieldMap::from([("message".into(), message)]),
+            HashSet::from(["message".into()]),
+        ),
         class: None,
-        hidden: Mutex::new(HashSet::from(["message".into()])),
         inherited_name: name,
     }))
     .into()
@@ -149,27 +162,28 @@ pub(super) fn runtime_error(name: &'static str, message: FieldValue) -> FieldVal
 pub(super) fn database_error(properties: FieldMap) -> FieldValue {
     // The reference Error objects keep host source-location properties nonenumerable.
     error_object(
-        properties.into(),
+        error_fields(
+            properties,
+            HashSet::from([
+                "message".into(),
+                "stack".into(),
+                "line".into(),
+                "column".into(),
+            ]),
+        ),
         None,
-        HashSet::from([
-            "message".into(),
-            "stack".into(),
-            "line".into(),
-            "column".into(),
-        ]),
     )
 }
 
 /// Attach a known native instance brand without constructing or projecting its fields.
 #[cfg(test)]
 pub(crate) fn brand_api_error_object(fields: FieldObject, class: ApiErrorClass) -> FieldValue {
-    error_object(fields, Some(class), HashSet::new())
+    error_object(fields, Some(class))
 }
 
 struct ErrorObject {
     fields: FieldObject,
     class: Option<ApiErrorClass>,
-    hidden: Mutex<HashSet<String>>,
     inherited_name: &'static str,
 }
 
@@ -182,23 +196,19 @@ impl crate::field_value::FieldObjectSource for ErrorObject {
         &self,
         name: &str,
     ) -> AuthResult<Option<crate::field_value::FieldPropertyDescriptor>> {
-        let Some(mut descriptor) = self.fields.own_property_descriptor(name)? else {
-            return Ok(None);
-        };
-        let hidden = self
-            .hidden
-            .lock()
-            .map_err(|_| AuthError::internal("API error property lock poisoned"))?;
-        descriptor.enumerable = !hidden.contains(name);
-        Ok(Some(descriptor))
+        self.fields.own_property_descriptor(name)
     }
 
     fn has_property(&self, name: &str) -> AuthResult<bool> {
         Ok(self.fields.has_property(name)? || matches!(name, "name" | "message" | "toString"))
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        if let Some(value) = self.fields.get(name)? {
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
+        if let Some(value) = self.fields.get_with_receiver(name, receiver)? {
             return Ok(Some(value));
         }
         Ok(match name {
@@ -209,28 +219,29 @@ impl crate::field_value::FieldObjectSource for ErrorObject {
         })
     }
 
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        self.fields.set(name, value)
+    fn set_with_receiver(
+        &self,
+        name: String,
+        value: FieldValue,
+        receiver: &FieldValue,
+    ) -> AuthResult<bool> {
+        self.fields.set_with_receiver(&name, value, receiver)
     }
 
-    fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        let previous = self.fields.delete(name)?;
-        let _ = self
-            .hidden
-            .lock()
-            .map_err(|_| AuthError::internal("API error property lock poisoned"))?
-            .remove(name);
-        Ok(previous)
+    fn define_own_property(
+        &self,
+        name: String,
+        definition: FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        self.fields.define_own_property(name, definition)
+    }
+
+    fn delete(&self, name: &str) -> AuthResult<bool> {
+        self.fields.delete(name)
     }
 
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
-        let mut fields = self.fields.snapshot_fields()?;
-        let hidden = self
-            .hidden
-            .lock()
-            .map_err(|_| AuthError::internal("API error property lock poisoned"))?;
-        fields.retain(|name, _| !hidden.contains(name));
-        Ok(fields)
+        FieldValue::Object(self.fields.clone()).enumerable_fields()
     }
 
     fn identity(&self) -> usize {

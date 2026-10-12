@@ -22,7 +22,7 @@ fn hint_selects_the_first_primitive_method_with_the_original_receiver() -> AuthR
         let events = Arc::new(Mutex::new(Vec::new()));
         for name in ["toString", "valueOf"] {
             let events = events.clone();
-            let _ = object.set(
+            object.set(
                 name,
                 FieldFunction::contextual(move |receiver, arguments| {
                     let FieldValue::Object(receiver) = receiver else {
@@ -64,20 +64,20 @@ fn fallback_observes_method_replacement_and_rejects_all_object_results() -> Auth
         .into(),
     ] {
         let object = FieldObject::from(FieldMap::new());
-        let _ = object.set(
+        object.set(
             "toString",
             FieldFunction::contextual(|_, _| {
                 Err(AuthError::internal("Replaced method must not be invoked"))
             })
             .into(),
         )?;
-        let _ = object.set(
+        object.set(
             "valueOf",
             FieldFunction::contextual(move |receiver, _| {
                 let FieldValue::Object(receiver) = receiver else {
                     return Err(AuthError::internal("Primitive receiver is not the object"));
                 };
-                let _ = receiver.set(
+                receiver.set(
                     "toString",
                     FieldFunction::contextual(|_, _| Ok(FieldValue::Undefined)).into(),
                 )?;
@@ -251,13 +251,18 @@ impl FieldObjectSource for UnreadableProperties {
     fn own_property_descriptor(&self, _: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
         Self::forbidden()
     }
-    fn get(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(&self, _: &str, _receiver: &FieldValue) -> AuthResult<Option<FieldValue>> {
         Self::forbidden()
     }
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(
+        &self,
+        _: String,
+        _: FieldValue,
+        _receiver: &FieldValue,
+    ) -> AuthResult<bool> {
         Self::forbidden()
     }
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Self::forbidden()
     }
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
@@ -265,6 +270,16 @@ impl FieldObjectSource for UnreadableProperties {
     }
     fn identity(&self) -> usize {
         std::ptr::from_ref(self) as usize
+    }
+
+    fn define_own_property(
+        &self,
+        _name: String,
+        _definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "This contract source does not define properties",
+        ))
     }
 }
 

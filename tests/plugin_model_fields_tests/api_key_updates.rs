@@ -1,8 +1,11 @@
 use super::*;
 use better_auth::server_api::UpdateKeyOptions;
 use better_auth_core::{
-    ApiErrorClass, ApiErrorInit, ApiKey, ApiKeyView, FromFieldMap,
-    field_value::{FieldObject, FieldObjectSource, FieldPropertyDescriptor},
+    ApiErrorClass, ApiErrorInit, ApiKey, ApiKeyView, FieldFunction, FromFieldMap,
+    field_value::{
+        FieldObject, FieldObjectSource, FieldProperty, FieldPropertyDefinition,
+        FieldPropertyDescriptor,
+    },
 };
 use std::sync::atomic::{AtomicU8, Ordering};
 
@@ -303,7 +306,15 @@ async fn sqlite_updates_preserve_omitted_and_supplied_timestamp_policies() -> Au
     contract(sqlite().await?).await
 }
 
-struct MessageGetterFailure(FieldValue);
+struct MessageGetterFailure(FieldFunction);
+
+impl MessageGetterFailure {
+    fn new(thrown: FieldValue) -> Self {
+        Self(FieldFunction::contextual(move |_, _| {
+            Err(AuthError::from_thrown(thrown.clone()))
+        }))
+    }
+}
 
 impl FieldObjectSource for MessageGetterFailure {
     fn own_keys(&self) -> AuthResult<Vec<String>> {
@@ -311,26 +322,44 @@ impl FieldObjectSource for MessageGetterFailure {
     }
 
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
-        Ok((name == "message").then_some(FieldPropertyDescriptor { enumerable: false }))
+        Ok((name == "message").then(|| FieldPropertyDescriptor {
+            enumerable: false,
+            configurable: true,
+            property: FieldProperty::Accessor {
+                get: Some(self.0.clone()),
+                set: None,
+            },
+        }))
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
         if name == "message" {
-            return Err(AuthError::from_thrown(self.0.clone()));
+            self.0.call_with(receiver, &[]).map(Some)
+        } else {
+            Ok(None)
         }
-        Ok(None)
     }
 
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(&self, _: String, _: FieldValue, _: &FieldValue) -> AuthResult<bool> {
         Err(AuthError::type_error("The injected error is read-only"))
     }
 
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(&self, _: String, _: FieldPropertyDefinition) -> AuthResult<bool> {
+        Err(AuthError::type_error("The injected error is read-only"))
+    }
+
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::type_error("The injected error is read-only"))
     }
 
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
-        let message = self.get("message")?.unwrap_or_default();
+        let message = self
+            .get_with_receiver("message", &FieldValue::Undefined)?
+            .unwrap_or_default();
         Ok(FieldMap::from([("message".into(), message)]))
     }
 
@@ -380,13 +409,14 @@ async fn endpoint_error_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> A
                 })?;
                 let original = required(error.raw_value(), "Expected a native API error")?.clone();
                 if kind == "api" {
-                    let _ = required(original.as_object(), "Expected an API error object")?
+                    required(original.as_object(), "Expected an API error object")?
                         .set("message", message.clone().into())?;
                 }
                 original
             }
             "getter" => {
-                FieldObject::from_source(Arc::new(MessageGetterFailure(sentinel.clone()))).into()
+                FieldObject::from_source(Arc::new(MessageGetterFailure::new(sentinel.clone())))
+                    .into()
             }
             _ => FieldMap::from([
                 ("name".into(), "Error".into()),

@@ -58,12 +58,6 @@ impl FieldObjectSource for Probe {
         self.fields.own_property_descriptor(name)
     }
 
-    fn get(&self, _: &str) -> AuthResult<Option<Value>> {
-        Err(AuthError::internal(
-            "Native reads must supply the record receiver",
-        ))
-    }
-
     fn get_with_receiver(&self, name: &str, receiver: &Value) -> AuthResult<Option<Value>> {
         self.check_receiver(receiver);
         if name != self.property {
@@ -84,22 +78,25 @@ impl FieldObjectSource for Probe {
         }
     }
 
-    fn set(&self, _: String, _: Value) -> AuthResult<Option<Value>> {
-        Err(AuthError::internal(
-            "Native assignment must not request the previous value",
-        ))
-    }
-
-    fn set_with_receiver(&self, name: String, value: Value, receiver: &Value) -> AuthResult<()> {
+    fn set_with_receiver(&self, name: String, value: Value, receiver: &Value) -> AuthResult<bool> {
         self.check_receiver(receiver);
         self.events.lock().unwrap().push(format!("set:{name}"));
         if self.stop_at == Some(name.as_str()) {
             return Err(AuthError::from_thrown(self.failure.clone()));
         }
-        self.fields.set(name, value).map(drop)
+        self.fields.set(name, value)?;
+        Ok(true)
     }
 
-    fn delete(&self, name: &str) -> AuthResult<Option<Value>> {
+    fn define_own_property(
+        &self,
+        name: String,
+        definition: crate::field_value::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        self.fields.define_own_property(name, definition)
+    }
+
+    fn delete(&self, name: &str) -> AuthResult<bool> {
         self.fields.delete(name)
     }
 

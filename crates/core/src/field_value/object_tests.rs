@@ -7,6 +7,202 @@ use super::*;
 use crate::{SchemaField, SchemaValue};
 
 #[test]
+fn omitted_data_and_accessor_updates_preserve_the_existing_property_kind() -> AuthResult<()> {
+    for property in [
+        FieldProperty::Data {
+            value: 1.into(),
+            writable: false,
+        },
+        FieldProperty::Accessor {
+            get: Some(FieldFunction::contextual(|_, _| {
+                Err(AuthError::internal(
+                    "Descriptor updates must not read the getter",
+                ))
+            })),
+            set: None,
+        },
+    ] {
+        let descriptor = FieldPropertyDescriptor {
+            enumerable: true,
+            configurable: false,
+            property,
+        };
+        let value: FieldValue = FieldObject::from(indexmap::IndexMap::from([(
+            "value".into(),
+            descriptor.clone(),
+        )]))
+        .into();
+        for property in [
+            FieldPropertyUpdate::Data {
+                value: None,
+                writable: None,
+            },
+            FieldPropertyUpdate::Accessor {
+                get: None,
+                set: None,
+            },
+        ] {
+            assert!(value.define_own_property(
+                "value",
+                FieldPropertyDefinition {
+                    property,
+                    ..Default::default()
+                }
+            )?);
+            assert_eq!(
+                value.own_property_descriptor("value")?,
+                Some(descriptor.clone())
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn owned_accessor_probes_and_diagnostics_do_not_read_or_discard_the_original_error()
+-> AuthResult<()> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    for enumerable in [false, true] {
+        let reads = Arc::new(AtomicUsize::new(0));
+        let observed = reads.clone();
+        let original: FieldValue = FieldMap::from([("failure".into(), "original".into())]).into();
+        let thrown = original.clone();
+        let descriptor = FieldPropertyDescriptor {
+            enumerable,
+            configurable: true,
+            property: FieldProperty::Accessor {
+                get: Some(FieldFunction::contextual(move |receiver, _| {
+                    observed.fetch_add(1, Ordering::SeqCst);
+                    receiver.set_model_property("mutation", "retained".into())?;
+                    Err(AuthError::from_thrown(thrown.clone()))
+                })),
+                set: None,
+            },
+        };
+        let fields = indexmap::IndexMap::from([("selected".into(), descriptor.clone())]);
+        let object = FieldObject::from(fields.clone());
+        let other = FieldObject::from(fields);
+        let value: FieldValue = object.clone().into();
+        assert_eq!(object, other);
+        assert!(format!("{object:?}").contains("Accessor"));
+        assert_eq!(
+            object.own_property_descriptor("selected")?,
+            Some(descriptor)
+        );
+        let narrowed = SchemaValue::<serde_json::Value>::from_field(value.clone());
+        assert!(matches!(narrowed, SchemaValue::Dynamic(_)));
+        assert!(narrowed.field_value().strict_equals(&value));
+        assert!(
+            matches!(<serde_json::Value as SchemaField>::from_field(value.clone()),
+            Err(retained) if retained.strict_equals(&value))
+        );
+        assert!(other.delete("selected")?);
+        assert_eq!(reads.load(Ordering::SeqCst), 0);
+        let error = object
+            .get("selected")
+            .err()
+            .ok_or_else(|| AuthError::internal("The accessor must retain its failure"))?;
+        assert!(error.into_thrown_value()?.strict_equals(&original));
+        assert_eq!(object.get("mutation")?, Some("retained".into()));
+        assert_eq!(reads.load(Ordering::SeqCst), 1);
+    }
+    for flags in [
+        (false, true, true),
+        (true, false, true),
+        (true, true, false),
+    ] {
+        let (enumerable, configurable, writable) = flags;
+        let value: FieldValue = FieldObject::from(indexmap::IndexMap::from([(
+            "value".into(),
+            FieldPropertyDescriptor {
+                enumerable,
+                configurable,
+                property: FieldProperty::Data {
+                    value: 1.into(),
+                    writable,
+                },
+            },
+        )]))
+        .into();
+        let narrowed = SchemaValue::<serde_json::Value>::from_field(value.clone());
+        assert!(matches!(narrowed, SchemaValue::Dynamic(_)));
+        assert!(narrowed.field_value().strict_equals(&value));
+    }
+    Ok(())
+}
+
+#[test]
+fn live_key_order_reaches_reflection_and_enumeration_without_wrapper_reordering() -> AuthResult<()>
+{
+    struct Source(FieldObject);
+    impl FieldObjectSource for Source {
+        fn own_keys(&self) -> AuthResult<Vec<String>> {
+            Ok(["tail", "2", "1"].map(str::to_owned).to_vec())
+        }
+        fn own_property_descriptor(
+            &self,
+            name: &str,
+        ) -> AuthResult<Option<FieldPropertyDescriptor>> {
+            self.0.own_property_descriptor(name)
+        }
+        fn get_with_receiver(
+            &self,
+            name: &str,
+            receiver: &FieldValue,
+        ) -> AuthResult<Option<FieldValue>> {
+            self.0.get_with_receiver(name, receiver)
+        }
+        fn set_with_receiver(
+            &self,
+            name: String,
+            value: FieldValue,
+            receiver: &FieldValue,
+        ) -> AuthResult<bool> {
+            self.0.set_with_receiver(&name, value, receiver)
+        }
+        fn define_own_property(
+            &self,
+            name: String,
+            definition: FieldPropertyDefinition,
+        ) -> AuthResult<bool> {
+            self.0.define_own_property(name, definition)
+        }
+        fn delete(&self, name: &str) -> AuthResult<bool> {
+            self.0.delete(name)
+        }
+        fn snapshot_fields(&self) -> AuthResult<FieldMap> {
+            Err(AuthError::internal(
+                "Property enumeration must retain the source key order",
+            ))
+        }
+        fn identity(&self) -> usize {
+            std::ptr::from_ref(self) as usize
+        }
+    }
+    let owned: FieldObject = FieldMap::from([
+        ("tail".into(), "tail".into()),
+        ("2".into(), 2.into()),
+        ("1".into(), 1.into()),
+    ])
+    .into();
+    assert_eq!(owned.own_keys()?, ["1", "2", "tail"]);
+    let live = FieldObject::from_source(Arc::new(Source(owned)));
+    assert_eq!(live.own_keys()?, ["tail", "2", "1"]);
+    let value: FieldValue = live.into();
+    assert_eq!(value.own_property_keys()?, ["tail", "2", "1"]);
+    assert_eq!(
+        value
+            .enumerable_fields()?
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        ["tail", "2", "1"]
+    );
+    Ok(())
+}
+
+#[test]
 fn aliases_preserve_presence_and_property_order_through_mutation() -> AuthResult<()> {
     let object = FieldObject::from(FieldMap::from([
         ("first".into(), 1.into()),
@@ -16,13 +212,20 @@ fn aliases_preserve_presence_and_property_order_through_mutation() -> AuthResult
     let alias = object.clone();
     assert_eq!(alias.get("absent")?, None);
     assert_eq!(alias.get("ownUndefined")?, Some(FieldValue::Undefined));
-    assert_eq!(object.set("first", FieldValue::Null)?, Some(1.into()));
-    assert_eq!(alias.delete("first")?, Some(FieldValue::Null));
-    assert_eq!(object.set("first", false.into())?, None);
-    assert_eq!(alias.delete("ownUndefined")?, Some(FieldValue::Undefined));
-    assert_eq!(alias.delete("ownUndefined")?, None);
-    assert_eq!(object.set("2", "two".into())?, None);
-    assert_eq!(alias.set("1", "one".into())?, None);
+    assert_eq!(object.get("first")?, Some(1.into()));
+    object.set("first", FieldValue::Null)?;
+    assert_eq!(alias.get("first")?, Some(FieldValue::Null));
+    assert!(alias.delete("first")?);
+    assert_eq!(alias.get("first")?, None);
+    object.set("first", false.into())?;
+    assert_eq!(alias.get("ownUndefined")?, Some(FieldValue::Undefined));
+    assert!(alias.delete("ownUndefined")?);
+    assert_eq!(alias.get("ownUndefined")?, None);
+    assert!(alias.delete("ownUndefined")?);
+    assert_eq!(object.get("2")?, None);
+    object.set("2", "two".into())?;
+    assert_eq!(alias.get("1")?, None);
+    alias.set("1", "one".into())?;
     assert!(object.same_object(&alias));
     let value = FieldValue::Object(object);
     let expected = ["1", "2", "tail", "first"];
@@ -65,7 +268,7 @@ fn schema_decoding_preserves_handles_and_explicit_rust_copies_remain_available()
     assert!(matches!(json, SchemaValue::Dynamic(_)));
     assert!(object_field.typed()?.same_object(&object));
     assert!(value_field.typed()?.strict_equals(&value));
-    let _ = object.set("answer", 2.into())?;
+    object.set("answer", 2.into())?;
     assert_eq!(json.json()?, Some(serde_json::json!({"answer": 2})));
     assert!(json.field_value().strict_equals(&value));
 
@@ -108,15 +311,15 @@ fn owned_cycles_have_finite_comparison_and_debug_but_require_explicit_unlinking(
 {
     let left = FieldObject::from(FieldMap::from([("value".into(), 1.into())]));
     let right = FieldObject::from(FieldMap::from([("value".into(), 1.into())]));
-    let _ = left.set("self", FieldValue::Object(left.clone()))?;
-    let _ = right.set("self", FieldValue::Object(right.clone()))?;
+    left.set("self", FieldValue::Object(left.clone()))?;
+    right.set("self", FieldValue::Object(right.clone()))?;
     let equal = left == right;
     let debug = format!("{left:?}");
     let value = FieldValue::Object(left.clone());
     let json = value.json();
     let text = value.stringify();
     let clone = StructuredCloneContext::new().clone_value(&value);
-    let _ = right.set("value", 2.into())?;
+    right.set("value", 2.into())?;
     let changed = left != right;
     // Break strong reference cycles before assertions or dropping the external handles.
     let _ = left.delete("self")?;
@@ -180,7 +383,11 @@ fn object_enumeration_preserves_descriptor_schedules_deletion_and_child_identity
                 }))
         }
 
-        fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+        fn get_with_receiver(
+            &self,
+            name: &str,
+            receiver: &FieldValue,
+        ) -> AuthResult<Option<FieldValue>> {
             if matches!(name, "excluded" | "hidden") {
                 return Err(AuthError::internal("The unselected getter must not run"));
             }
@@ -188,19 +395,24 @@ fn object_enumeration_preserves_descriptor_schedules_deletion_and_child_identity
                 .lock()
                 .map_err(|_| AuthError::internal("Rest read events poisoned"))?
                 .push(format!("get:{name}"));
-            let value = self.fields.get(name)?;
+            let value = self.fields.get_with_receiver(name, receiver)?;
             if name == "first" {
                 let _ = self.fields.delete("deleted")?;
-                let _ = self.fields.set("added", "not-enumerated".into())?;
+                self.fields.set("added", "not-enumerated".into())?;
             }
             Ok(value)
         }
 
-        fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-            self.fields.set(name, value)
+        fn set_with_receiver(
+            &self,
+            name: String,
+            value: FieldValue,
+            receiver: &FieldValue,
+        ) -> AuthResult<bool> {
+            self.fields.set_with_receiver(&name, value, receiver)
         }
 
-        fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+        fn delete(&self, name: &str) -> AuthResult<bool> {
             self.fields.delete(name)
         }
 
@@ -212,6 +424,16 @@ fn object_enumeration_preserves_descriptor_schedules_deletion_and_child_identity
 
         fn identity(&self) -> usize {
             std::ptr::from_ref(self) as usize
+        }
+
+        fn define_own_property(
+            &self,
+            _name: String,
+            _definition: crate::FieldPropertyDefinition,
+        ) -> AuthResult<bool> {
+            Err(AuthError::internal(
+                "This contract source does not define properties",
+            ))
         }
     }
 
@@ -336,15 +558,24 @@ fn record_consumers_keep_undefined_when_a_selected_descriptor_deletes_its_proper
             Ok(descriptor)
         }
 
-        fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-            self.0.get(name)
+        fn get_with_receiver(
+            &self,
+            name: &str,
+            receiver: &FieldValue,
+        ) -> AuthResult<Option<FieldValue>> {
+            self.0.get_with_receiver(name, receiver)
         }
 
-        fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-            self.0.set(name, value)
+        fn set_with_receiver(
+            &self,
+            name: String,
+            value: FieldValue,
+            receiver: &FieldValue,
+        ) -> AuthResult<bool> {
+            self.0.set_with_receiver(&name, value, receiver)
         }
 
-        fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+        fn delete(&self, name: &str) -> AuthResult<bool> {
             self.0.delete(name)
         }
 
@@ -356,6 +587,14 @@ fn record_consumers_keep_undefined_when_a_selected_descriptor_deletes_its_proper
 
         fn identity(&self) -> usize {
             std::ptr::from_ref(self) as usize
+        }
+
+        fn define_own_property(
+            &self,
+            name: String,
+            definition: crate::FieldPropertyDefinition,
+        ) -> AuthResult<bool> {
+            self.0.define_own_property(name, definition)
         }
     }
 

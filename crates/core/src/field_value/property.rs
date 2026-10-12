@@ -1,6 +1,9 @@
 //! Native property operations retain receiver identity until an explicit projection boundary.
 
-use super::{FieldMap, FieldObject, FieldPropertyDescriptor, FieldValue, string_fields};
+use super::{
+    FieldMap, FieldObject, FieldProperty, FieldPropertyDefinition, FieldPropertyDescriptor,
+    FieldValue, string_fields,
+};
 use crate::{AuthError, AuthResult};
 
 #[cfg(test)]
@@ -24,6 +27,11 @@ impl FieldValue {
 
     /// Read one property without converting its value or invoking unrelated getters.
     pub fn model_property(&self, name: &str) -> AuthResult<Self> {
+        self.get_property_with_receiver(name, self)
+    }
+
+    /// Read a native property with an explicit receiver without redirecting the target lookup.
+    pub fn get_property_with_receiver(&self, name: &str, receiver: &Self) -> AuthResult<Self> {
         if let Some(kind) = self.nullish_name() {
             return Err(AuthError::type_error(format!(
                 "Cannot read properties of {kind} (reading '{name}')"
@@ -34,7 +42,9 @@ impl FieldValue {
                 return Ok(array.len()?.into());
             }
             if let Some(index) = crate::utils::json::array_index(name) {
-                return Ok(array.get(index as usize)?.unwrap_or_default());
+                return Ok(array
+                    .get_with_receiver(index as usize, receiver)?
+                    .unwrap_or_default());
             }
         }
         if let Some(units) = crate::query::field_string_units(self) {
@@ -48,7 +58,9 @@ impl FieldValue {
             });
         }
         match self.property_source() {
-            Some(source) => Ok(source.get_with_receiver(name, self)?.unwrap_or_default()),
+            Some(source) => Ok(source
+                .get_with_receiver(name, receiver)?
+                .unwrap_or_default()),
             None => Ok(Self::Undefined),
         }
     }
@@ -74,29 +86,127 @@ impl FieldValue {
     /// Assign one property in strict mode without reading its previous value.
     /// Cloned handles observe the same mutation; a source setter retains its original error.
     pub fn set_model_property(&self, name: &str, value: Self) -> AuthResult<()> {
+        if self.set_property(name, value)? {
+            Ok(())
+        } else {
+            Err(AuthError::type_error(
+                "Attempted to assign to readonly property.",
+            ))
+        }
+    }
+
+    /// Assign a native property without converting a rejected write into an exception.
+    pub fn set_property(&self, name: &str, value: Self) -> AuthResult<bool> {
+        self.set_property_with_receiver(name, value, self)
+    }
+
+    /// Assign through the target while preserving an explicit native receiver.
+    pub fn set_property_with_receiver(
+        &self,
+        name: &str,
+        value: Self,
+        receiver: &Self,
+    ) -> AuthResult<bool> {
         if let Self::Array(array) = self {
             if name == "length" {
-                // ArraySetLength converts twice; valueOf can return a different value on the second call.
-                let first = crate::query::field_number(&value)?;
-                let length = if first.is_finite() {
-                    first.trunc().rem_euclid(4_294_967_296.0)
-                } else {
-                    0.0
-                };
-                if crate::query::field_number(&value)? != length {
-                    return Err(AuthError::RangeError("Invalid array length".into()));
+                if let Some(result) = array.length_descriptor()?.assign(receiver, value.clone())? {
+                    return Ok(result);
                 }
-                return array.set_length(length as usize);
+                return receiver.write_data_property(name, value);
             }
             if let Some(index) = crate::utils::json::array_index(name) {
-                return array.set(index as usize, value);
+                return array.assign_index(index as usize, value, receiver);
             }
         }
         match self.property_source() {
-            Some(source) => source.assign(name, value, self),
+            Some(source) => source.set_with_receiver(name, value, receiver),
+            None => Ok(false),
+        }
+    }
+
+    pub(crate) fn write_data_property(&self, name: &str, value: Self) -> AuthResult<bool> {
+        if self.property_source().is_none() {
+            return Ok(false);
+        }
+        match self.own_property_descriptor(name)? {
+            Some(FieldPropertyDescriptor {
+                property: FieldProperty::Data { writable: true, .. },
+                ..
+            }) => self.define_own_property(name, FieldPropertyDefinition::value(value)),
+            Some(_) => Ok(false),
+            None => self.define_own_property(name, FieldPropertyDescriptor::data(value).into()),
+        }
+    }
+
+    /// Define an own property and retain the native boolean rejection result.
+    pub fn define_own_property(
+        &self,
+        name: &str,
+        definition: FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        if let Self::Array(array) = self {
+            if name == "length" {
+                return array.define_length(definition);
+            }
+            if let Some(index) = crate::utils::json::array_index(name) {
+                return array.define_index(index as usize, definition);
+            }
+        }
+        match self.property_source() {
+            Some(source) => source.define_own_property(name, definition),
             None => Err(AuthError::type_error(
-                "Attempted to assign to readonly property.",
+                "Object.defineProperty called on non-object",
             )),
+        }
+    }
+
+    /// Define an own property in strict mode.
+    pub fn define_model_property(
+        &self,
+        name: &str,
+        definition: FieldPropertyDefinition,
+    ) -> AuthResult<()> {
+        if self.define_own_property(name, definition)? {
+            Ok(())
+        } else {
+            Err(AuthError::type_error(format!(
+                "Cannot redefine property: {name}"
+            )))
+        }
+    }
+
+    /// Delete an own property without evaluating its getter.
+    pub fn delete_property(&self, name: &str) -> AuthResult<bool> {
+        if let Some(kind) = self.nullish_name() {
+            return Err(AuthError::type_error(format!(
+                "Cannot convert {kind} to object"
+            )));
+        }
+        if let Self::Array(array) = self {
+            if name == "length" {
+                return Ok(false);
+            }
+            if let Some(index) = crate::utils::json::array_index(name) {
+                return array.delete_index(index as usize);
+            }
+        }
+        if crate::query::field_string_units(self).is_some() {
+            return Ok(self.own_property_descriptor(name)?.is_none());
+        }
+        match self.property_source() {
+            Some(source) => source.delete(name),
+            None => Ok(true),
+        }
+    }
+
+    /// Delete an own property in strict mode.
+    pub fn delete_model_property(&self, name: &str) -> AuthResult<()> {
+        if self.delete_property(name)? {
+            Ok(())
+        } else {
+            Err(AuthError::type_error(format!(
+                "Cannot delete property '{name}'"
+            )))
         }
     }
 
@@ -120,7 +230,8 @@ impl FieldValue {
         }
     }
 
-    pub(crate) fn own_property_keys(&self) -> AuthResult<Vec<String>> {
+    /// Capture all own string keys, including non-enumerable array and string length.
+    pub fn own_property_keys(&self) -> AuthResult<Vec<String>> {
         let mut keys = match self {
             Self::Array(array) => array
                 .own_indices()?
@@ -129,32 +240,47 @@ impl FieldValue {
                 .collect(),
             _ => Vec::new(),
         };
-        if let Self::Array(array) = self {
+        if let Some(units) = crate::query::field_string_units(self) {
+            keys.extend((0..units.len()).map(|index| index.to_string()));
+            keys.push("length".into());
+        } else if let Self::Array(array) = self {
+            keys.push("length".into());
             keys.extend(array.named_property_keys()?);
         } else if let Some(source) = self.property_source() {
             keys.extend(source.own_keys()?);
         }
-        keys.sort_by_key(|name| {
-            crate::utils::json::array_index(name).map_or((true, 0), |index| (false, index))
-        });
-        keys.dedup();
         Ok(keys)
     }
 
-    pub(crate) fn own_property_descriptor(
+    /// Inspect a complete own descriptor without evaluating an accessor.
+    pub fn own_property_descriptor(
         &self,
         name: &str,
     ) -> AuthResult<Option<FieldPropertyDescriptor>> {
         if let Self::Array(array) = self {
             if name == "length" {
-                return Ok(Some(FieldPropertyDescriptor { enumerable: false }));
+                return array.length_descriptor().map(Some);
             }
             if let Some(index) = crate::utils::json::array_index(name) {
-                return Ok(array
-                    .own_indices()?
-                    .contains(&(index as usize))
-                    .then_some(FieldPropertyDescriptor { enumerable: true }));
+                return array.own_property_descriptor(index as usize);
             }
+        }
+        if let Some(units) = crate::query::field_string_units(self) {
+            let value = if name == "length" {
+                Some(units.len().into())
+            } else {
+                crate::utils::json::array_index(name)
+                    .and_then(|index| units.get(index as usize))
+                    .map(|unit| crate::Utf16String::from_units(vec![*unit]).into())
+            };
+            return Ok(value.map(|value| FieldPropertyDescriptor {
+                enumerable: name != "length",
+                configurable: false,
+                property: FieldProperty::Data {
+                    value,
+                    writable: false,
+                },
+            }));
         }
         match self.property_source() {
             Some(source) => source.own_property_descriptor(name),

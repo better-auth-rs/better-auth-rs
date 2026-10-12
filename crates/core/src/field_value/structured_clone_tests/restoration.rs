@@ -48,7 +48,7 @@ fn default_record_restoration_reads_populated_targets_and_retries_after_decode_f
         matches!(rejected, Err(AuthError::Internal(message)) if message == "Native decoder rejected the record")
     );
     assert!(context.copies.is_empty());
-    let _ = gate.set("allowed", true.into())?;
+    gate.set("allowed", true.into())?;
     let cloned = source.structured_clone(&mut context)?;
     assert_eq!(cloned.strings, strings);
     assert_eq!(cloned.json, json);
@@ -112,7 +112,7 @@ fn restoration_errors_and_panics_clear_new_cycles_without_polluting_the_context(
     for panics in [false, true] {
         let object = FieldObject::from(FieldMap::from([("value".into(), 1.into())]));
         let array = FieldArray::from(vec![FieldValue::Object(object.clone()), "tail".into()]);
-        let _ = object.set("array", array.clone().into())?;
+        object.set("array", array.clone().into())?;
         let date = FieldValue::from(FieldDate::from_milliseconds(42.0));
         let mut context = StructuredCloneContext::new();
         let existing = context.clone_value(&date)?;
@@ -158,7 +158,7 @@ fn restoration_errors_and_panics_clear_new_cycles_without_polluting_the_context(
             targets.ok_or_else(|| AuthError::internal("Expected staged restoration targets"))?;
         assert_eq!(failed_array.len()?, 0);
         assert!(failed_object.snapshot_fields()?.is_empty());
-        let _ = object.set("value", 2.into())?;
+        object.set("value", 2.into())?;
         let cloned = context.clone_map(&fields)?;
         assert!(cloned["date"].strict_equals(&existing));
         let copied_object = cloned["root"]

@@ -417,7 +417,7 @@ fn publishes_debug<S: AuthSchema>(context: &AuthContext<S>) -> bool {
 fn restore_error_stack(value: &crate::FieldValue) -> AuthResult<()> {
     if let Some(object) = value.as_object() {
         let stack = object.get("errorStack")?.unwrap_or_default();
-        let _ = object.set("stack", stack)?;
+        object.set("stack", stack)?;
     }
     Ok(())
 }
@@ -624,8 +624,8 @@ mod logger_tests {
                         .ok_or_else(|| AuthError::internal("Hook error must be an object"))?;
                     let original_stack: FieldValue =
                         FieldMap::from([("stack".into(), "original".into())]).into();
-                    let _ = object.set("stack", "hidden".into())?;
-                    let _ = object.set("errorStack", original_stack.clone())?;
+                    object.set("stack", "hidden".into())?;
+                    object.set("errorStack", original_stack.clone())?;
                     let request = AuthRequest::new(HttpMethod::Get, "/hook-error");
                     let retained = if after {
                         let mut response = AuthResponse::new(200);

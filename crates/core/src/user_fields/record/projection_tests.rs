@@ -264,7 +264,7 @@ async fn raw_helpers_share_native_replacements_and_defer_dynamic_ids() -> AuthRe
                     output: Some(UserFieldTransform::new(move |value| {
                         assert!(value.strict_equals(&callback_payload));
                         let _ = callback_calls.fetch_add(1, Ordering::SeqCst);
-                        let _ = callback_id.set(
+                        callback_id.set(
                             "toString",
                             FieldFunction::contextual(|_, _| Ok("after-name".into())).into(),
                         )?;

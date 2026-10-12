@@ -66,8 +66,7 @@ impl OAuthProfileMapper for Callbacks {
             return Err(AuthError::from_thrown(self.0.failure.clone()));
         }
         if self.0.scenario.shape == "identity" {
-            let _ = raw
-                .as_object()
+            raw.as_object()
                 .unwrap()
                 .set("mapperMarker", self.0.marker.clone())?;
         }
@@ -105,7 +104,7 @@ impl OAuthAccountSubject for Callbacks {
                     .model_property("mapperMarker")?
                     .strict_equals(&self.0.marker)
             );
-            let _ = profile
+            profile
                 .as_object()
                 .unwrap()
                 .set("subjectMarker", self.0.marker.clone())?;
@@ -213,7 +212,7 @@ impl<S: AuthSchema> ValidateUserInfo<S> for Callbacks {
                     .model_property("subjectMarker")?
                     .strict_equals(&self.0.marker)
             );
-            let _ = profile
+            profile
                 .as_object()
                 .unwrap()
                 .set("admissionMarker", self.0.marker.clone())?;

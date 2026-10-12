@@ -1,7 +1,7 @@
 use super::Headers;
 use crate::{
     AuthError, AuthResult, FieldMap, FieldObject, FieldValue,
-    field_value::{FieldObjectSource, FieldPropertyDescriptor},
+    field_value::{FieldObjectSource, FieldPropertyDefinition, FieldPropertyDescriptor},
 };
 use std::{
     any::Any,
@@ -45,15 +45,32 @@ impl FieldObjectSource for NativeHeaders {
         self.properties.own_property_descriptor(name)
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        self.properties.get(name)
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
+        self.properties.get_with_receiver(name, receiver)
     }
 
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        self.properties.set(name, value)
+    fn set_with_receiver(
+        &self,
+        name: String,
+        value: FieldValue,
+        receiver: &FieldValue,
+    ) -> AuthResult<bool> {
+        self.properties.set_with_receiver(&name, value, receiver)
     }
 
-    fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(
+        &self,
+        name: String,
+        definition: FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        self.properties.define_own_property(name, definition)
+    }
+
+    fn delete(&self, name: &str) -> AuthResult<bool> {
         self.properties.delete(name)
     }
 

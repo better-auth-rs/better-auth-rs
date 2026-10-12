@@ -274,10 +274,14 @@ struct Properties {
 
 impl FieldObjectSource for Properties {
     fn own_keys(&self) -> AuthResult<Vec<String>> {
-        Ok(self.values.keys().cloned().collect())
+        crate::FieldObject::from(self.values.clone()).own_keys()
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        _receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
         self.reads.lock().unwrap().push(name.into());
         if self.reject == Some(name) {
             return Err(AuthError::bad_request("original cached property failure"));
@@ -288,17 +292,23 @@ impl FieldObjectSource for Properties {
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
         Ok(self
             .values
-            .contains_key(name)
-            .then_some(FieldPropertyDescriptor { enumerable: true }))
+            .get(name)
+            .cloned()
+            .map(FieldPropertyDescriptor::data))
     }
 
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(
+        &self,
+        _: String,
+        _: FieldValue,
+        _receiver: &FieldValue,
+    ) -> AuthResult<bool> {
         Err(AuthError::internal(
             "The cached getter fixture is read-only",
         ))
     }
 
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal(
             "The cached getter fixture is read-only",
         ))
@@ -307,12 +317,28 @@ impl FieldObjectSource for Properties {
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
         self.own_keys()?
             .into_iter()
-            .map(|name| Ok((name.clone(), self.get(&name)?.unwrap_or_default())))
+            .map(|name| {
+                Ok((
+                    name.clone(),
+                    self.get_with_receiver(&name, &FieldValue::Undefined)?
+                        .unwrap_or_default(),
+                ))
+            })
             .collect()
     }
 
     fn identity(&self) -> usize {
         std::ptr::from_ref(self).addr()
+    }
+
+    fn define_own_property(
+        &self,
+        _name: String,
+        _definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "This contract source does not define properties",
+        ))
     }
 }
 

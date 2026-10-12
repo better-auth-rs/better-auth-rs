@@ -1,6 +1,6 @@
 use better_auth_core::{
     AuthError, AuthResult, FieldDate, FieldFunction, FieldMap, FieldObject, FieldValue,
-    field_value::{FieldObjectSource, FieldPropertyDescriptor},
+    field_value::{FieldProperty, FieldPropertyDescriptor},
 };
 use serde_json::{Value as Json, json};
 use std::sync::{
@@ -47,26 +47,31 @@ struct Properties {
     thrown: FieldValue,
 }
 
-impl FieldObjectSource for Properties {
-    fn own_keys(&self) -> AuthResult<Vec<String>> {
-        Ok(METHODS.into_iter().map(str::to_owned).collect())
+impl Properties {
+    fn into_object(self) -> AuthResult<FieldObject> {
+        let source = Arc::new(self);
+        let object = FieldObject::from(FieldMap::new());
+        for name in METHODS {
+            let source = source.clone();
+            FieldValue::Object(object.clone()).define_model_property(
+                name,
+                FieldPropertyDescriptor {
+                    enumerable: false,
+                    configurable: false,
+                    property: FieldProperty::Accessor {
+                        get: Some(FieldFunction::contextual(move |receiver, _| {
+                            Ok(source.read(name, receiver)?.unwrap_or_default())
+                        })),
+                        set: None,
+                    },
+                }
+                .into(),
+            )?;
+        }
+        Ok(object)
     }
 
-    fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
-        Ok(METHODS
-            .contains(&name)
-            .then_some(FieldPropertyDescriptor { enumerable: false }))
-    }
-
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        self.get_with_receiver(name, &FieldValue::Undefined)
-    }
-
-    fn get_with_receiver(
-        &self,
-        name: &str,
-        expected: &FieldValue,
-    ) -> AuthResult<Option<FieldValue>> {
+    fn read(self: &Arc<Self>, name: &str, expected: &FieldValue) -> AuthResult<Option<FieldValue>> {
         if !METHODS.contains(&name) {
             return Ok(None);
         }
@@ -101,29 +106,6 @@ impl FieldObjectSource for Properties {
             .into(),
         ))
     }
-
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
-        Err(AuthError::type_error(
-            "Date probe properties are not assignable",
-        ))
-    }
-
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
-        Err(AuthError::type_error(
-            "Date probe properties are not configurable",
-        ))
-    }
-
-    fn snapshot_fields(&self) -> AuthResult<FieldMap> {
-        METHODS
-            .into_iter()
-            .map(|name| Ok((name.into(), self.get(name)?.unwrap_or_default())))
-            .collect()
-    }
-
-    fn identity(&self) -> usize {
-        std::ptr::from_ref(self) as usize
-    }
 }
 
 fn observe(name: &str, value: FieldValue, events: Events, thrown: FieldValue) -> AuthResult<Json> {
@@ -154,10 +136,7 @@ fn native(name: &str, timestamp: f64, configure: impl FnOnce(&mut Properties)) -
         thrown: thrown.clone(),
     };
     configure(&mut properties);
-    let date = FieldDate::from_milliseconds_with_properties(
-        timestamp,
-        FieldObject::from_source(Arc::new(properties)),
-    );
+    let date = FieldDate::from_milliseconds_with_properties(timestamp, properties.into_object()?);
     observe(name, date.into(), events, thrown)
 }
 

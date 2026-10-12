@@ -1,7 +1,7 @@
 {
   "contract": "mysql-native-values",
   "version": "1.7.6",
-  "status": "Two upstream captures are byte-identical. Rust Date and Array replay is pending.",
+  "status": "Two upstream captures are byte-identical. Focused compiler and native-value replay passed; the sole production lint failure was repaired and accepted by CI 38278048257. Full integrated acceptance remains pending.",
   "run": "38270385616",
   "runURL": "https://github.com/better-auth-rs/better-auth-rs/actions/runs/38270385616",
   "commit": "d57a7414343e606ed32ddca0f837b6db191e884f",
@@ -44,5 +44,21 @@
     "sha256": "854dc789eaa33e57d9ef50cafbe8c2172f6a1bda70d3b80b5bbeed1a90d46cdb"
   },
   "normalizations": [],
-  "boundary": "Preserve complete UTF-16 formatted SQL, Date method and coercion order, receiver identity, original thrown identity, and live Array traversal. These observations include static cycles and a callback that breaks a cycle; they do not establish engine-dependent stack depth or arbitrary native value parity."
+  "boundary": "Preserve complete UTF-16 formatted SQL, Date method and coercion order, receiver identity, original thrown identity, and live Array traversal. These observations include static cycles and a callback that breaks a cycle; they do not establish engine-dependent stack depth or arbitrary native value parity.",
+  "integrationAcceptance": {
+    "compilerRun": "38277274736",
+    "compilerRunURL": "https://github.com/better-auth-rs/better-auth-rs/actions/runs/38277274736",
+    "compilerCommit": "918258fa",
+    "compilerRunConclusion": "failure",
+    "compilerRustTestsPassed": 618,
+    "compilerSourceTestsPassed": 1,
+    "compilerFailure": "One collapsible-if production lint in shared update reselect. No source or Rust test failed.",
+    "adapterRun": "38278048257",
+    "adapterRunURL": "https://github.com/better-auth-rs/better-auth-rs/actions/runs/38278048257",
+    "adapterCommit": "02fbf364",
+    "adapterRunConclusion": "success",
+    "adapterTestsPassed": 137,
+    "liveAdapterTestsPassed": 4,
+    "fixturesChanged": false
+  }
 }

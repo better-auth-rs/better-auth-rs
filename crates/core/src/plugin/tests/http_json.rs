@@ -23,10 +23,50 @@ impl FieldArraySource for SelfArray {
         Ok(vec![0])
     }
 
-    fn get(&self, index: usize) -> AuthResult<Option<FieldValue>> {
+    fn get(&self, index: usize, _receiver: &FieldValue) -> AuthResult<Option<FieldValue>> {
         Ok((index == 0).then(|| FieldArray::from_source(self.0.upgrade().unwrap()).into()))
     }
 
+    fn own_property_descriptor(
+        &self,
+        index: usize,
+    ) -> AuthResult<Option<crate::FieldPropertyDescriptor>> {
+        Ok((index == 0).then(|| {
+            crate::FieldPropertyDescriptor::data(
+                FieldArray::from_source(self.0.upgrade().unwrap()).into(),
+            )
+        }))
+    }
+    fn length_descriptor(&self) -> AuthResult<crate::FieldPropertyDescriptor> {
+        Ok(crate::FieldPropertyDescriptor {
+            enumerable: false,
+            configurable: false,
+            property: crate::FieldProperty::Data {
+                value: 1.into(),
+                writable: true,
+            },
+        })
+    }
+    fn set(&self, _: usize, _: FieldValue, _: &FieldValue) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "The cyclic fixture does not assign indices",
+        ))
+    }
+    fn define_index(&self, _: usize, _: crate::FieldPropertyDefinition) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "The cyclic fixture does not define indices",
+        ))
+    }
+    fn define_length(&self, _: crate::FieldPropertyDefinition) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "The cyclic fixture does not define length",
+        ))
+    }
+    fn delete(&self, _: usize) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "The cyclic fixture does not delete indices",
+        ))
+    }
     fn identity(&self) -> usize {
         std::ptr::from_ref(self) as usize
     }
@@ -72,7 +112,7 @@ impl Sample {
         let fields = root.as_object().unwrap();
         match name {
             "object-self" => {
-                let _ = fields.set("self", root.clone())?;
+                fields.set("self", root.clone())?;
                 sample.cleanup.push((root.clone(), "self"));
                 sample.bytes = Some(r#"{"self":"[Circular ref-0]"}"#);
             }
@@ -85,16 +125,16 @@ impl Sample {
             }
             "indirect" => {
                 let child: FieldValue = FieldMap::from([("root".into(), root.clone())]).into();
-                let _ = fields.set("child", child.clone())?;
+                fields.set("child", child.clone())?;
                 sample.cleanup.push((child, "root"));
                 sample.bytes = Some(r#"{"child":{"root":"[Circular ref-0]"}}"#);
             }
             "aliases" => {
                 let shared: FieldValue = FieldMap::new().into();
-                let _ = shared.as_object().unwrap().set("self", shared.clone())?;
-                let _ = fields.set("first", FieldMap::new().into())?;
-                let _ = fields.set("a", shared.clone())?;
-                let _ = fields.set("b", shared.clone())?;
+                shared.as_object().unwrap().set("self", shared.clone())?;
+                fields.set("first", FieldMap::new().into())?;
+                fields.set("a", shared.clone())?;
+                fields.set("b", shared.clone())?;
                 sample.cleanup.push((shared, "self"));
                 sample.bytes = Some(
                     r#"{"first":{},"a":{"self":"[Circular ref-2]"},"b":{"self":"[Circular ref-2]"}}"#,
@@ -103,24 +143,24 @@ impl Sample {
             "returned-date" => {
                 let date = converting(FieldDate::from_milliseconds(0.0).into(), &sample.calls);
                 let child: FieldValue = FieldMap::new().into();
-                let _ = child.as_object().unwrap().set("self", child.clone())?;
-                let _ = fields.set("date", date.clone())?;
-                let _ = fields.set("child", child.clone())?;
+                child.as_object().unwrap().set("self", child.clone())?;
+                fields.set("date", date.clone())?;
+                fields.set("child", child.clone())?;
                 sample.method = Some((date, "date"));
                 sample.cleanup.push((child, "self"));
                 sample.bytes = Some(r#"{"date":{},"child":{"self":"[Circular ref-2]"}}"#);
             }
             "toJSON-ancestor" => {
                 let child = converting(root.clone(), &sample.calls);
-                let _ = fields.set("child", child.clone())?;
+                fields.set("child", child.clone())?;
                 sample.method = Some((child, "child"));
                 sample.cleanup.push((root.clone(), "child"));
                 sample.bytes = Some(r#"{"child":"[Circular ref-0]"}"#);
             }
             "ordinary-alias" => {
                 let shared: FieldValue = FieldMap::from([("leaf".into(), 1.0.into())]).into();
-                let _ = fields.set("a", shared.clone())?;
-                let _ = fields.set("b", shared)?;
+                fields.set("a", shared.clone())?;
+                fields.set("b", shared)?;
                 sample.bytes = Some(r#"{"a":{"leaf":1},"b":{"leaf":1}}"#);
                 sample.cyclic = false;
             }

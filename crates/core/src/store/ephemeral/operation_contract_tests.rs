@@ -39,10 +39,8 @@ fn run_once(action: &Mutex<Option<Action>>) -> AuthResult<()> {
 }
 
 struct Operand {
-    events: Events,
     tag: &'static str,
-    method: FieldFunction,
-    on_read: Mutex<Option<Action>>,
+    getter: FieldFunction,
 }
 
 impl FieldObjectSource for Operand {
@@ -50,8 +48,20 @@ impl FieldObjectSource for Operand {
         &self,
         name: &str,
     ) -> AuthResult<Option<crate::field_value::FieldPropertyDescriptor>> {
-        Ok(matches!(name, "tag" | "valueOf")
-            .then_some(crate::field_value::FieldPropertyDescriptor { enumerable: true }))
+        Ok(match name {
+            "tag" => Some(crate::field_value::FieldPropertyDescriptor::data(
+                self.tag.into(),
+            )),
+            "valueOf" => Some(crate::field_value::FieldPropertyDescriptor {
+                enumerable: true,
+                configurable: true,
+                property: crate::field_value::FieldProperty::Accessor {
+                    get: Some(self.getter.clone()),
+                    set: None,
+                },
+            }),
+            _ => None,
+        })
     }
 
     fn own_keys(&self) -> AuthResult<Vec<String>> {
@@ -60,23 +70,31 @@ impl FieldObjectSource for Operand {
         ))
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
         match name {
             "tag" => Ok(Some(self.tag.into())),
-            "valueOf" => {
-                record(&self.events, format!("get:{}.valueOf", self.tag))?;
-                run_once(&self.on_read)?;
-                Ok(Some(self.method.clone().into()))
-            }
+            "valueOf" => self.getter.call_with(receiver, &[]).map(Some),
             _ => Ok(None),
         }
     }
 
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(&self, _: String, _: FieldValue, _: &FieldValue) -> AuthResult<bool> {
         Err(AuthError::internal("The predicate operand is immutable"))
     }
 
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(
+        &self,
+        _: String,
+        _: crate::field_value::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        Err(AuthError::internal("The predicate operand is immutable"))
+    }
+
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal("The predicate operand is immutable"))
     }
 
@@ -110,12 +128,14 @@ fn operand(
         run_once(&on_call)?;
         Ok(number.into())
     });
-    FieldValue::Object(FieldObject::from_source(Arc::new(Operand {
-        events: events.clone(),
-        tag,
-        method,
-        on_read: Mutex::new(on_read),
-    })))
+    let reads = events.clone();
+    let on_read = Mutex::new(on_read);
+    let getter = FieldFunction::contextual(move |_, _| {
+        record(&reads, format!("get:{tag}.valueOf"))?;
+        run_once(&on_read)?;
+        Ok(method.clone().into())
+    });
+    FieldValue::Object(FieldObject::from_source(Arc::new(Operand { tag, getter })))
 }
 
 fn key(id: &str, remaining: f64) -> FieldMap {
@@ -220,8 +240,8 @@ async fn memory_api_key_increment_updates_the_detached_selected_row() -> AuthRes
         Some(Box::new(move || {
             updater.operation(|op| {
                 let object = live.as_object().expect("retained row");
-                let _ = object.set("name", named)?;
-                let _ = object.set("remaining", 7.0.into())?;
+                object.set("name", named)?;
+                object.set("remaining", 7.0.into())?;
                 record(&call_events, "nested:mutate-retained")?;
                 let active = op.capture_table(EntityRole::ApiKey)?;
                 op.replace_table(EntityRole::ApiKey, active.without_refs(&[call_row])?)?;
@@ -233,7 +253,7 @@ async fn memory_api_key_increment_updates_the_detached_selected_row() -> AuthRes
             })
         })),
     );
-    let _ = target.set_field("remaining".into(), probe)?;
+    target.set_field("remaining".into(), probe)?;
     let result = runtime
         .write_api_key_usage(&"target".to_owned().into(), ApiKeyUsageWrite::Decrement)
         .await?;
@@ -288,8 +308,8 @@ async fn memory_api_key_later_predicate_error_keeps_nested_writes_without_decrem
         Some(Box::new(move || {
             updater.operation(|_| {
                 let object = live.as_object().expect("retained row");
-                let _ = object.set("name", named)?;
-                let _ = object.set("remaining", 7.0.into())?;
+                object.set("name", named)?;
+                object.set("remaining", 7.0.into())?;
                 record(&call_events, "nested:mutate-retained")
             })
         })),
@@ -303,8 +323,8 @@ async fn memory_api_key_later_predicate_error_keeps_nested_writes_without_decrem
         None,
         Some(Box::new(move || Err(AuthError::Internal(message)))),
     );
-    let _ = target.set_field("remaining".into(), first)?;
-    let _ = later.set_field("remaining".into(), rejecting.clone())?;
+    target.set_field("remaining".into(), first)?;
+    later.set_field("remaining".into(), rejecting.clone())?;
     let result = runtime
         .write_api_key_usage(&"target".to_owned().into(), ApiKeyUsageWrite::Decrement)
         .await;
@@ -373,7 +393,7 @@ async fn memory_api_key_expiry_delete_publishes_the_captured_array() -> AuthResu
         None,
         Some(Box::new(move || {
             updater.operation(|op| {
-                let _ = live.as_object().expect("retained row").set("name", named)?;
+                live.as_object().expect("retained row").set("name", named)?;
                 record(&call_events, "nested:mutate-retained")?;
                 let active = op.capture_table(EntityRole::ApiKey)?;
                 op.replace_table(EntityRole::ApiKey, active.without_refs(&[removed])?)?;
@@ -387,7 +407,7 @@ async fn memory_api_key_expiry_delete_publishes_the_captured_array() -> AuthResu
             })
         })),
     );
-    let _ = target.set_field("expiresAt".into(), probe.clone())?;
+    target.set_field("expiresAt".into(), probe.clone())?;
     let deleted = runtime.delete_expired_api_keys().await?;
     assert_eq!(deleted, 2);
     assert_eq!(

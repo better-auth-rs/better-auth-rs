@@ -47,7 +47,7 @@ impl BeforeEndpointHook<StatelessSchema> for NativeProbe {
         _: &AuthContext<StatelessSchema>,
     ) -> AuthResult<Option<BeforeRequestAction>> {
         self.raw("before", request)?;
-        let _ = required(self.raw.as_object())?.set("name", "before".into())?;
+        required(self.raw.as_object())?.set("name", "before".into())?;
         Ok(None)
     }
 }
@@ -103,7 +103,7 @@ impl AuthPlugin<StatelessSchema> for NativeProbe {
     ) -> AuthResult<Option<BeforeRequestAction>> {
         self.raw("plugin.before", request)?;
         assert_eq!(request.query_string("name")?, Some("before".to_owned()));
-        let _ = required(self.raw.as_object())?.set("name", "plugin".into())?;
+        required(self.raw.as_object())?.set("name", "plugin".into())?;
         Ok(None)
     }
 

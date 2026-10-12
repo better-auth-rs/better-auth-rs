@@ -47,7 +47,7 @@ async fn public_endpoint_helpers_preserve_native_adapter_receiver_root_and_key_h
         let read_root = root.value();
         let read_keys = keys.clone();
         let read_calls = calls.clone();
-        let _ = receiver.fields.set(
+        receiver.fields.set(
             "getJwks",
             function(awaited, move |receiver, arguments| {
                 assert!(receiver.strict_equals(&read_receiver.upgrade().unwrap().value()));
@@ -62,7 +62,7 @@ async fn public_endpoint_helpers_preserve_native_adapter_receiver_root_and_key_h
         let create_root = root.value();
         let create_keys = keys.clone();
         let create_calls = calls.clone();
-        let _ = receiver.fields.set(
+        receiver.fields.set(
             "createJwk",
             function(awaited, move |receiver, arguments| {
                 assert!(receiver.strict_equals(&create_receiver.upgrade().unwrap().value()));

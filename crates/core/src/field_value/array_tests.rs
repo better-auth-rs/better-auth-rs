@@ -37,9 +37,48 @@ impl FieldArraySource for Source {
             .copied()
             .collect())
     }
-    fn get(&self, index: usize) -> AuthResult<Option<FieldValue>> {
+    fn get(&self, index: usize, _receiver: &FieldValue) -> AuthResult<Option<FieldValue>> {
         (self.on_read)(index)?;
         Ok(self.entries.lock().map_err(poisoned)?.get(&index).cloned())
+    }
+    fn own_property_descriptor(&self, index: usize) -> AuthResult<Option<FieldPropertyDescriptor>> {
+        Ok(self
+            .entries
+            .lock()
+            .map_err(poisoned)?
+            .get(&index)
+            .cloned()
+            .map(FieldPropertyDescriptor::data))
+    }
+    fn length_descriptor(&self) -> AuthResult<FieldPropertyDescriptor> {
+        Ok(FieldPropertyDescriptor {
+            enumerable: false,
+            configurable: false,
+            property: FieldProperty::Data {
+                value: self.length.into(),
+                writable: true,
+            },
+        })
+    }
+    fn set(&self, _: usize, _: FieldValue, _: &FieldValue) -> AuthResult<bool> {
+        Err(AuthError::type_error(
+            "The live array source does not support index assignment",
+        ))
+    }
+    fn define_index(&self, _: usize, _: FieldPropertyDefinition) -> AuthResult<bool> {
+        Err(AuthError::type_error(
+            "The live array source does not support index definition",
+        ))
+    }
+    fn define_length(&self, _: FieldPropertyDefinition) -> AuthResult<bool> {
+        Err(AuthError::type_error(
+            "The live array source does not support length assignment",
+        ))
+    }
+    fn delete(&self, _: usize) -> AuthResult<bool> {
+        Err(AuthError::type_error(
+            "The live array source does not support index deletion",
+        ))
     }
     fn identity(&self) -> usize {
         std::ptr::from_ref(self) as usize
@@ -49,6 +88,82 @@ impl FieldArraySource for Source {
         *self.target.lock().map_err(poisoned)? = Some(seed.array.clone());
         Ok(Some(seed))
     }
+}
+
+#[test]
+fn indexed_accessors_preserve_alternate_receivers_and_clone_hidden_indices_as_data()
+-> AuthResult<()> {
+    let value: FieldValue = vec![0.into(), 1.into(), 2.into()].into();
+    value.set_model_property("marker", "target".into())?;
+    let receiver: FieldValue = FieldMap::from([("marker".into(), "receiver".into())]).into();
+    let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let observed = reads.clone();
+    assert!(
+        value.define_own_property(
+            "0",
+            FieldPropertyDescriptor {
+                enumerable: true,
+                configurable: true,
+                property: FieldProperty::Accessor {
+                    get: Some(crate::FieldFunction::contextual(move |receiver, _| {
+                        observed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        receiver.model_property("marker")
+                    })),
+                    set: Some(crate::FieldFunction::contextual(|receiver, arguments| {
+                        let assigned = arguments
+                            .first()
+                            .cloned()
+                            .ok_or_else(|| AuthError::internal("Missing setter value"))?;
+                        receiver.set_model_property("marker", assigned)?;
+                        Ok(FieldValue::Undefined)
+                    })),
+                },
+            }
+            .into()
+        )?
+    );
+    let hidden_reads = reads.clone();
+    assert!(
+        value.define_own_property(
+            "1",
+            FieldPropertyDescriptor {
+                enumerable: false,
+                configurable: true,
+                property: FieldProperty::Accessor {
+                    get: Some(crate::FieldFunction::contextual(move |_, _| {
+                        hidden_reads.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        Ok("hidden-index".into())
+                    })),
+                    set: None,
+                },
+            }
+            .into()
+        )?
+    );
+    assert_eq!(
+        value.get_property_with_receiver("0", &receiver)?,
+        "receiver".into()
+    );
+    assert!(value.set_property_with_receiver("0", "assigned".into(), &receiver)?);
+    assert_eq!(receiver.model_property("marker")?, "assigned".into());
+    assert_eq!(value.model_property("marker")?, "target".into());
+    assert!(value.set_property_with_receiver("2", "receiver-index".into(), &receiver)?);
+    assert_eq!(receiver.model_property("2")?, "receiver-index".into());
+    assert_eq!(value.model_property("2")?, 2.into());
+    assert!(<Vec<FieldValue> as crate::SchemaField>::from_field(value.clone()).is_err());
+    assert_eq!(reads.load(std::sync::atomic::Ordering::SeqCst), 1);
+    let cloned = StructuredCloneContext::new().clone_value(&value)?;
+    assert_eq!(cloned.model_property("length")?, 3.into());
+    assert_eq!(
+        cloned.own_property_descriptor("1")?,
+        Some(FieldPropertyDescriptor::data("hidden-index".into()))
+    );
+    assert_eq!(
+        cloned.own_property_descriptor("0")?,
+        Some(FieldPropertyDescriptor::data("target".into()))
+    );
+    assert_eq!(reads.load(std::sync::atomic::Ordering::SeqCst), 3);
+    Ok(())
 }
 
 #[test]
@@ -166,7 +281,7 @@ fn clone_reads_arrays_depth_first_and_preserves_holes_and_own_undefined() -> Aut
         .ok_or_else(|| AuthError::internal("Expected cloned array"))?;
     assert_eq!(
         *events.lock().map_err(poisoned)?,
-        ["outer:0", "nested:0", "outer:1", "outer:2", "outer:3"]
+        ["outer:0", "nested:0", "outer:1", "outer:3"]
     );
     assert_eq!(copied.len()?, 4);
     assert_eq!(copied.own_indices()?, [0, 1, 3]);

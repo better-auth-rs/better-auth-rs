@@ -66,10 +66,12 @@ async fn native_relation_mutations_share_projection_source_without_writing_datab
                             AuthError::internal("Parent did not capture its child")
                         })?;
                         assert_eq!(
-                            object.set("organizationId", 9.0.into())?,
+                            object.get("organizationId")?,
                             Some("stored-organization".into())
                         );
-                        assert_eq!(object.set("id", 42.0.into())?, None);
+                        object.set("organizationId", 9.0.into())?;
+                        assert_eq!(object.get("id")?, None);
+                        object.set("id", 42.0.into())?;
                         if failure == Failure::Child {
                             return Err(AuthError::internal("child failure"));
                         }
@@ -119,11 +121,10 @@ async fn native_relation_mutations_share_projection_source_without_writing_datab
                         let object = value.as_object().ok_or_else(|| {
                             AuthError::internal("Parent relation is not an object")
                         })?;
-                        assert_eq!(
-                            object.set("name", "parent-name".into())?,
-                            Some("stored-name".into())
-                        );
-                        assert_eq!(object.delete("id")?, Some("stored-id".into()));
+                        assert_eq!(object.get("name")?, Some("stored-name".into()));
+                        object.set("name", "parent-name".into())?;
+                        assert_eq!(object.get("id")?, Some("stored-id".into()));
+                        assert!(object.delete("id")?);
                         if failure == Failure::Parent {
                             return Err(AuthError::internal("parent failure"));
                         }

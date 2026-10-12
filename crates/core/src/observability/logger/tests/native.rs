@@ -69,10 +69,6 @@ impl FieldObjectSource for Probe {
         self.fields.own_property_descriptor(name)
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        (self.read)(name, &FieldValue::Undefined)
-    }
-
     fn get_with_receiver(
         &self,
         name: &str,
@@ -81,11 +77,16 @@ impl FieldObjectSource for Probe {
         (self.read)(name, receiver)
     }
 
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        self.fields.set(name, value)
+    fn set_with_receiver(
+        &self,
+        name: String,
+        value: FieldValue,
+        receiver: &FieldValue,
+    ) -> AuthResult<bool> {
+        self.fields.set_with_receiver(&name, value, receiver)
     }
 
-    fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn delete(&self, name: &str) -> AuthResult<bool> {
         self.fields.delete(name)
     }
 
@@ -95,6 +96,14 @@ impl FieldObjectSource for Probe {
 
     fn identity(&self) -> usize {
         std::ptr::from_ref(self) as usize
+    }
+
+    fn define_own_property(
+        &self,
+        name: String,
+        definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        self.fields.define_own_property(name, definition)
     }
 }
 

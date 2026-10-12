@@ -1,7 +1,9 @@
 use super::*;
 use better_auth_core::{
-    FieldArray, FieldDate, FieldObject, FromFieldMap,
-    field_value::{FieldObjectSource, FieldPropertyDescriptor},
+    FieldArray, FieldDate, FieldFunction, FieldObject, FromFieldMap,
+    field_value::{
+        FieldObjectSource, FieldProperty, FieldPropertyDefinition, FieldPropertyDescriptor,
+    },
 };
 use std::sync::{OnceLock, Weak};
 
@@ -25,26 +27,58 @@ impl Receiver {
 }
 
 struct Properties {
-    fields: FieldMap,
-    observer: Observer,
-    receiver: Receiver,
-    failure: Option<FieldValue>,
+    fields: FieldObject,
+}
+
+impl Properties {
+    fn new(
+        fields: FieldMap,
+        observer: Observer,
+        receiver: Receiver,
+        failure: Option<FieldValue>,
+    ) -> Self {
+        let fields = fields
+            .into_iter()
+            .map(|(name, value)| {
+                let observer = observer.clone();
+                let receiver = receiver.clone();
+                let failure = failure.clone();
+                let phase = format!("get:{name}");
+                let get = FieldFunction::contextual(move |this, _| {
+                    observer
+                        .lock()
+                        .unwrap()
+                        .call(&phase, this, &receiver.get(), &[])?;
+                    if let Some(error) = &failure {
+                        return Err(AuthError::from_thrown(error.clone()));
+                    }
+                    Ok(value.clone())
+                });
+                (
+                    name,
+                    FieldPropertyDescriptor {
+                        enumerable: false,
+                        configurable: true,
+                        property: FieldProperty::Accessor {
+                            get: Some(get),
+                            set: None,
+                        },
+                    },
+                )
+            })
+            .collect::<indexmap::IndexMap<_, _>>()
+            .into();
+        Self { fields }
+    }
 }
 
 impl FieldObjectSource for Properties {
     fn own_keys(&self) -> AuthResult<Vec<String>> {
-        Ok(self.fields.keys().cloned().collect())
+        self.fields.own_keys()
     }
 
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
-        Ok(self
-            .fields
-            .contains_key(name)
-            .then_some(FieldPropertyDescriptor { enumerable: false }))
-    }
-
-    fn get(&self, _: &str) -> AuthResult<Option<FieldValue>> {
-        Err(AuthError::internal("Native getter requires its receiver"))
+        self.fields.own_property_descriptor(name)
     }
 
     fn get_with_receiver(
@@ -52,26 +86,18 @@ impl FieldObjectSource for Properties {
         name: &str,
         receiver: &FieldValue,
     ) -> AuthResult<Option<FieldValue>> {
-        let Some(value) = self.fields.get(name) else {
-            return Ok(None);
-        };
-        self.observer.lock().unwrap().call(
-            &format!("get:{name}"),
-            receiver,
-            &self.receiver.get(),
-            &[],
-        )?;
-        if let Some(error) = &self.failure {
-            return Err(AuthError::from_thrown(error.clone()));
-        }
-        Ok(Some(value.clone()))
+        self.fields.get_with_receiver(name, receiver)
     }
 
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(&self, _: String, _: FieldValue, _: &FieldValue) -> AuthResult<bool> {
         Err(AuthError::internal("Contract accessor has no setter"))
     }
 
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(&self, _: String, _: FieldPropertyDefinition) -> AuthResult<bool> {
+        Err(AuthError::internal("Contract accessor has no setter"))
+    }
+
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal(
             "Contract does not delete named accessors",
         ))
@@ -195,15 +221,15 @@ fn dynamic_result(observer: &Observer) -> Arc<FieldValue> {
         Ok("custom-reference".into())
     });
     expected.bind(
-        FieldObject::from_source(Arc::new(Properties {
-            fields: FieldMap::from([
+        FieldObject::from_source(Arc::new(Properties::new(
+            FieldMap::from([
                 ("length".into(), "0".into()),
                 ("toJSON".into(), to_json.into()),
             ]),
-            observer: observer.clone(),
-            receiver: expected.clone(),
-            failure: None,
-        }))
+            observer.clone(),
+            expected.clone(),
+            None,
+        )))
         .into(),
     )
 }
@@ -302,12 +328,12 @@ async fn run_case(scenario: &Value) -> AuthResult<Value> {
     let index = expected.bind(
         FieldArray::from_values_with_properties(
             vec!["before".into()],
-            FieldObject::from_source(Arc::new(Properties {
-                fields: FieldMap::from([(method.into(), callback.into())]),
-                observer: observer.clone(),
-                receiver: expected.clone(),
-                failure: getter_error.then(|| original.clone()),
-            })),
+            FieldObject::from_source(Arc::new(Properties::new(
+                FieldMap::from([(method.into(), callback.into())]),
+                observer.clone(),
+                expected.clone(),
+                getter_error.then(|| original.clone()),
+            ))),
         )
         .into(),
     );

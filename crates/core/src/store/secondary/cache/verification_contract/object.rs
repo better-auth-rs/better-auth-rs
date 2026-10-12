@@ -1,21 +1,11 @@
 use super::*;
-use crate::field_value::{FieldObjectSource, FieldPropertyDescriptor};
+use crate::field_value::{FieldProperty, FieldPropertyDescriptor};
 use std::sync::{OnceLock, Weak};
-
-type Getter = Arc<dyn Fn(&FieldValue) -> AuthResult<FieldValue> + Send + Sync>;
-
-enum Property {
-    Value(FieldValue),
-    Getter { callback: Getter, enumerable: bool },
-}
-
-#[derive(Default)]
-struct Properties(Mutex<indexmap::IndexMap<String, Property>>);
 
 pub(super) struct Root {
     pub(super) value: FieldValue,
     expected: Arc<OnceLock<FieldValue>>,
-    properties: Arc<Properties>,
+    properties: crate::FieldObject,
 }
 
 impl Root {
@@ -51,8 +41,8 @@ impl Root {
     pub(super) fn build(
         create: impl FnOnce(crate::FieldObject) -> AuthResult<FieldValue>,
     ) -> AuthResult<Self> {
-        let properties = Arc::new(Properties::default());
-        let fields = crate::FieldObject::from_source(properties.clone());
+        let properties: crate::FieldObject = FieldMap::new().into();
+        let fields = properties.clone();
         let value = create(fields)?;
         let expected = Arc::new(OnceLock::new());
         expected.set(value.clone()).unwrap();
@@ -68,12 +58,9 @@ impl Root {
     }
 
     pub(super) fn data(&self, name: &str, value: FieldValue) {
-        let _ = self
-            .properties
-            .0
-            .lock()
-            .unwrap()
-            .insert(name.into(), Property::Value(value));
+        self.properties
+            .define_own_property(name, FieldPropertyDescriptor::data(value).into())
+            .unwrap();
     }
 
     pub(super) fn getter(
@@ -82,72 +69,21 @@ impl Root {
         enumerable: bool,
         callback: impl Fn(&FieldValue) -> AuthResult<FieldValue> + Send + Sync + 'static,
     ) {
-        let _ = self.properties.0.lock().unwrap().insert(
-            name.into(),
-            Property::Getter {
-                callback: Arc::new(callback),
-                enumerable,
-            },
-        );
-    }
-}
-
-impl FieldObjectSource for Properties {
-    fn own_keys(&self) -> AuthResult<Vec<String>> {
-        Ok(self.0.lock().unwrap().keys().cloned().collect())
-    }
-
-    fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
-        Ok(self
-            .0
-            .lock()
-            .unwrap()
-            .get(name)
-            .map(|property| FieldPropertyDescriptor {
-                enumerable: match property {
-                    Property::Value(_) => true,
-                    Property::Getter { enumerable, .. } => *enumerable,
-                },
-            }))
-    }
-
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        self.get_with_receiver(name, &FieldValue::Undefined)
-    }
-
-    fn get_with_receiver(
-        &self,
-        name: &str,
-        receiver: &FieldValue,
-    ) -> AuthResult<Option<FieldValue>> {
-        let callback = match self.0.lock().unwrap().get(name) {
-            Some(Property::Value(value)) => return Ok(Some(value.clone())),
-            Some(Property::Getter { callback, .. }) => callback.clone(),
-            None => return Ok(None),
-        };
-        callback(receiver).map(Some)
-    }
-
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        match self.0.lock().unwrap().insert(name, Property::Value(value)) {
-            Some(Property::Value(value)) => Ok(Some(value)),
-            _ => Ok(None),
-        }
-    }
-
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
-        Err(AuthError::internal(
-            "Verification contract does not delete root properties",
-        ))
-    }
-
-    fn snapshot_fields(&self) -> AuthResult<FieldMap> {
-        Err(AuthError::internal(
-            "Verification native roots must remain live until spread",
-        ))
-    }
-
-    fn identity(&self) -> usize {
-        std::ptr::from_ref(self).addr()
+        self.properties
+            .define_own_property(
+                name,
+                FieldPropertyDescriptor {
+                    enumerable,
+                    configurable: true,
+                    property: FieldProperty::Accessor {
+                        get: Some(crate::FieldFunction::contextual(move |receiver, _| {
+                            callback(receiver)
+                        })),
+                        set: None,
+                    },
+                }
+                .into(),
+            )
+            .unwrap();
     }
 }

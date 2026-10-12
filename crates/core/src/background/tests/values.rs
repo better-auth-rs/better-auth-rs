@@ -13,13 +13,22 @@ impl FieldObjectSource for NonEnumerableObject {
             descriptor
         }))
     }
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        self.0.get(name)
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
+        self.0.get_with_receiver(name, receiver)
     }
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        self.0.set(name, value)
+    fn set_with_receiver(
+        &self,
+        name: String,
+        value: FieldValue,
+        receiver: &FieldValue,
+    ) -> AuthResult<bool> {
+        self.0.set_with_receiver(&name, value, receiver)
     }
-    fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn delete(&self, name: &str) -> AuthResult<bool> {
         self.0.delete(name)
     }
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
@@ -27,6 +36,14 @@ impl FieldObjectSource for NonEnumerableObject {
     }
     fn identity(&self) -> usize {
         std::ptr::from_ref(self) as usize
+    }
+
+    fn define_own_property(
+        &self,
+        name: String,
+        definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        self.0.define_own_property(name, definition)
     }
 }
 

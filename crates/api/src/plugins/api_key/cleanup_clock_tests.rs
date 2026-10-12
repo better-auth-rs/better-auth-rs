@@ -144,7 +144,7 @@ impl Instance {
     fn with_rows(clock: &Arc<AtomicI64>, rows: Vec<FieldMap>) -> AuthResult<Self> {
         let logger_calls = Arc::new(AtomicUsize::new(0));
         let logger: FieldObject = FieldMap::from([("level".into(), "error".into())]).into();
-        let _ = logger.set(
+        logger.set(
             "log",
             FieldFunction::contextual({
                 let calls = logger_calls.clone();

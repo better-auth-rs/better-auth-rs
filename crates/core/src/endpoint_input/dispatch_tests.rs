@@ -62,7 +62,7 @@ impl BeforeEndpointHook<StatelessSchema> for Hooks {
         _: &AuthContext<StatelessSchema>,
     ) -> AuthResult<Option<BeforeRequestAction>> {
         self.observe_raw("before", request)?;
-        let _ = object(&request.input_field_value()?)?.set("name", "from hook".into())?;
+        object(&request.input_field_value()?)?.set("name", "from hook".into())?;
         Ok(None)
     }
 }
@@ -86,7 +86,7 @@ impl AuthPlugin<StatelessSchema> for Hooks {
             object(&request.input_field_value()?)?.get("name")?,
             Some("from hook".into())
         );
-        let _ = object(&scope()?.body)?.set("name", "from plugin".into())?;
+        object(&scope()?.body)?.set("name", "from plugin".into())?;
         Ok(None)
     }
 
@@ -188,7 +188,7 @@ async fn hook_mutations_reach_validation_and_handler_without_replacing_raw_scope
                 Some("validated")
             );
             assert_eq!(request.body.as_deref(), Some(BYTES));
-            let _ = object(&metadata)?.set("value", 2.into())?;
+            object(&metadata)?.set("value", 2.into())?;
             AuthResponse::json(200, &serde_json::json!({"ok": true}))
         };
         let response = if http {

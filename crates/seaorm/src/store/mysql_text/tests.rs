@@ -1,7 +1,7 @@
 use super::*;
 use better_auth_core::{
     FieldDate, FieldFunction, FieldMap, FieldObject,
-    field_value::{FieldObjectSource, FieldPropertyDescriptor},
+    field_value::{FieldObjectSource, FieldPropertyDefinition, FieldPropertyDescriptor},
 };
 use serde_json::{Value as Json, json};
 use std::sync::{
@@ -88,7 +88,7 @@ impl FieldObjectSource for Native {
         }
         Ok(name == "toSqlString")
     }
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(&self, name: &str, _: &FieldValue) -> AuthResult<Option<FieldValue>> {
         if name != "toSqlString" {
             return Ok(None);
         }
@@ -114,12 +114,18 @@ impl FieldObjectSource for Native {
             .into(),
         ))
     }
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(&self, _: String, _: FieldValue, _: &FieldValue) -> AuthResult<bool> {
         Err(AuthError::internal(
             "Native contract source must not be assigned",
         ))
     }
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(&self, _: String, _: FieldPropertyDefinition) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "Native contract source must not be assigned",
+        ))
+    }
+
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal(
             "Native contract source must not be deleted",
         ))

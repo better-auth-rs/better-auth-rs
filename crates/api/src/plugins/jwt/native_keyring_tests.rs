@@ -487,7 +487,7 @@ async fn discovery_filters_before_mapping_and_keeps_live_record_mutations_on_suc
         first.getter(
             "publicKey",
             FieldFunction::contextual(move |_, _| {
-                let _ = second_fields.set("id", "changed".into())?;
+                second_fields.set("id", "changed".into())?;
                 if fails {
                     return Err(AuthError::from_thrown(failure.clone()));
                 }

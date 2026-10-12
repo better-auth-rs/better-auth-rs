@@ -87,7 +87,7 @@ impl State {
         .into();
         let expected: FieldValue = options.clone().into();
         let state = self.clone();
-        let _ = options.set(
+        options.set(
             "log",
             FieldFunction::contextual(move |receiver, arguments| {
                 assert!(receiver.strict_equals(&expected));

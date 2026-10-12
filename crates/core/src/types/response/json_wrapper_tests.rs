@@ -6,8 +6,7 @@
 
 use crate::{
     AuthError, AuthResponse, AuthResult, FieldArray, FieldFunction, FieldMap, FieldObject,
-    FieldValue, Headers, ResponseBody,
-    field_value::{FieldArraySource, FieldObjectSource},
+    FieldValue, Headers, ResponseBody, field_value::FieldObjectSource,
 };
 use std::sync::{Arc, Mutex};
 
@@ -88,7 +87,7 @@ fn raw_json_wrappers_encode_the_body_once_and_preserve_native_identity() -> Auth
         br#"{"_flag":"json","body":"nested"}"#
     );
     let cycle: FieldValue = FieldMap::new().into();
-    let _ = cycle.as_object().unwrap().set("self", cycle.clone())?;
+    cycle.as_object().unwrap().set("self", cycle.clone())?;
     let error = AuthResponse::native(None, bare(cycle.clone()))
         .into_http_response()
         .unwrap_err();
@@ -199,7 +198,7 @@ struct Getters {
 
 impl FieldObjectSource for Getters {
     fn own_keys(&self) -> AuthResult<Vec<String>> {
-        Ok(self.fields.keys().cloned().collect())
+        crate::FieldObject::from(self.fields.clone()).own_keys()
     }
     fn own_property_descriptor(
         &self,
@@ -207,10 +206,15 @@ impl FieldObjectSource for Getters {
     ) -> AuthResult<Option<crate::field_value::FieldPropertyDescriptor>> {
         Ok(self
             .fields
-            .contains_key(name)
-            .then_some(crate::field_value::FieldPropertyDescriptor { enumerable: true }))
+            .get(name)
+            .cloned()
+            .map(crate::field_value::FieldPropertyDescriptor::data))
     }
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        _receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
         let Some(value) = self.fields.get(name) else {
             return Ok(None);
         };
@@ -218,20 +222,41 @@ impl FieldObjectSource for Getters {
         record(&self.events, self.failure, &event)?;
         Ok(Some(value.clone()))
     }
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(
+        &self,
+        _: String,
+        _: FieldValue,
+        _receiver: &FieldValue,
+    ) -> AuthResult<bool> {
         Err(AuthError::internal("Wrapper fixture is read-only"))
     }
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal("Wrapper fixture is read-only"))
     }
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
         self.fields
             .keys()
-            .map(|name| Ok((name.clone(), self.get(name)?.unwrap())))
+            .map(|name| {
+                Ok((
+                    name.clone(),
+                    self.get_with_receiver(name, &FieldValue::Undefined)?
+                        .unwrap(),
+                ))
+            })
             .collect()
     }
     fn identity(&self) -> usize {
         std::ptr::from_ref(self) as usize
+    }
+
+    fn define_own_property(
+        &self,
+        _name: String,
+        _definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "This contract source does not define properties",
+        ))
     }
 }
 
@@ -477,9 +502,9 @@ fn header_record_rechecks_deleted_fields_and_keeps_explicit_undefined() -> AuthR
         .into(),
     )])
     .into();
-    let _ = fields.set("first", first)?;
-    let _ = fields.set("removed", "never copied".into())?;
-    let _ = fields.set("explicit", FieldValue::Undefined)?;
+    fields.set("first", first)?;
+    fields.set("removed", "never copied".into())?;
+    fields.set("explicit", FieldValue::Undefined)?;
     let response = AuthResponse::native(
         None,
         wrapper(
@@ -609,36 +634,10 @@ fn init_header_validation_follows_wrapper_headers_and_precedes_body_json() -> Au
     Ok(())
 }
 
-struct MutableArray(Mutex<Vec<FieldValue>>, crate::FieldObject);
-
-impl Default for MutableArray {
-    fn default() -> Self {
-        Self(Mutex::default(), crate::FieldMap::new().into())
-    }
-}
-
-impl FieldArraySource for MutableArray {
-    fn properties(&self) -> &crate::FieldObject {
-        &self.1
-    }
-    fn len(&self) -> AuthResult<usize> {
-        Ok(self.0.lock().unwrap().len())
-    }
-    fn own_indices(&self) -> AuthResult<Vec<usize>> {
-        Ok((0..self.len()?).collect())
-    }
-    fn get(&self, index: usize) -> AuthResult<Option<FieldValue>> {
-        Ok(self.0.lock().unwrap().get(index).cloned())
-    }
-    fn identity(&self) -> usize {
-        std::ptr::from_ref(self) as usize
-    }
-}
-
 #[test]
 fn header_sequences_observe_live_inner_and_outer_lengths() -> AuthResult<()> {
     for mode in ["inner-grow", "inner-shrink", "outer-grow", "outer-shrink"] {
-        let array = Arc::new(MutableArray::default());
+        let array = FieldArray::new();
         let events = Events::default();
         let name: FieldValue = FieldMap::from([(
             "toString".into(),
@@ -648,11 +647,11 @@ fn header_sequences_observe_live_inner_and_outer_lengths() -> AuthResult<()> {
                 move |_, arguments| {
                     assert!(arguments.is_empty());
                     events.lock().unwrap().push("name.toString".into());
-                    let mut values = array.0.lock().unwrap();
                     match mode {
-                        "inner-grow" => values.push("third".into()),
-                        "outer-grow" => values.push(vec!["x-added".into(), "added".into()].into()),
-                        _ => values.truncate(1),
+                        "inner-grow" => array.set(array.len()?, "third".into())?,
+                        "outer-grow" => array
+                            .set(array.len()?, vec!["x-added".into(), "added".into()].into())?,
+                        _ => array.set_length(1)?,
                     }
                     Ok("x-first".into())
                 }
@@ -661,15 +660,18 @@ fn header_sequences_observe_live_inner_and_outer_lengths() -> AuthResult<()> {
         )])
         .into();
         let headers = if mode.starts_with("inner") {
-            *array.0.lock().unwrap() = vec![name, "first".into()];
-            vec![FieldArray::from_source(array.clone()).into()].into()
+            array.set(0, name)?;
+            array.set(1, "first".into())?;
+            vec![array.clone().into()].into()
         } else {
             let mut pairs = vec![vec![name, "first".into()].into()];
             if mode == "outer-shrink" {
                 pairs.push(vec!["x-removed".into(), "never copied".into()].into());
             }
-            *array.0.lock().unwrap() = pairs;
-            FieldArray::from_source(array.clone()).into()
+            for (index, pair) in pairs.into_iter().enumerate() {
+                array.set(index, pair)?;
+            }
+            array.clone().into()
         };
         let response = AuthResponse::native(
             None,
@@ -694,7 +696,7 @@ fn header_sequences_observe_live_inner_and_outer_lengths() -> AuthResult<()> {
             assert_eq!(observation(&response?.headers), (expected, Vec::new()));
         }
         assert_eq!(*events.lock().unwrap(), ["name.toString"]);
-        array.0.lock().unwrap().clear();
+        array.set_length(0)?;
     }
     Ok(())
 }

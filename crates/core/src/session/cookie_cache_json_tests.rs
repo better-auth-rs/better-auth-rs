@@ -17,7 +17,58 @@ fn record(events: &Events, event: impl Into<String>) -> AuthResult<()> {
 struct Probe {
     model: &'static str,
     events: Events,
-    error: Mutex<Option<AuthError>>,
+    error: Arc<Mutex<Option<AuthError>>>,
+    properties: FieldObject,
+}
+
+impl Probe {
+    fn new(model: &'static str, events: Events, failure: Option<AuthError>) -> Self {
+        let error = Arc::new(Mutex::new(failure));
+        let properties = ["value", "later"]
+            .into_iter()
+            .map(|name| {
+                let events = events.clone();
+                let error = error.clone();
+                (
+                    name.into(),
+                    crate::FieldPropertyDescriptor {
+                        enumerable: true,
+                        configurable: true,
+                        property: crate::FieldProperty::Accessor {
+                            get: Some(crate::FieldFunction::contextual(move |_, _| {
+                                Self::read(model, &events, &error, name)
+                            })),
+                            set: None,
+                        },
+                    },
+                )
+            })
+            .collect::<indexmap::IndexMap<_, _>>()
+            .into();
+        Self {
+            model,
+            events,
+            error,
+            properties,
+        }
+    }
+
+    fn read(
+        model: &str,
+        events: &Events,
+        error: &Mutex<Option<AuthError>>,
+        name: &str,
+    ) -> AuthResult<FieldValue> {
+        record(events, format!("{model}.{name}"))?;
+        if let Some(error) = error
+            .lock()
+            .map_err(|_| AuthError::internal("Cache error poisoned"))?
+            .take()
+        {
+            return Err(error);
+        }
+        Ok(name.into())
+    }
 }
 
 impl FieldObjectSource for Probe {
@@ -29,28 +80,27 @@ impl FieldObjectSource for Probe {
         &self,
         name: &str,
     ) -> AuthResult<Option<crate::field_value::FieldPropertyDescriptor>> {
-        Ok(matches!(name, "value" | "later")
-            .then_some(crate::field_value::FieldPropertyDescriptor { enumerable: true }))
+        self.properties.own_property_descriptor(name)
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        record(&self.events, format!("{}.{name}", self.model))?;
-        if let Some(error) = self
-            .error
-            .lock()
-            .map_err(|_| AuthError::internal("Cache error poisoned"))?
-            .take()
-        {
-            return Err(error);
-        }
-        Ok(Some(name.into()))
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        _receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
+        Self::read(self.model, &self.events, &self.error, name).map(Some)
     }
 
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(
+        &self,
+        _: String,
+        _: FieldValue,
+        _receiver: &FieldValue,
+    ) -> AuthResult<bool> {
         Err(AuthError::internal("Cache probes are immutable"))
     }
 
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal("Cache probes are immutable"))
     }
 
@@ -62,6 +112,16 @@ impl FieldObjectSource for Probe {
 
     fn identity(&self) -> usize {
         std::ptr::from_ref(self) as usize
+    }
+
+    fn define_own_property(
+        &self,
+        _name: String,
+        _definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "This contract source does not define properties",
+        ))
     }
 }
 
@@ -99,7 +159,7 @@ async fn cache_failures_preserve_filter_version_json_order_and_original_errors()
             let mut probe = |model: &'static str| -> AuthResult<FieldValue> {
                 if stage.strip_suffix("-cycle") == Some(model) {
                     let object = FieldObject::from(FieldMap::new());
-                    let _ = object.set("self", FieldValue::Object(object.clone()))?;
+                    object.set("self", FieldValue::Object(object.clone()))?;
                     cycles.push(object.clone());
                     return Ok(FieldValue::Object(object));
                 }
@@ -112,11 +172,7 @@ async fn cache_failures_preserve_filter_version_json_order_and_original_errors()
                     None
                 };
                 Ok(FieldValue::Object(FieldObject::from_source(Arc::new(
-                    Probe {
-                        model,
-                        events: events.clone(),
-                        error: Mutex::new(failure),
-                    },
+                    Probe::new(model, events.clone(), failure),
                 ))))
             };
             let data = data(probe("session")?, probe("user")?)?;
@@ -239,7 +295,7 @@ async fn payload_preserves_public_active_extension_and_omits_private_active() ->
 async fn compact_serializes_live_session_children_twice_after_version() -> AuthResult<()> {
     let events = Events::default();
     let child = FieldObject::from(FieldMap::from([("serial".into(), 0.0.into())]));
-    let _ = child.set(
+    child.set(
         "toJSON",
         crate::FieldFunction::contextual({
             let events = events.clone();
@@ -250,7 +306,7 @@ async fn compact_serializes_live_session_children_twice_after_version() -> AuthR
                     .as_f64()
                     .ok_or_else(|| AuthError::internal("Missing live serial"))?
                     + 1.0;
-                let _ = receiver
+                receiver
                     .as_object()
                     .ok_or_else(|| AuthError::internal("Missing toJSON receiver"))?
                     .set("serial", serial.into())?;

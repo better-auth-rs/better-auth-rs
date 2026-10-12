@@ -147,7 +147,7 @@ async fn serial_verification_consumption_preserves_numeric_reservation_ids() -> 
             .snapshot_refs()?
         {
             created_at += 1_000.0;
-            let _ = row.set_field(
+            row.set_field(
                 "createdAt".into(),
                 crate::FieldDate::from_milliseconds(created_at).into(),
             )?;

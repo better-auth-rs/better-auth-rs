@@ -217,7 +217,7 @@ fn deferred_statements_retain_live_objects_between_executions() -> AuthResult<()
     let calls = Arc::new(AtomicUsize::new(0));
     for output in ["FIRST", "SECOND"] {
         let counted = calls.clone();
-        let _ = object.set(
+        object.set(
             "toSqlString",
             FieldFunction::contextual(move |_, _| {
                 let _ = counted.fetch_add(1, Ordering::SeqCst);

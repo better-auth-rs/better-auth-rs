@@ -7,7 +7,9 @@
 use super::*;
 use better_auth_core::{
     FieldFunction, FieldObject,
-    field_value::{FieldObjectSource, FieldPropertyDescriptor},
+    field_value::{
+        FieldObjectSource, FieldPropertyDefinition, FieldPropertyDescriptor, FieldPropertyUpdate,
+    },
     observability::{LogArgument, LogLevel, LogSink},
 };
 use std::sync::{Arc, Mutex, Weak};
@@ -54,7 +56,6 @@ impl LogSink for Trace {
 pub(super) struct ObservedFields {
     owner: Weak<Self>,
     pub(super) fields: FieldObject,
-    getters: FieldObject,
     trace: Arc<Trace>,
     failure: Option<(&'static str, FieldValue)>,
 }
@@ -68,7 +69,6 @@ impl ObservedFields {
         Arc::new_cyclic(|owner| Self {
             owner: owner.clone(),
             fields: fields.into(),
-            getters: FieldMap::new().into(),
             trace,
             failure,
         })
@@ -79,7 +79,23 @@ impl ObservedFields {
     }
 
     pub(super) fn getter(&self, name: &str, callback: FieldFunction) -> AuthResult<()> {
-        self.getters.set(name, callback.into()).map(drop)
+        if self.fields.define_own_property(
+            name,
+            FieldPropertyDefinition {
+                enumerable: Some(true),
+                configurable: Some(true),
+                property: FieldPropertyUpdate::Accessor {
+                    get: Some(Some(callback)),
+                    set: Some(None),
+                },
+            },
+        )? {
+            Ok(())
+        } else {
+            Err(AuthError::internal(
+                "The JWT probe rejected its accessor definition",
+            ))
+        }
     }
 }
 
@@ -90,10 +106,6 @@ impl FieldObjectSource for ObservedFields {
 
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
         self.fields.own_property_descriptor(name)
-    }
-
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        self.get_with_receiver(name, &self.owner.upgrade().unwrap().value())
     }
 
     fn get_with_receiver(
@@ -108,17 +120,27 @@ impl FieldObjectSource for ObservedFields {
         {
             return Err(AuthError::from_thrown(error.clone()));
         }
-        if let Some(FieldValue::Function(getter)) = self.getters.get(name)? {
-            return getter.call_with(receiver, &[]).map(Some);
-        }
-        self.fields.get(name)
+        self.fields.get_with_receiver(name, receiver)
     }
 
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        self.fields.set(name, value)
+    fn set_with_receiver(
+        &self,
+        name: String,
+        value: FieldValue,
+        receiver: &FieldValue,
+    ) -> AuthResult<bool> {
+        self.fields.set_with_receiver(&name, value, receiver)
     }
 
-    fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(
+        &self,
+        name: String,
+        definition: FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        self.fields.define_own_property(name, definition)
+    }
+
+    fn delete(&self, name: &str) -> AuthResult<bool> {
         self.fields.delete(name)
     }
 

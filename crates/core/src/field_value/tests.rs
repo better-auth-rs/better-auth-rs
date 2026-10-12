@@ -63,7 +63,7 @@ async fn live_object_read_errors_propagate_without_implicit_snapshots() {
     use crate::{AuthConfig, AuthContext, store::EphemeralStore};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    struct FailedSource(AtomicUsize, FieldValue);
+    struct FailedSource(Arc<AtomicUsize>, FieldValue, crate::FieldFunction);
 
     impl FieldObjectSource for FailedSource {
         fn own_keys(&self) -> AuthResult<Vec<String>> {
@@ -74,7 +74,14 @@ async fn live_object_read_errors_propagate_without_implicit_snapshots() {
             &self,
             name: &str,
         ) -> AuthResult<Option<FieldPropertyDescriptor>> {
-            Ok((name == "id").then_some(FieldPropertyDescriptor { enumerable: true }))
+            Ok((name == "id").then(|| FieldPropertyDescriptor {
+                enumerable: true,
+                configurable: true,
+                property: crate::FieldProperty::Accessor {
+                    get: Some(self.2.clone()),
+                    set: None,
+                },
+            }))
         }
 
         fn has_property(&self, name: &str) -> AuthResult<bool> {
@@ -84,7 +91,11 @@ async fn live_object_read_errors_propagate_without_implicit_snapshots() {
             Ok(matches!(name, "id" | "inherited"))
         }
 
-        fn get(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+        fn get_with_receiver(
+            &self,
+            _: &str,
+            _receiver: &FieldValue,
+        ) -> AuthResult<Option<FieldValue>> {
             let _ = self.0.fetch_add(1, Ordering::SeqCst);
             Err(AuthError::from_thrown(self.1.clone()))
         }
@@ -94,16 +105,31 @@ async fn live_object_read_errors_propagate_without_implicit_snapshots() {
             Err(AuthError::from_thrown(self.1.clone()))
         }
 
-        fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+        fn set_with_receiver(
+            &self,
+            _: String,
+            _: FieldValue,
+            _receiver: &FieldValue,
+        ) -> AuthResult<bool> {
             Err(AuthError::internal("object source write failed"))
         }
 
-        fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+        fn delete(&self, _: &str) -> AuthResult<bool> {
             Err(AuthError::internal("object source write failed"))
         }
 
         fn identity(&self) -> usize {
             std::ptr::from_ref(self) as usize
+        }
+
+        fn define_own_property(
+            &self,
+            _name: String,
+            _definition: crate::FieldPropertyDefinition,
+        ) -> AuthResult<bool> {
+            Err(AuthError::internal(
+                "This contract source does not define properties",
+            ))
         }
     }
 
@@ -131,7 +157,14 @@ async fn live_object_read_errors_propagate_without_implicit_snapshots() {
         ("message".into(), "object source read failed".into()),
     ])
     .into();
-    let source = Arc::new(FailedSource(AtomicUsize::new(0), failure.clone()));
+    let reads = Arc::new(AtomicUsize::new(0));
+    let source = Arc::new(FailedSource(reads.clone(), failure.clone(), {
+        let failure = failure.clone();
+        crate::FieldFunction::contextual(move |_, _| {
+            let _ = reads.fetch_add(1, Ordering::SeqCst);
+            Err(AuthError::from_thrown(failure.clone()))
+        })
+    }));
     let object = FieldObject::from_source(source.clone());
     let value = FieldValue::Object(object.clone());
     let same_source = FieldValue::Object(FieldObject::from_source(source.clone()));
@@ -211,7 +244,7 @@ fn cyclic_live_objects_clone_and_fail_at_json_conversion_boundaries() -> AuthRes
 
     impl FieldObjectSource for CyclicSource {
         fn own_keys(&self) -> AuthResult<Vec<String>> {
-            Ok(self.fields()?.keys().cloned().collect())
+            FieldObject::from(self.fields()?.clone()).own_keys()
         }
 
         fn own_property_descriptor(
@@ -220,11 +253,16 @@ fn cyclic_live_objects_clone_and_fail_at_json_conversion_boundaries() -> AuthRes
         ) -> AuthResult<Option<FieldPropertyDescriptor>> {
             Ok(self
                 .fields()?
-                .contains_key(name)
-                .then_some(FieldPropertyDescriptor { enumerable: true }))
+                .get(name)
+                .cloned()
+                .map(FieldPropertyDescriptor::data))
         }
 
-        fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+        fn get_with_receiver(
+            &self,
+            name: &str,
+            _receiver: &FieldValue,
+        ) -> AuthResult<Option<FieldValue>> {
             Ok(self.fields()?.get(name).cloned())
         }
 
@@ -232,16 +270,33 @@ fn cyclic_live_objects_clone_and_fail_at_json_conversion_boundaries() -> AuthRes
             Ok(self.fields()?.clone())
         }
 
-        fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-            Ok(self.fields()?.insert(name, value))
+        fn set_with_receiver(
+            &self,
+            name: String,
+            value: FieldValue,
+            _receiver: &FieldValue,
+        ) -> AuthResult<bool> {
+            let _ = self.fields()?.insert(name, value);
+            Ok(true)
         }
 
-        fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-            Ok(self.fields()?.remove(name))
+        fn delete(&self, name: &str) -> AuthResult<bool> {
+            let _ = self.fields()?.remove(name);
+            Ok(true)
         }
 
         fn identity(&self) -> usize {
             std::ptr::from_ref(self) as usize
+        }
+
+        fn define_own_property(
+            &self,
+            _name: String,
+            _definition: crate::FieldPropertyDefinition,
+        ) -> AuthResult<bool> {
+            Err(AuthError::internal(
+                "This contract source does not define properties",
+            ))
         }
     }
 

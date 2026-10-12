@@ -77,7 +77,7 @@ pub(super) fn typed_input(
     // Restore Rust numbers before hooks; validation must read the values left by those hooks.
     for &(name, number) in numbers {
         if let Some(number) = number {
-            let _ = object.set(name, number.into())?;
+            object.set(name, number.into())?;
         }
     }
     Ok(value)

@@ -213,22 +213,20 @@ pub(super) async fn github(
             || index_zero(emails),
         )?;
         let email = optional_property(&selected, "email")?;
-        match profile {
-            FieldValue::Object(profile) => {
-                let _ = profile.set("email", email)?;
-            }
-            FieldValue::Array(_) | FieldValue::Date(_) | FieldValue::Function(_) => {
-                // shortcut: Move assignment into FieldValue when all object carriers support named properties.
-                return Err(AuthError::internal(
-                    "Native carrier does not support named-property assignment on this value",
-                ));
-            }
-            _ => {
-                return Err(AuthError::type_error(
-                    "Cannot assign property 'email' to a primitive value",
-                ));
-            }
+        if matches!(
+            profile,
+            FieldValue::Undefined
+                | FieldValue::Null
+                | FieldValue::Bool(_)
+                | FieldValue::Number(_)
+                | FieldValue::String(_)
+                | FieldValue::Utf16String(_)
+        ) {
+            return Err(AuthError::type_error(
+                "Cannot assign property 'email' to a primitive value",
+            ));
         }
+        profile.set_model_property("email", email)?;
     }
     let verified = if emails.is_null() || emails.is_undefined() {
         FieldValue::Undefined
@@ -341,3 +339,7 @@ fn reddit_image(image: FieldValue) -> AuthResult<FieldValue> {
     )
     .into())
 }
+
+#[cfg(test)]
+#[path = "github_assignment_tests.rs"]
+mod github_assignment_tests;

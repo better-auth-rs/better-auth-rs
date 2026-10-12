@@ -1,0 +1,4405 @@
+{
+  "version": "1.7.6",
+  "runtime": {
+    "bun": "1.4.2"
+  },
+  "boundary": "Bun structuredClone property selection after nested getters mutate later descriptors; complete descriptor graphs retain function reflection.",
+  "cases": [
+    {
+      "name": "object-delete-inherited",
+      "kind": "object",
+      "mode": "delete-inherited",
+      "before": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "root",
+          "inherited",
+          "original"
+        ],
+        "properties": [
+          [
+            "root",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "object",
+                "ownKeys": [
+                  "first",
+                  "later",
+                  "tail"
+                ],
+                "properties": [
+                  [
+                    "first",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-3",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-1"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "later",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-4",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-2"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "tail",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-5",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-3"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "inherited",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-6",
+                "type": "object",
+                "ownKeys": [],
+                "properties": []
+              }
+            }
+          ],
+          [
+            "original",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-7",
+                "type": "object",
+                "ownKeys": [
+                  "failure",
+                  "ownUndefined"
+                ],
+                "properties": [
+                  [
+                    "failure",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "object-delete-inherited"
+                    }
+                  ],
+                  [
+                    "ownUndefined",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      },
+      "outcome": {
+        "returned": true,
+        "result": {
+          "identity": "object-1",
+          "type": "object",
+          "ownKeys": [
+            "first",
+            "tail"
+          ],
+          "properties": [
+            [
+              "first",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": {
+                  "identity": "object-2",
+                  "type": "object",
+                  "ownKeys": [
+                    "mutate"
+                  ],
+                  "properties": [
+                    [
+                      "mutate",
+                      {
+                        "enumerable": true,
+                        "configurable": true,
+                        "writable": true,
+                        "value": "child-value"
+                      }
+                    ]
+                  ]
+                }
+              }
+            ],
+            [
+              "tail",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": "tail-value"
+              }
+            ]
+          ]
+        }
+      },
+      "after": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "root",
+          "inherited",
+          "original"
+        ],
+        "properties": [
+          [
+            "root",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "object",
+                "ownKeys": [
+                  "first",
+                  "tail",
+                  "mutation"
+                ],
+                "properties": [
+                  [
+                    "first",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-3",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-1"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "tail",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-4",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-3"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "mutation",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "retained"
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "inherited",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-5",
+                "type": "object",
+                "ownKeys": [
+                  "later"
+                ],
+                "properties": [
+                  [
+                    "later",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-6",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-4"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "original",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-7",
+                "type": "object",
+                "ownKeys": [
+                  "failure",
+                  "ownUndefined"
+                ],
+                "properties": [
+                  [
+                    "failure",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "object-delete-inherited"
+                    }
+                  ],
+                  [
+                    "ownUndefined",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      },
+      "events": [
+        {
+          "phase": "get:root:first",
+          "sameReceiver": true
+        },
+        {
+          "phase": "get:child:mutate",
+          "sameReceiver": true
+        },
+        {
+          "phase": "get:root:tail",
+          "sameReceiver": true
+        }
+      ],
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-2",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-3",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-4",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n        native.record(`get:inherited:${later}`, { sameReceiver: this === root });\n        return \"inherited-value\";\n      }",
+          "string": "get() {\n        native.record(`get:inherited:${later}`, { sameReceiver: this === root });\n        return \"inherited-value\";\n      }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "object-hide-later",
+      "kind": "object",
+      "mode": "hide-later",
+      "before": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "root",
+          "inherited",
+          "original"
+        ],
+        "properties": [
+          [
+            "root",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "object",
+                "ownKeys": [
+                  "first",
+                  "later",
+                  "tail"
+                ],
+                "properties": [
+                  [
+                    "first",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-3",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-1"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "later",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-4",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-2"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "tail",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-5",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-3"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "inherited",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-6",
+                "type": "object",
+                "ownKeys": [],
+                "properties": []
+              }
+            }
+          ],
+          [
+            "original",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-7",
+                "type": "object",
+                "ownKeys": [
+                  "failure",
+                  "ownUndefined"
+                ],
+                "properties": [
+                  [
+                    "failure",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "object-hide-later"
+                    }
+                  ],
+                  [
+                    "ownUndefined",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      },
+      "outcome": {
+        "returned": true,
+        "result": {
+          "identity": "object-1",
+          "type": "object",
+          "ownKeys": [
+            "first",
+            "later",
+            "tail"
+          ],
+          "properties": [
+            [
+              "first",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": {
+                  "identity": "object-2",
+                  "type": "object",
+                  "ownKeys": [
+                    "mutate"
+                  ],
+                  "properties": [
+                    [
+                      "mutate",
+                      {
+                        "enumerable": true,
+                        "configurable": true,
+                        "writable": true,
+                        "value": "child-value"
+                      }
+                    ]
+                  ]
+                }
+              }
+            ],
+            [
+              "later",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": "later-value"
+              }
+            ],
+            [
+              "tail",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": "tail-value"
+              }
+            ]
+          ]
+        }
+      },
+      "after": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "root",
+          "inherited",
+          "original"
+        ],
+        "properties": [
+          [
+            "root",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "object",
+                "ownKeys": [
+                  "first",
+                  "later",
+                  "tail",
+                  "mutation"
+                ],
+                "properties": [
+                  [
+                    "first",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-3",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-1"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "later",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-4",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-2"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "tail",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-5",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-3"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "mutation",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "retained"
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "inherited",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-6",
+                "type": "object",
+                "ownKeys": [],
+                "properties": []
+              }
+            }
+          ],
+          [
+            "original",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-7",
+                "type": "object",
+                "ownKeys": [
+                  "failure",
+                  "ownUndefined"
+                ],
+                "properties": [
+                  [
+                    "failure",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "object-hide-later"
+                    }
+                  ],
+                  [
+                    "ownUndefined",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      },
+      "events": [
+        {
+          "phase": "get:root:first",
+          "sameReceiver": true
+        },
+        {
+          "phase": "get:child:mutate",
+          "sameReceiver": true
+        },
+        {
+          "phase": "get:root:later",
+          "sameReceiver": true
+        },
+        {
+          "phase": "get:root:tail",
+          "sameReceiver": true
+        }
+      ],
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-2",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-3",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "object-show-hidden",
+      "kind": "object",
+      "mode": "show-hidden",
+      "before": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "root",
+          "inherited",
+          "original"
+        ],
+        "properties": [
+          [
+            "root",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "object",
+                "ownKeys": [
+                  "first",
+                  "later",
+                  "tail"
+                ],
+                "properties": [
+                  [
+                    "first",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-3",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-1"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "later",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-4",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-2"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "tail",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-5",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-3"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "inherited",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-6",
+                "type": "object",
+                "ownKeys": [],
+                "properties": []
+              }
+            }
+          ],
+          [
+            "original",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-7",
+                "type": "object",
+                "ownKeys": [
+                  "failure",
+                  "ownUndefined"
+                ],
+                "properties": [
+                  [
+                    "failure",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "object-show-hidden"
+                    }
+                  ],
+                  [
+                    "ownUndefined",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      },
+      "outcome": {
+        "returned": true,
+        "result": {
+          "identity": "object-1",
+          "type": "object",
+          "ownKeys": [
+            "first",
+            "tail"
+          ],
+          "properties": [
+            [
+              "first",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": {
+                  "identity": "object-2",
+                  "type": "object",
+                  "ownKeys": [
+                    "mutate"
+                  ],
+                  "properties": [
+                    [
+                      "mutate",
+                      {
+                        "enumerable": true,
+                        "configurable": true,
+                        "writable": true,
+                        "value": "child-value"
+                      }
+                    ]
+                  ]
+                }
+              }
+            ],
+            [
+              "tail",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": "tail-value"
+              }
+            ]
+          ]
+        }
+      },
+      "after": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "root",
+          "inherited",
+          "original"
+        ],
+        "properties": [
+          [
+            "root",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "object",
+                "ownKeys": [
+                  "first",
+                  "later",
+                  "tail",
+                  "mutation"
+                ],
+                "properties": [
+                  [
+                    "first",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-3",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-1"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "later",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-4",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-2"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "tail",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-5",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-3"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "mutation",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "retained"
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "inherited",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-6",
+                "type": "object",
+                "ownKeys": [],
+                "properties": []
+              }
+            }
+          ],
+          [
+            "original",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-7",
+                "type": "object",
+                "ownKeys": [
+                  "failure",
+                  "ownUndefined"
+                ],
+                "properties": [
+                  [
+                    "failure",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "object-show-hidden"
+                    }
+                  ],
+                  [
+                    "ownUndefined",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      },
+      "events": [
+        {
+          "phase": "get:root:first",
+          "sameReceiver": true
+        },
+        {
+          "phase": "get:child:mutate",
+          "sameReceiver": true
+        },
+        {
+          "phase": "get:root:tail",
+          "sameReceiver": true
+        }
+      ],
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-2",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-3",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "object-throw-original",
+      "kind": "object",
+      "mode": "throw-original",
+      "before": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "root",
+          "inherited",
+          "original"
+        ],
+        "properties": [
+          [
+            "root",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "object",
+                "ownKeys": [
+                  "first",
+                  "later",
+                  "tail"
+                ],
+                "properties": [
+                  [
+                    "first",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-3",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-1"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "later",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-4",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-2"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "tail",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-5",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-3"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "inherited",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-6",
+                "type": "object",
+                "ownKeys": [],
+                "properties": []
+              }
+            }
+          ],
+          [
+            "original",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-7",
+                "type": "object",
+                "ownKeys": [
+                  "failure",
+                  "ownUndefined"
+                ],
+                "properties": [
+                  [
+                    "failure",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "object-throw-original"
+                    }
+                  ],
+                  [
+                    "ownUndefined",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      },
+      "outcome": {
+        "returned": false,
+        "sameOriginal": true,
+        "error": {
+          "identity": "object-1",
+          "type": "object",
+          "ownKeys": [
+            "failure",
+            "ownUndefined"
+          ],
+          "properties": [
+            [
+              "failure",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": "object-throw-original"
+              }
+            ],
+            [
+              "ownUndefined",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": {
+                  "type": "undefined"
+                }
+              }
+            ]
+          ]
+        }
+      },
+      "after": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "root",
+          "inherited",
+          "original"
+        ],
+        "properties": [
+          [
+            "root",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "object",
+                "ownKeys": [
+                  "first",
+                  "later",
+                  "tail",
+                  "mutation"
+                ],
+                "properties": [
+                  [
+                    "first",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-3",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-1"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "later",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-4",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-2"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "tail",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-5",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-3"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "mutation",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "retained"
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "inherited",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-6",
+                "type": "object",
+                "ownKeys": [],
+                "properties": []
+              }
+            }
+          ],
+          [
+            "original",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-7",
+                "type": "object",
+                "ownKeys": [
+                  "failure",
+                  "ownUndefined"
+                ],
+                "properties": [
+                  [
+                    "failure",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "object-throw-original"
+                    }
+                  ],
+                  [
+                    "ownUndefined",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      },
+      "events": [
+        {
+          "phase": "get:root:first",
+          "sameReceiver": true
+        },
+        {
+          "phase": "get:child:mutate",
+          "sameReceiver": true
+        }
+      ],
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-2",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-3",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "array-delete-inherited",
+      "kind": "array",
+      "mode": "delete-inherited",
+      "before": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "root",
+          "inherited",
+          "original"
+        ],
+        "properties": [
+          [
+            "root",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "array",
+                "ownKeys": [
+                  "0",
+                  "1",
+                  "2",
+                  "length"
+                ],
+                "properties": [
+                  [
+                    "0",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-3",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-1"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "1",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-4",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-2"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "2",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-5",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-3"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": false,
+                      "writable": true,
+                      "value": 3
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "inherited",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-6",
+                "type": "object",
+                "ownKeys": [],
+                "properties": []
+              }
+            }
+          ],
+          [
+            "original",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-7",
+                "type": "object",
+                "ownKeys": [
+                  "failure",
+                  "ownUndefined"
+                ],
+                "properties": [
+                  [
+                    "failure",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "array-delete-inherited"
+                    }
+                  ],
+                  [
+                    "ownUndefined",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      },
+      "outcome": {
+        "returned": true,
+        "result": {
+          "identity": "object-1",
+          "type": "array",
+          "ownKeys": [
+            "0",
+            "2",
+            "length",
+            "mutation"
+          ],
+          "properties": [
+            [
+              "0",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": {
+                  "identity": "object-2",
+                  "type": "object",
+                  "ownKeys": [
+                    "mutate"
+                  ],
+                  "properties": [
+                    [
+                      "mutate",
+                      {
+                        "enumerable": true,
+                        "configurable": true,
+                        "writable": true,
+                        "value": "child-value"
+                      }
+                    ]
+                  ]
+                }
+              }
+            ],
+            [
+              "2",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": "tail-value"
+              }
+            ],
+            [
+              "length",
+              {
+                "enumerable": false,
+                "configurable": false,
+                "writable": true,
+                "value": 3
+              }
+            ],
+            [
+              "mutation",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": "retained"
+              }
+            ]
+          ]
+        }
+      },
+      "after": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "root",
+          "inherited",
+          "original"
+        ],
+        "properties": [
+          [
+            "root",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "array",
+                "ownKeys": [
+                  "0",
+                  "2",
+                  "length",
+                  "mutation"
+                ],
+                "properties": [
+                  [
+                    "0",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-3",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-1"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "2",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-4",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-3"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": false,
+                      "writable": true,
+                      "value": 3
+                    }
+                  ],
+                  [
+                    "mutation",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "retained"
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "inherited",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-5",
+                "type": "object",
+                "ownKeys": [
+                  "1"
+                ],
+                "properties": [
+                  [
+                    "1",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-6",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-4"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "original",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-7",
+                "type": "object",
+                "ownKeys": [
+                  "failure",
+                  "ownUndefined"
+                ],
+                "properties": [
+                  [
+                    "failure",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "array-delete-inherited"
+                    }
+                  ],
+                  [
+                    "ownUndefined",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      },
+      "events": [
+        {
+          "phase": "get:root:0",
+          "sameReceiver": true
+        },
+        {
+          "phase": "get:child:mutate",
+          "sameReceiver": true
+        },
+        {
+          "phase": "get:root:2",
+          "sameReceiver": true
+        }
+      ],
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-2",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-3",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-4",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n        native.record(`get:inherited:${later}`, { sameReceiver: this === root });\n        return \"inherited-value\";\n      }",
+          "string": "get() {\n        native.record(`get:inherited:${later}`, { sameReceiver: this === root });\n        return \"inherited-value\";\n      }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "array-hide-later",
+      "kind": "array",
+      "mode": "hide-later",
+      "before": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "root",
+          "inherited",
+          "original"
+        ],
+        "properties": [
+          [
+            "root",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "array",
+                "ownKeys": [
+                  "0",
+                  "1",
+                  "2",
+                  "length"
+                ],
+                "properties": [
+                  [
+                    "0",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-3",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-1"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "1",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-4",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-2"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "2",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-5",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-3"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": false,
+                      "writable": true,
+                      "value": 3
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "inherited",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-6",
+                "type": "object",
+                "ownKeys": [],
+                "properties": []
+              }
+            }
+          ],
+          [
+            "original",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-7",
+                "type": "object",
+                "ownKeys": [
+                  "failure",
+                  "ownUndefined"
+                ],
+                "properties": [
+                  [
+                    "failure",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "array-hide-later"
+                    }
+                  ],
+                  [
+                    "ownUndefined",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      },
+      "outcome": {
+        "returned": true,
+        "result": {
+          "identity": "object-1",
+          "type": "array",
+          "ownKeys": [
+            "0",
+            "1",
+            "2",
+            "length",
+            "mutation"
+          ],
+          "properties": [
+            [
+              "0",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": {
+                  "identity": "object-2",
+                  "type": "object",
+                  "ownKeys": [
+                    "mutate"
+                  ],
+                  "properties": [
+                    [
+                      "mutate",
+                      {
+                        "enumerable": true,
+                        "configurable": true,
+                        "writable": true,
+                        "value": "child-value"
+                      }
+                    ]
+                  ]
+                }
+              }
+            ],
+            [
+              "1",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": "later-value"
+              }
+            ],
+            [
+              "2",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": "tail-value"
+              }
+            ],
+            [
+              "length",
+              {
+                "enumerable": false,
+                "configurable": false,
+                "writable": true,
+                "value": 3
+              }
+            ],
+            [
+              "mutation",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": "retained"
+              }
+            ]
+          ]
+        }
+      },
+      "after": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "root",
+          "inherited",
+          "original"
+        ],
+        "properties": [
+          [
+            "root",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "array",
+                "ownKeys": [
+                  "0",
+                  "1",
+                  "2",
+                  "length",
+                  "mutation"
+                ],
+                "properties": [
+                  [
+                    "0",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-3",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-1"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "1",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-4",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-2"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "2",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-5",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-3"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": false,
+                      "writable": true,
+                      "value": 3
+                    }
+                  ],
+                  [
+                    "mutation",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "retained"
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "inherited",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-6",
+                "type": "object",
+                "ownKeys": [],
+                "properties": []
+              }
+            }
+          ],
+          [
+            "original",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-7",
+                "type": "object",
+                "ownKeys": [
+                  "failure",
+                  "ownUndefined"
+                ],
+                "properties": [
+                  [
+                    "failure",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "array-hide-later"
+                    }
+                  ],
+                  [
+                    "ownUndefined",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      },
+      "events": [
+        {
+          "phase": "get:root:0",
+          "sameReceiver": true
+        },
+        {
+          "phase": "get:child:mutate",
+          "sameReceiver": true
+        },
+        {
+          "phase": "get:root:1",
+          "sameReceiver": true
+        },
+        {
+          "phase": "get:root:2",
+          "sameReceiver": true
+        }
+      ],
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-2",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-3",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "array-show-hidden",
+      "kind": "array",
+      "mode": "show-hidden",
+      "before": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "root",
+          "inherited",
+          "original"
+        ],
+        "properties": [
+          [
+            "root",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "array",
+                "ownKeys": [
+                  "0",
+                  "1",
+                  "2",
+                  "length"
+                ],
+                "properties": [
+                  [
+                    "0",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-3",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-1"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "1",
+                    {
+                      "enumerable": false,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-4",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-2"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "2",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-5",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-3"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": false,
+                      "writable": true,
+                      "value": 3
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "inherited",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-6",
+                "type": "object",
+                "ownKeys": [],
+                "properties": []
+              }
+            }
+          ],
+          [
+            "original",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-7",
+                "type": "object",
+                "ownKeys": [
+                  "failure",
+                  "ownUndefined"
+                ],
+                "properties": [
+                  [
+                    "failure",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "array-show-hidden"
+                    }
+                  ],
+                  [
+                    "ownUndefined",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      },
+      "outcome": {
+        "returned": true,
+        "result": {
+          "identity": "object-1",
+          "type": "array",
+          "ownKeys": [
+            "0",
+            "1",
+            "2",
+            "length",
+            "mutation"
+          ],
+          "properties": [
+            [
+              "0",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": {
+                  "identity": "object-2",
+                  "type": "object",
+                  "ownKeys": [
+                    "mutate"
+                  ],
+                  "properties": [
+                    [
+                      "mutate",
+                      {
+                        "enumerable": true,
+                        "configurable": true,
+                        "writable": true,
+                        "value": "child-value"
+                      }
+                    ]
+                  ]
+                }
+              }
+            ],
+            [
+              "1",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": "later-value"
+              }
+            ],
+            [
+              "2",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": "tail-value"
+              }
+            ],
+            [
+              "length",
+              {
+                "enumerable": false,
+                "configurable": false,
+                "writable": true,
+                "value": 3
+              }
+            ],
+            [
+              "mutation",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": "retained"
+              }
+            ]
+          ]
+        }
+      },
+      "after": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "root",
+          "inherited",
+          "original"
+        ],
+        "properties": [
+          [
+            "root",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "array",
+                "ownKeys": [
+                  "0",
+                  "1",
+                  "2",
+                  "length",
+                  "mutation"
+                ],
+                "properties": [
+                  [
+                    "0",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-3",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-1"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "1",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-4",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-2"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "2",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-5",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-3"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": false,
+                      "writable": true,
+                      "value": 3
+                    }
+                  ],
+                  [
+                    "mutation",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "retained"
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "inherited",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-6",
+                "type": "object",
+                "ownKeys": [],
+                "properties": []
+              }
+            }
+          ],
+          [
+            "original",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-7",
+                "type": "object",
+                "ownKeys": [
+                  "failure",
+                  "ownUndefined"
+                ],
+                "properties": [
+                  [
+                    "failure",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "array-show-hidden"
+                    }
+                  ],
+                  [
+                    "ownUndefined",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      },
+      "events": [
+        {
+          "phase": "get:root:0",
+          "sameReceiver": true
+        },
+        {
+          "phase": "get:child:mutate",
+          "sameReceiver": true
+        },
+        {
+          "phase": "get:root:1",
+          "sameReceiver": true
+        },
+        {
+          "phase": "get:root:2",
+          "sameReceiver": true
+        }
+      ],
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-2",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-3",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "array-throw-original",
+      "kind": "array",
+      "mode": "throw-original",
+      "before": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "root",
+          "inherited",
+          "original"
+        ],
+        "properties": [
+          [
+            "root",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "array",
+                "ownKeys": [
+                  "0",
+                  "1",
+                  "2",
+                  "length"
+                ],
+                "properties": [
+                  [
+                    "0",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-3",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-1"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "1",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-4",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-2"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "2",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-5",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-3"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": false,
+                      "writable": true,
+                      "value": 3
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "inherited",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-6",
+                "type": "object",
+                "ownKeys": [],
+                "properties": []
+              }
+            }
+          ],
+          [
+            "original",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-7",
+                "type": "object",
+                "ownKeys": [
+                  "failure",
+                  "ownUndefined"
+                ],
+                "properties": [
+                  [
+                    "failure",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "array-throw-original"
+                    }
+                  ],
+                  [
+                    "ownUndefined",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      },
+      "outcome": {
+        "returned": false,
+        "sameOriginal": true,
+        "error": {
+          "identity": "object-1",
+          "type": "object",
+          "ownKeys": [
+            "failure",
+            "ownUndefined"
+          ],
+          "properties": [
+            [
+              "failure",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": "array-throw-original"
+              }
+            ],
+            [
+              "ownUndefined",
+              {
+                "enumerable": true,
+                "configurable": true,
+                "writable": true,
+                "value": {
+                  "type": "undefined"
+                }
+              }
+            ]
+          ]
+        }
+      },
+      "after": {
+        "identity": "object-1",
+        "type": "object",
+        "ownKeys": [
+          "root",
+          "inherited",
+          "original"
+        ],
+        "properties": [
+          [
+            "root",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-2",
+                "type": "array",
+                "ownKeys": [
+                  "0",
+                  "1",
+                  "2",
+                  "length",
+                  "mutation"
+                ],
+                "properties": [
+                  [
+                    "0",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-3",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-1"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "1",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-4",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-2"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "2",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "get": {
+                        "identity": "object-5",
+                        "type": "function",
+                        "ownKeys": [
+                          "length",
+                          "name"
+                        ],
+                        "properties": [
+                          [
+                            "length",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": 0
+                            }
+                          ],
+                          [
+                            "name",
+                            {
+                              "enumerable": false,
+                              "configurable": true,
+                              "writable": false,
+                              "value": "get"
+                            }
+                          ]
+                        ],
+                        "value": {
+                          "type": "function",
+                          "identity": "function-3"
+                        }
+                      },
+                      "set": {
+                        "type": "undefined"
+                      }
+                    }
+                  ],
+                  [
+                    "length",
+                    {
+                      "enumerable": false,
+                      "configurable": false,
+                      "writable": true,
+                      "value": 3
+                    }
+                  ],
+                  [
+                    "mutation",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "retained"
+                    }
+                  ]
+                ]
+              }
+            }
+          ],
+          [
+            "inherited",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-6",
+                "type": "object",
+                "ownKeys": [],
+                "properties": []
+              }
+            }
+          ],
+          [
+            "original",
+            {
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "value": {
+                "identity": "object-7",
+                "type": "object",
+                "ownKeys": [
+                  "failure",
+                  "ownUndefined"
+                ],
+                "properties": [
+                  [
+                    "failure",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": "array-throw-original"
+                    }
+                  ],
+                  [
+                    "ownUndefined",
+                    {
+                      "enumerable": true,
+                      "configurable": true,
+                      "writable": true,
+                      "value": {
+                        "type": "undefined"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      },
+      "events": [
+        {
+          "phase": "get:root:0",
+          "sameReceiver": true
+        },
+        {
+          "phase": "get:child:mutate",
+          "sameReceiver": true
+        }
+      ],
+      "functions": [
+        {
+          "identity": "function-1",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-2",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        },
+        {
+          "identity": "function-3",
+          "name": "get",
+          "length": 0,
+          "source": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "string": "get() {\n      native.record(`get:${target === root ? \"root\" : \"child\"}:${key}`, { sameReceiver: this === target });\n      return read();\n    }",
+          "ownKeys": [
+            "length",
+            "name"
+          ]
+        }
+      ]
+    }
+  ]
+}

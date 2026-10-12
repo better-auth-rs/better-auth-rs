@@ -775,7 +775,7 @@ async fn invitation_claim_rejects_null_selector_deletion_or_undefined() -> AuthR
                                 if erase {
                                     let _ = row.delete_field("lookup")?;
                                 } else {
-                                    let _ = row.set_field("lookup".into(), Value::Undefined)?;
+                                    row.set_field("lookup".into(), Value::Undefined)?;
                                 }
                                 Ok(())
                             })?;

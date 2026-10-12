@@ -1,7 +1,9 @@
 use super::*;
 use better_auth_core::{
-    FieldArray, FieldObject,
-    field_value::{FieldObjectSource, FieldPropertyDescriptor},
+    FieldArray, FieldFunction, FieldObject,
+    field_value::{
+        FieldObjectSource, FieldProperty, FieldPropertyDefinition, FieldPropertyDescriptor,
+    },
 };
 
 #[derive(Debug)]
@@ -30,8 +32,42 @@ impl Calls {
 
 struct Properties {
     fields: FieldObject,
-    calls: Calls,
-    failure: Option<(&'static str, FieldValue)>,
+}
+
+impl Properties {
+    fn new(fields: FieldMap, calls: Calls, failure: Option<(&'static str, FieldValue)>) -> Self {
+        let fields = fields
+            .into_iter()
+            .map(|(name, value)| {
+                let calls = calls.clone();
+                let error = failure
+                    .as_ref()
+                    .filter(|(failed, _)| name == *failed)
+                    .map(|(_, error)| error.clone());
+                let phase = format!("get:{name}");
+                let getter = FieldFunction::contextual(move |receiver, _| {
+                    calls.record(&phase, receiver, &[]);
+                    if let Some(error) = &error {
+                        return Err(AuthError::from_thrown(error.clone()));
+                    }
+                    Ok(value.clone())
+                });
+                (
+                    name,
+                    FieldPropertyDescriptor {
+                        enumerable: true,
+                        configurable: true,
+                        property: FieldProperty::Accessor {
+                            get: Some(getter),
+                            set: None,
+                        },
+                    },
+                )
+            })
+            .collect::<indexmap::IndexMap<_, _>>()
+            .into();
+        Self { fields }
+    }
 }
 
 impl FieldObjectSource for Properties {
@@ -43,34 +79,32 @@ impl FieldObjectSource for Properties {
         self.fields.own_property_descriptor(name)
     }
 
-    fn get(&self, _: &str) -> AuthResult<Option<FieldValue>> {
-        Err(AuthError::internal(
-            "Property reads must retain the native receiver",
-        ))
-    }
-
     fn get_with_receiver(
         &self,
         name: &str,
         receiver: &FieldValue,
     ) -> AuthResult<Option<FieldValue>> {
-        if !self.fields.has_property(name)? {
-            return Ok(None);
-        }
-        self.calls.record(format!("get:{name}"), receiver, &[]);
-        if let Some((failed, error)) = &self.failure
-            && name == *failed
-        {
-            return Err(AuthError::from_thrown(error.clone()));
-        }
-        self.fields.get(name)
+        self.fields.get_with_receiver(name, receiver)
     }
 
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        self.fields.set(name, value)
+    fn set_with_receiver(
+        &self,
+        name: String,
+        value: FieldValue,
+        receiver: &FieldValue,
+    ) -> AuthResult<bool> {
+        self.fields.set_with_receiver(&name, value, receiver)
     }
 
-    fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(
+        &self,
+        name: String,
+        definition: FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        self.fields.define_own_property(name, definition)
+    }
+
+    fn delete(&self, name: &str) -> AuthResult<bool> {
         self.fields.delete(name)
     }
 
@@ -86,11 +120,7 @@ impl FieldObjectSource for Properties {
 }
 
 fn properties(fields: FieldMap, calls: &Calls) -> FieldObject {
-    FieldObject::from_source(Arc::new(Properties {
-        fields: fields.into(),
-        calls: calls.clone(),
-        failure: None,
-    }))
+    FieldObject::from_source(Arc::new(Properties::new(fields, calls.clone(), None)))
 }
 
 #[tokio::test]
@@ -268,11 +298,11 @@ async fn original_getter_and_method_errors_preserve_completed_cache_writes_and_d
             });
             let index: FieldValue = FieldArray::from_values_with_properties(
                 vec!["key".into()],
-                FieldObject::from_source(Arc::new(Properties {
-                    fields: FieldMap::from([(method.into(), callback.into())]).into(),
-                    calls: calls.clone(),
-                    failure: getter.then(|| (method, original.clone())),
-                })),
+                FieldObject::from_source(Arc::new(Properties::new(
+                    FieldMap::from([(method.into(), callback.into())]),
+                    calls.clone(),
+                    getter.then(|| (method, original.clone())),
+                ))),
             )
             .into();
             cache.seed("api-key:hash", "stored-hash".into());

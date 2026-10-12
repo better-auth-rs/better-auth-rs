@@ -34,7 +34,8 @@ pub mod error;
 mod error_codes;
 pub mod field_value;
 pub use field_value::{
-    FieldArray, FieldArrayIter, FieldDate, FieldFunction, FieldMap, FieldObject, FieldValue,
+    FieldArray, FieldArrayIter, FieldDate, FieldFunction, FieldMap, FieldObject, FieldProperty,
+    FieldPropertyDefinition, FieldPropertyDescriptor, FieldPropertyUpdate, FieldValue,
     StructuredCloneContext,
 };
 pub mod hooks;

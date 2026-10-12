@@ -238,14 +238,13 @@ fn json_structure(
             let _ = active.remove(&identity);
             Value::Array(values)
         }
-        FieldValue::Object(object) if !object.is_live() => {
+        FieldValue::Object(object) => {
             let identity = ContainerIdentity::Object(object.identity());
             if !active.insert(identity) {
                 return None;
             }
             let fields = object
-                .snapshot_fields()
-                .ok()?
+                .owned_fields()?
                 .into_iter()
                 .map(|(name, value)| Some((name, json_structure(&value, active)?)))
                 .collect::<Option<_>>()?;
@@ -328,7 +327,7 @@ mod json_tests {
             Ok(serde_json::json!({"toJSON": "ordinary property", "value": [null, true]})),
         );
         let object = crate::FieldObject::from(crate::FieldMap::new());
-        let _ = object.set("self", FieldValue::Object(object.clone()))?;
+        object.set("self", FieldValue::Object(object.clone()))?;
         let value = FieldValue::Object(object.clone());
         let result = <serde_json::Value as SchemaField>::from_field(value.clone());
         let _ = object.delete("self")?;

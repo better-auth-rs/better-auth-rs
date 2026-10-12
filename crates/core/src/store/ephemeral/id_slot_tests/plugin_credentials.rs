@@ -110,7 +110,7 @@ async fn memory_plugin_id_slot_reads_primary_key_at_its_position() -> AuthResult
                     transform: Some(FieldTransforms {
                         output: Some(UserFieldTransform::new(move |value| {
                             let _ = output_calls.fetch_add(1, Ordering::SeqCst);
-                            let _ = target.set_field("id".into(), Value::Number(101.0))?;
+                            target.set_field("id".into(), Value::Number(101.0))?;
                             Ok(format!("{}:out", required(value.as_str())?).into())
                         })),
                         ..Default::default()
@@ -246,7 +246,7 @@ async fn memory_plugin_primary_id_filters_distinguish_null_from_undefined() -> A
             store.operation(|_| {
                 let _ = source.delete_field("id")?;
                 if let Some(id) = stored_id {
-                    let _ = source.set_field("id".into(), id)?;
+                    source.set_field("id".into(), id)?;
                 }
                 Ok(())
             })?;

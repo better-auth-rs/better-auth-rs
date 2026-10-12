@@ -24,7 +24,7 @@ async fn message_methods_receive_native_receiver_and_truthy_return_values() -> A
         } else {
             42.0.into()
         };
-        let _ = receiver.set("includes", includes)?;
+        receiver.set("includes", includes)?;
         let fields: FieldObject = FieldMap::from([
             ("name".into(), "RuntimeFailure".into()),
             ("message".into(), FieldValue::Undefined),
@@ -130,7 +130,7 @@ async fn native_logger_messages_convert_before_the_sink_and_preserve_conversion_
                     Ok("rendered native message".into())
                 }
             });
-            let _ = payload.set("toString", convert.into())?;
+            payload.set("toString", convert.into())?;
             let fields = FieldObject::from(FieldMap::from([
                 (
                     "name".into(),

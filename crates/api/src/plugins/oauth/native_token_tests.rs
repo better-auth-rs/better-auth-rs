@@ -11,7 +11,9 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use better_auth_core::{
     FieldArray, FieldFunction, FieldMap, FieldObject,
-    field_value::{FieldObjectSource, FieldPropertyDescriptor},
+    field_value::{
+        FieldObjectSource, FieldProperty, FieldPropertyDefinition, FieldPropertyDescriptor,
+    },
 };
 
 use super::super::{
@@ -205,15 +207,67 @@ async fn native_exchange_keeps_root_values_until_expiry_property_access() -> Aut
 
 struct ExpirySource {
     mode: &'static str,
-    fields: Mutex<FieldMap>,
-    receiver: Mutex<Option<FieldValue>>,
-    events: Mutex<Vec<&'static str>>,
-    original: FieldValue,
+    fields: Arc<Mutex<FieldMap>>,
+    receiver: Arc<Mutex<Option<FieldValue>>>,
+    events: Arc<Mutex<Vec<&'static str>>>,
+    getter: FieldFunction,
+    setter: FieldFunction,
+}
+
+impl ExpirySource {
+    fn new(mode: &'static str, initial: FieldValue, original: FieldValue) -> Self {
+        let fields = Arc::new(Mutex::new(FieldMap::from([(
+            "accessTokenExpiresAt".into(),
+            initial,
+        )])));
+        let receiver = Arc::new(Mutex::new(None::<FieldValue>));
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let get_fields = fields.clone();
+        let get_receiver = receiver.clone();
+        let get_events = events.clone();
+        let get_error = original.clone();
+        let getter = FieldFunction::contextual(move |this, _| {
+            assert!(this.strict_equals(get_receiver.lock().unwrap().as_ref().unwrap()));
+            get_events.lock().unwrap().push("get");
+            if mode == "get-throws" {
+                return Err(AuthError::from_thrown(get_error.clone()));
+            }
+            Ok(get_fields
+                .lock()
+                .unwrap()
+                .get("accessTokenExpiresAt")
+                .cloned()
+                .unwrap())
+        });
+        let set_fields = fields.clone();
+        let set_receiver = receiver.clone();
+        let set_events = events.clone();
+        let setter = FieldFunction::contextual(move |this, arguments| {
+            assert!(this.strict_equals(set_receiver.lock().unwrap().as_ref().unwrap()));
+            set_events.lock().unwrap().push("set");
+            if mode == "set-throws" {
+                return Err(AuthError::from_thrown(original.clone()));
+            }
+            let _ = set_fields.lock().unwrap().insert(
+                "accessTokenExpiresAt".into(),
+                arguments.first().cloned().unwrap_or_default(),
+            );
+            Ok(FieldValue::Undefined)
+        });
+        Self {
+            mode,
+            fields,
+            receiver,
+            events,
+            getter,
+            setter,
+        }
+    }
 }
 
 impl FieldObjectSource for ExpirySource {
     fn own_keys(&self) -> AuthResult<Vec<String>> {
-        Ok(self.fields.lock().unwrap().keys().cloned().collect())
+        FieldObject::from(self.fields.lock().unwrap().clone()).own_keys()
     }
 
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
@@ -221,14 +275,23 @@ impl FieldObjectSource for ExpirySource {
             .fields
             .lock()
             .unwrap()
-            .contains_key(name)
-            .then_some(FieldPropertyDescriptor {
+            .get(name)
+            .cloned()
+            .map(|value| FieldPropertyDescriptor {
                 enumerable: self.mode != "nonenumerable" || name != "accessTokenExpiresAt",
+                configurable: true,
+                property: if matches!(self.mode, "readonly" | "nonenumerable") {
+                    FieldProperty::Data {
+                        value,
+                        writable: self.mode != "readonly",
+                    }
+                } else {
+                    FieldProperty::Accessor {
+                        get: Some(self.getter.clone()),
+                        set: Some(self.setter.clone()),
+                    }
+                },
             }))
-    }
-
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        Ok(self.fields.lock().unwrap().get(name).cloned())
     }
 
     fn get_with_receiver(
@@ -236,17 +299,14 @@ impl FieldObjectSource for ExpirySource {
         name: &str,
         receiver: &FieldValue,
     ) -> AuthResult<Option<FieldValue>> {
-        assert!(receiver.strict_equals(self.receiver.lock().unwrap().as_ref().unwrap()));
         assert_eq!(name, "accessTokenExpiresAt");
-        self.events.lock().unwrap().push("get");
-        if self.mode == "get-throws" {
-            return Err(AuthError::from_thrown(self.original.clone()));
+        if matches!(self.mode, "readonly" | "nonenumerable") {
+            assert!(receiver.strict_equals(self.receiver.lock().unwrap().as_ref().unwrap()));
+            self.events.lock().unwrap().push("get");
+            Ok(self.fields.lock().unwrap().get(name).cloned())
+        } else {
+            self.getter.call_with(receiver, &[]).map(Some)
         }
-        self.get(name)
-    }
-
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        Ok(self.fields.lock().unwrap().insert(name, value))
     }
 
     fn set_with_receiver(
@@ -254,20 +314,26 @@ impl FieldObjectSource for ExpirySource {
         name: String,
         value: FieldValue,
         receiver: &FieldValue,
-    ) -> AuthResult<()> {
-        assert!(receiver.strict_equals(self.receiver.lock().unwrap().as_ref().unwrap()));
+    ) -> AuthResult<bool> {
         assert_eq!(name, "accessTokenExpiresAt");
-        self.events.lock().unwrap().push("set");
-        match self.mode {
-            "set-throws" => Err(AuthError::from_thrown(self.original.clone())),
-            "readonly" => Err(AuthError::type_error(
-                "Attempted to assign to readonly property.",
-            )),
-            _ => self.set(name, value).map(drop),
+        if matches!(self.mode, "readonly" | "nonenumerable") {
+            assert!(receiver.strict_equals(self.receiver.lock().unwrap().as_ref().unwrap()));
+            self.events.lock().unwrap().push("set");
+            if self.mode == "readonly" {
+                return Ok(false);
+            }
+            let _ = self.fields.lock().unwrap().insert(name, value);
+        } else {
+            self.setter.call_with(receiver, &[value])?;
         }
+        Ok(true)
     }
 
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(&self, _: String, _: FieldPropertyDefinition) -> AuthResult<bool> {
+        Err(AuthError::internal("The probe does not define properties"))
+    }
+
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal(
             "Expiry defaults must not delete a property",
         ))
@@ -304,16 +370,7 @@ async fn expiry_defaults_preserve_accessors_errors_and_mutation_identity() -> Au
         } else {
             FieldValue::Undefined
         };
-        let source = Arc::new(ExpirySource {
-            mode,
-            fields: Mutex::new(FieldMap::from([(
-                "accessTokenExpiresAt".into(),
-                initial.clone(),
-            )])),
-            receiver: Mutex::new(None),
-            events: Mutex::new(Vec::new()),
-            original: original.clone(),
-        });
+        let source = Arc::new(ExpirySource::new(mode, initial.clone(), original.clone()));
         let token: FieldValue = FieldObject::from_source(source.clone()).into();
         *source.receiver.lock().unwrap() = Some(token.clone());
         let request = input(None);
@@ -349,7 +406,13 @@ async fn expiry_defaults_preserve_accessors_errors_and_mutation_identity() -> Au
             ),
             _ => assert!(result?.strict_equals(&token)),
         }
-        let stored = source.get("accessTokenExpiresAt")?.unwrap();
+        let stored = source
+            .fields
+            .lock()
+            .unwrap()
+            .get("accessTokenExpiresAt")
+            .cloned()
+            .unwrap();
         if matches!(mode, "get-throws" | "set-throws" | "readonly") {
             assert!(stored.is_undefined());
         } else if mode == "truthy" {

@@ -1,5 +1,8 @@
 use super::*;
-use better_auth_core::field_value::{FieldObjectSource, FieldPropertyDescriptor};
+use better_auth_core::FieldFunction;
+use better_auth_core::field_value::{
+    FieldObjectSource, FieldProperty, FieldPropertyDefinition, FieldPropertyDescriptor,
+};
 
 #[derive(Clone, Default)]
 struct Receiver(Arc<OnceLock<Weak<FieldValue>>>);
@@ -17,30 +20,72 @@ impl Receiver {
 }
 
 struct Properties {
-    fields: FieldMap,
-    getters: Vec<&'static str>,
-    fail_get: Option<&'static str>,
-    original: FieldValue,
-    observer: Observer,
-    receiver: Receiver,
+    fields: FieldObject,
+}
+
+impl Properties {
+    fn new(
+        fields: FieldMap,
+        getters: Vec<&'static str>,
+        fail_get: Option<&'static str>,
+        original: FieldValue,
+        observer: Observer,
+        receiver: Receiver,
+    ) -> Self {
+        let fields = fields
+            .into_iter()
+            .map(|(name, value)| {
+                let enumerable = !matches!(name.as_str(), "toISOString" | "toJSON" | "valueOf");
+                let property = if getters.contains(&name.as_str()) {
+                    let observer = observer.clone();
+                    let receiver = receiver.clone();
+                    let original = original.clone();
+                    let failed = fail_get == Some(name.as_str());
+                    let phase = format!("get:{name}");
+                    FieldProperty::Accessor {
+                        get: Some(FieldFunction::contextual(move |this, _| {
+                            observer.lock().unwrap().record(
+                                &phase,
+                                [(
+                                    "sameReceiver".into(),
+                                    this.strict_equals(&receiver.get()).into(),
+                                )],
+                            );
+                            if failed {
+                                return Err(AuthError::from_thrown(original.clone()));
+                            }
+                            Ok(value.clone())
+                        })),
+                        set: None,
+                    }
+                } else {
+                    FieldProperty::Data {
+                        value,
+                        writable: enumerable,
+                    }
+                };
+                (
+                    name,
+                    FieldPropertyDescriptor {
+                        enumerable,
+                        configurable: true,
+                        property,
+                    },
+                )
+            })
+            .collect::<indexmap::IndexMap<_, _>>()
+            .into();
+        Self { fields }
+    }
 }
 
 impl FieldObjectSource for Properties {
     fn own_keys(&self) -> AuthResult<Vec<String>> {
-        Ok(self.fields.keys().cloned().collect())
+        self.fields.own_keys()
     }
 
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
-        Ok(self
-            .fields
-            .contains_key(name)
-            .then_some(FieldPropertyDescriptor {
-                enumerable: !matches!(name, "toISOString" | "toJSON" | "valueOf"),
-            }))
-    }
-
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        self.get_with_receiver(name, &self.receiver.get())
+        self.fields.own_property_descriptor(name)
     }
 
     fn get_with_receiver(
@@ -48,28 +93,22 @@ impl FieldObjectSource for Properties {
         name: &str,
         receiver: &FieldValue,
     ) -> AuthResult<Option<FieldValue>> {
-        if self.getters.contains(&name) {
-            self.observer.lock().unwrap().record(
-                &format!("get:{name}"),
-                [(
-                    "sameReceiver".into(),
-                    receiver.strict_equals(&self.receiver.get()).into(),
-                )],
-            );
-        }
-        if self.fail_get == Some(name) {
-            return Err(AuthError::from_thrown(self.original.clone()));
-        }
-        Ok(self.fields.get(name).cloned())
+        self.fields.get_with_receiver(name, receiver)
     }
 
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(&self, _: String, _: FieldValue, _: &FieldValue) -> AuthResult<bool> {
         Err(AuthError::internal(
             "Date method contract does not assign properties",
         ))
     }
 
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(&self, _: String, _: FieldPropertyDefinition) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "Date method contract does not assign properties",
+        ))
+    }
+
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal(
             "Date method contract does not delete properties",
         ))
@@ -116,14 +155,14 @@ pub(super) fn receiver(
         );
     }
     let returned = returned.bind(
-        FieldObject::from_source(Arc::new(Properties {
-            fields: returned_fields,
-            getters: Vec::new(),
-            fail_get: None,
-            original: original.clone(),
-            observer: observer.clone(),
-            receiver: returned.clone(),
-        }))
+        FieldObject::from_source(Arc::new(Properties::new(
+            returned_fields,
+            Vec::new(),
+            None,
+            original.clone(),
+            observer.clone(),
+            returned.clone(),
+        )))
         .into(),
     );
     let expected = Receiver::default();
@@ -177,14 +216,14 @@ pub(super) fn receiver(
         );
         getters.push("valueOf");
     }
-    let properties = FieldObject::from_source(Arc::new(Properties {
+    let properties = FieldObject::from_source(Arc::new(Properties::new(
         fields,
         getters,
         fail_get,
-        original: original.clone(),
-        observer: observer.clone(),
-        receiver: expected.clone(),
-    }));
+        original.clone(),
+        observer.clone(),
+        expected.clone(),
+    )));
     let receiver = match mode {
         "date-to-json" => FieldDate::from_milliseconds_with_properties(0.0, properties).into(),
         "invalid-date-iso" => {

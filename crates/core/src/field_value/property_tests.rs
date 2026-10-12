@@ -35,43 +35,24 @@ impl FieldObjectSource for Properties {
         self.fields.own_keys()
     }
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
-        Ok(self
-            .fields
-            .own_property_descriptor(name)?
-            .map(|mut descriptor| {
-                descriptor.enumerable = name != "hidden";
-                descriptor
-            }))
+        self.fields.own_property_descriptor(name)
     }
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        self.fields.get(name)
-    }
+
     fn get_with_receiver(
         &self,
         name: &str,
         receiver: &FieldValue,
     ) -> AuthResult<Option<FieldValue>> {
         self.reads.fetch_add(1, Ordering::SeqCst);
-        if name == "hidden" {
-            return Err(AuthError::internal("Hidden getter must not run"));
-        }
-        if name == "selected" {
-            let same = lock(&self.observation.receiver)?
-                .as_ref()
-                .is_some_and(|expected| expected.strict_equals(receiver));
-            lock(&self.observation.events)?.push(format!("get:{same}"));
-        }
-        self.fields.get(name)
+        self.fields.get_with_receiver(name, receiver)
     }
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        self.fields.set(name, value)
-    }
+
     fn set_with_receiver(
         &self,
         name: String,
         value: FieldValue,
         receiver: &FieldValue,
-    ) -> AuthResult<()> {
+    ) -> AuthResult<bool> {
         if let Some(error) = lock(&self.write_failure)?.take() {
             let same = lock(&self.observation.receiver)?
                 .as_ref()
@@ -79,9 +60,9 @@ impl FieldObjectSource for Properties {
             lock(&self.observation.events)?.push(format!("set:{same}"));
             return Err(error);
         }
-        self.set(name, value).map(drop)
+        self.fields.set_with_receiver(&name, value, receiver)
     }
-    fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn delete(&self, name: &str) -> AuthResult<bool> {
         self.fields.delete(name)
     }
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
@@ -91,6 +72,14 @@ impl FieldObjectSource for Properties {
     }
     fn identity(&self) -> usize {
         std::ptr::from_ref(self) as usize
+    }
+
+    fn define_own_property(
+        &self,
+        name: String,
+        definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        self.fields.define_own_property(name, definition)
     }
 }
 
@@ -109,14 +98,51 @@ fn native_property_spread_json_and_clone_match_complete_source_observations() ->
         let observation = Arc::new(Observation::default());
         let child: FieldValue =
             FieldMap::from([("ownUndefined".into(), FieldValue::Undefined)]).into();
+        let fields: FieldObject = FieldMap::from([
+            ("alias".into(), child.clone()),
+            ("ownUndefined".into(), FieldValue::Undefined),
+        ])
+        .into();
+        let observed = observation.clone();
+        let selected = child.clone();
+        assert!(
+            fields.define_own_property(
+                "selected",
+                FieldPropertyDescriptor {
+                    enumerable: true,
+                    configurable: false,
+                    property: FieldProperty::Accessor {
+                        get: Some(FieldFunction::contextual(move |receiver, _| {
+                            let same = lock(&observed.receiver)?
+                                .as_ref()
+                                .is_some_and(|expected| expected.strict_equals(receiver));
+                            lock(&observed.events)?.push(format!("get:{same}"));
+                            Ok(selected.clone())
+                        })),
+                        set: None,
+                    },
+                }
+                .into(),
+            )?
+        );
+        assert!(
+            fields.define_own_property(
+                "hidden",
+                FieldPropertyDescriptor {
+                    enumerable: false,
+                    configurable: false,
+                    property: FieldProperty::Accessor {
+                        get: Some(FieldFunction::contextual(|_, _| {
+                            Err(AuthError::internal("Hidden getter must not run"))
+                        })),
+                        set: None,
+                    },
+                }
+                .into(),
+            )?
+        );
         let properties = FieldObject::from_source(Arc::new(Properties {
-            fields: FieldMap::from([
-                ("alias".into(), child.clone()),
-                ("ownUndefined".into(), FieldValue::Undefined),
-                ("selected".into(), child.clone()),
-                ("hidden".into(), FieldValue::Undefined),
-            ])
-            .into(),
+            fields,
             observation: observation.clone(),
             reads: AtomicUsize::new(0),
             write_failure: Mutex::new(None),

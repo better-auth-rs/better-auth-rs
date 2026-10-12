@@ -2,7 +2,7 @@
 
 use super::super::__private_core::{
     FieldObject,
-    field_value::{FieldObjectSource, FieldPropertyDescriptor},
+    field_value::{FieldProperty, FieldPropertyDescriptor},
 };
 use super::*;
 
@@ -24,69 +24,28 @@ pub(crate) fn cases(consumer: &str) -> impl Iterator<Item = &'static Json> + '_ 
         .filter(move |case| case["consumer"] == consumer)
 }
 
-struct GetterRow {
-    properties: FieldObject,
-    getters: FieldMap,
-}
-
-impl FieldObjectSource for GetterRow {
-    fn own_keys(&self) -> AuthResult<Vec<String>> {
-        self.properties.own_keys()
+pub(super) fn row(properties: FieldMap, getters: FieldMap) -> FieldValue {
+    let object: FieldObject = properties.into();
+    for (name, getter) in getters {
+        let FieldValue::Function(getter) = getter else {
+            unreachable!();
+        };
+        object
+            .define_own_property(
+                name,
+                FieldPropertyDescriptor {
+                    enumerable: true,
+                    configurable: true,
+                    property: FieldProperty::Accessor {
+                        get: Some(getter),
+                        set: None,
+                    },
+                }
+                .into(),
+            )
+            .unwrap();
     }
-
-    fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
-        self.properties.own_property_descriptor(name)
-    }
-
-    fn get(&self, _: &str) -> AuthResult<Option<FieldValue>> {
-        Err(AuthError::internal(
-            "The source getter requires its original record receiver",
-        ))
-    }
-
-    fn get_with_receiver(
-        &self,
-        name: &str,
-        receiver: &FieldValue,
-    ) -> AuthResult<Option<FieldValue>> {
-        match self.getters.get(name) {
-            Some(FieldValue::Function(getter)) => getter.call_with(receiver, &[]).map(Some),
-            _ => self.properties.get(name),
-        }
-    }
-
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
-        Err(AuthError::TypeError(
-            "Attempted to assign to readonly property.".into(),
-        ))
-    }
-
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
-        Err(AuthError::internal(
-            "The source sorting contract does not delete row properties",
-        ))
-    }
-
-    fn snapshot_fields(&self) -> AuthResult<FieldMap> {
-        Err(AuthError::internal(
-            "The source sorting contract must not snapshot an accessor row",
-        ))
-    }
-
-    fn identity(&self) -> usize {
-        std::ptr::from_ref(self) as usize
-    }
-}
-
-pub(super) fn row(mut properties: FieldMap, getters: FieldMap) -> FieldValue {
-    for name in getters.keys() {
-        let _ = properties.insert(name.clone(), FieldValue::Undefined);
-    }
-    FieldObject::from_source(Arc::new(GetterRow {
-        properties: properties.into(),
-        getters,
-    }))
-    .into()
+    object.into()
 }
 
 struct Graph<'a> {
@@ -118,16 +77,12 @@ impl Graph<'_> {
                     .into_iter()
                     .map(|index| index.to_string())
                     .collect::<Vec<_>>();
-                assert_eq!(
-                    value
-                        .enumerable_fields()?
-                        .keys()
-                        .cloned()
-                        .collect::<Vec<_>>(),
-                    keys,
-                    "The source fixture constructs dense arrays without named properties"
-                );
                 keys.push("length".into());
+                assert_eq!(
+                    value.own_property_keys()?,
+                    keys,
+                    "The source fixture constructs arrays without named properties"
+                );
                 keys
             }
             FieldValue::Object(object) => object.own_keys()?,
@@ -137,25 +92,20 @@ impl Graph<'_> {
         let mut properties = Vec::new();
         for name in &keys {
             let descriptor = match value {
-                FieldValue::Array(_) => FieldPropertyDescriptor {
-                    enumerable: name != "length",
-                },
+                FieldValue::Array(_) => value.own_property_descriptor(name)?.unwrap(),
                 FieldValue::Object(object) => object.own_property_descriptor(name)?.unwrap(),
                 FieldValue::Date(date) => date.properties().own_property_descriptor(name)?.unwrap(),
                 _ => unreachable!(),
             };
-            let accessor = self
-                .state
-                .rows
-                .iter()
-                .any(|row| row.strict_equals(value))
-                .then(|| self.state.accessor(name))
-                .flatten();
-            let property = if let Some(getter) = accessor {
-                let getter: FieldValue = getter.into();
-                json!({"enumerable": descriptor.enumerable, "get": self.value(&getter)?, "set": self.value(&FieldValue::Undefined)?})
-            } else {
-                json!({"enumerable": descriptor.enumerable, "value": self.value(&value.model_property(name)?)?})
+            let property = match descriptor.property {
+                FieldProperty::Accessor { get, set } => {
+                    json!({"enumerable": descriptor.enumerable,
+                        "get": self.value(&get.map(FieldValue::from).unwrap_or_default())?,
+                        "set": self.value(&set.map(FieldValue::from).unwrap_or_default())?})
+                }
+                FieldProperty::Data { value, .. } => {
+                    json!({"enumerable": descriptor.enumerable, "value": self.value(&value)?})
+                }
             };
             properties.push(json!([name, property]));
         }

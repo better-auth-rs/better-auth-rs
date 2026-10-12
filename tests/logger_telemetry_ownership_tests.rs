@@ -75,7 +75,7 @@ impl Fixture {
         ])
         .into();
         let expected: FieldValue = logger_options.clone().into();
-        let _ = logger_options.set(
+        logger_options.set(
             "log",
             FieldFunction::contextual({
                 let logs = logs.clone();

@@ -58,7 +58,7 @@ impl Contract {
             let fields = value
                 .as_object()
                 .ok_or_else(|| AuthError::internal("Missing cycle object"))?;
-            let _ = fields.set("self", value.clone())?;
+            fields.set("self", value.clone())?;
             value
         } else {
             let observed = trace.clone();

@@ -66,7 +66,7 @@ impl Drop for StagedWrites<'_> {
     }
 }
 
-type Prepare = Box<dyn FnOnce(FieldMap, Vec<FieldValue>) -> AuthResult<CloneWrite>>;
+type Prepare = Box<dyn FnOnce(FieldMap, Vec<FieldValue>, FieldMap) -> AuthResult<CloneWrite>>;
 type PrepareArray = Box<dyn FnOnce(usize, Vec<(usize, FieldValue)>) -> AuthResult<CloneWrite>>;
 
 pub(crate) struct ArrayCloneSeed {
@@ -358,17 +358,18 @@ impl<'a> Graph<'a> {
             FieldValue::Array(array) => {
                 let seed = array.clone_seed()?;
                 let length = array.len()?;
-                let indices = array.own_indices()?;
-                let names = array.named_property_keys()?;
                 let mut entries = Vec::new();
-                for index in indices {
-                    if let Some(value) = array.get(index)? {
+                // Bun captures length, then reads current own indices regardless of enumerability.
+                for index in 0..length {
+                    if array.own_property_descriptor(index)?.is_some()
+                        && let Some(value) = array.get(index)?
+                    {
                         let edge = self.visit(&value)?;
                         entries.push((index, value, edge));
                     }
                 }
                 let mut properties = Vec::new();
-                for name in names {
+                for name in array.named_property_keys()? {
                     if array
                         .properties()
                         .own_property_descriptor(&name)?
@@ -389,7 +390,9 @@ impl<'a> Graph<'a> {
                 let mut seed = object.clone_seed()?;
                 let mut fields = Vec::new();
                 for name in object.enumerable_keys()? {
-                    if let Some(value) = object.get(&name)? {
+                    if object.own_property_descriptor(&name)?.is_some()
+                        && let Some(value) = object.get(&name)?
+                    {
                         let edge = self.visit(&value)?;
                         fields.push((name, value, edge));
                     }
@@ -458,12 +461,16 @@ impl<'a> Graph<'a> {
                     fields,
                     state,
                 } => {
+                    let original_fields = fields
+                        .iter()
+                        .map(|(name, value, _)| (name.clone(), value.clone()))
+                        .collect();
                     let fields = fields
                         .into_iter()
                         .map(|(name, _, edge)| (name, edge.resolve(&values)))
                         .collect();
                     let state = state.iter().map(|edge| edge.resolve(&values)).collect();
-                    publish.push((seed.prepare)(fields, state)?);
+                    publish.push((seed.prepare)(fields, state, original_fields)?);
                 }
                 Node::Array {
                     seed,

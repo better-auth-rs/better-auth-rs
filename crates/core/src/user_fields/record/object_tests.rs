@@ -19,11 +19,10 @@ async fn shared_storage_reads_mapped_fields_and_id_after_earlier_callbacks() -> 
         let payload = payload.clone();
         UserFieldTransform::new(move |value| {
             assert_eq!(source.get("attached")?, Some(true.into()));
-            assert_eq!(
-                source.set("physicalPayload", payload.clone())?,
-                Some("[]".into())
-            );
-            assert_eq!(source.set("id", 9.into())?, Some("before".into()));
+            assert_eq!(source.get("physicalPayload")?, Some("[]".into()));
+            source.set("physicalPayload", payload.clone())?;
+            assert_eq!(source.get("id")?, Some("before".into()));
+            source.set("id", 9.into())?;
             Ok(value)
         })
     };

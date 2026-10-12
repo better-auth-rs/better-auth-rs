@@ -118,8 +118,7 @@ impl Seeded {
                             required(store.upgrade())?.operation(|op| {
                                 let table = required(op.capture_physical_table("account")?)?;
                                 let row = required(table.row_at(0)?)?;
-                                let _ =
-                                    row.set_field("accessToken".into(), "parent-0-after".into())?;
+                                row.set_field("accessToken".into(), "parent-0-after".into())?;
                                 Ok(())
                             })?;
                             lock(&events)?.push(json!([

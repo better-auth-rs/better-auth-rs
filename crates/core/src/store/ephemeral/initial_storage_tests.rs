@@ -128,7 +128,7 @@ async fn raw_initialization_preserves_physical_records_before_runtime_queries() 
         [Value::from("Stored User")]
     );
     assert_eq!(store.storage_rows(EntityRole::User)?, [record]);
-    let _ = child.set("phase", "after".into())?;
+    child.set("phase", "after".into())?;
     let retained = stored
         .get("extra")
         .ok_or_else(|| AuthError::internal("Missing retained child"))?;

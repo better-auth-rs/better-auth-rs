@@ -213,8 +213,7 @@ async fn acceptance_reads_live_teams_and_pending_seats_without_callback_replay()
                                     return Err(AuthError::type_error("member-rejected"));
                                 }
                                 if outcome == "conflict" {
-                                    let _ = first
-                                        .set_field("memberCount".into(), Value::Number(9.0))?;
+                                    first.set_field("memberCount".into(), Value::Number(9.0))?;
                                 }
                                 Ok(value)
                             }
@@ -720,8 +719,7 @@ async fn acceptance_session_writes_share_transaction_hooks_projection_and_owners
                                 return Err(AuthError::type_error("output-session"));
                             }
                             if mode == "external" && value == Value::from("team") {
-                                let _ = original
-                                    .set_field("userAgent".into(), "external-agent".into())?;
+                                original.set_field("userAgent".into(), "external-agent".into())?;
                             }
                             Ok(format!("{}:projected", required(value.as_str())?).into())
                         }

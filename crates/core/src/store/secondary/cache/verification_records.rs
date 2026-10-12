@@ -77,17 +77,22 @@ struct Properties {
 impl FieldObjectSource for Properties {
     fn own_keys(&self) -> AuthResult<Vec<String>> {
         self.reads.lock().unwrap().push("ownKeys".into());
-        Ok(self.fields.keys().cloned().collect())
+        crate::FieldObject::from(self.fields.clone()).own_keys()
     }
 
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
         Ok(self
             .fields
-            .contains_key(name)
-            .then_some(FieldPropertyDescriptor { enumerable: true }))
+            .get(name)
+            .cloned()
+            .map(FieldPropertyDescriptor::data))
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        _receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
         self.reads.lock().unwrap().push(name.into());
         if self.reject == Some(name) {
             return Err(AuthError::from_thrown(self.error.clone()));
@@ -95,13 +100,18 @@ impl FieldObjectSource for Properties {
         Ok(self.fields.get(name).cloned())
     }
 
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(
+        &self,
+        _: String,
+        _: FieldValue,
+        _receiver: &FieldValue,
+    ) -> AuthResult<bool> {
         Err(AuthError::internal(
             "The verification getter contract is read-only",
         ))
     }
 
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal(
             "The verification getter contract is read-only",
         ))
@@ -115,6 +125,16 @@ impl FieldObjectSource for Properties {
 
     fn identity(&self) -> usize {
         std::ptr::from_ref(self).addr()
+    }
+
+    fn define_own_property(
+        &self,
+        _name: String,
+        _definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "This contract source does not define properties",
+        ))
     }
 }
 

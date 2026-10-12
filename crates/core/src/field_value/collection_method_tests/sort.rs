@@ -104,20 +104,39 @@ impl FieldArraySource for Writable {
     fn own_indices(&self) -> AuthResult<Vec<usize>> {
         self.values.own_indices()
     }
-    fn get(&self, index: usize) -> AuthResult<Option<FieldValue>> {
+    fn get(&self, index: usize, receiver: &FieldValue) -> AuthResult<Option<FieldValue>> {
         self.observe("get", index)?;
-        self.values.get(index)
+        self.values.get_with_receiver(index, receiver)
+    }
+    fn own_property_descriptor(
+        &self,
+        index: usize,
+    ) -> AuthResult<Option<crate::FieldPropertyDescriptor>> {
+        self.values.own_property_descriptor(index)
+    }
+    fn length_descriptor(&self) -> AuthResult<crate::FieldPropertyDescriptor> {
+        self.values.length_descriptor()
+    }
+    fn define_index(
+        &self,
+        index: usize,
+        definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        self.values.define_index(index, definition)
+    }
+    fn define_length(&self, definition: crate::FieldPropertyDefinition) -> AuthResult<bool> {
+        self.values.define_length(definition)
     }
     fn identity(&self) -> usize {
         std::ptr::from_ref(self) as usize
     }
-    fn set(&self, index: usize, value: FieldValue) -> AuthResult<()> {
+    fn set(&self, index: usize, value: FieldValue, receiver: &FieldValue) -> AuthResult<bool> {
         self.observe("set", index)?;
-        self.values.set(index, value)
+        self.values.assign_index(index, value, receiver)
     }
-    fn delete(&self, index: usize) -> AuthResult<()> {
+    fn delete(&self, index: usize) -> AuthResult<bool> {
         self.observe("delete", index)?;
-        self.values.delete(index)
+        self.values.delete_index(index)
     }
 }
 

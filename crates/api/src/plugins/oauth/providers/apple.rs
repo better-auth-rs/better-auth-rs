@@ -250,7 +250,7 @@ mod tests {
                     assert!(receiver.is_object());
                     assert!(arguments.is_empty());
                     converted.lock().unwrap().push("first:toString".into());
-                    let _ = changed_user.set(
+                    changed_user.set(
                         "name",
                         FieldMap::from([("lastName".into(), last.clone())]).into(),
                     )?;
@@ -262,7 +262,7 @@ mod tests {
                 .into(),
             )])
             .into();
-            let _ = user.set(
+            user.set(
                 "name",
                 FieldMap::from([
                     ("firstName".into(), first),

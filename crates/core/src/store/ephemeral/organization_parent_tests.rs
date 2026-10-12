@@ -52,11 +52,11 @@ impl Control {
                     .fixture_table("invitation")
                     .get_ref("invitation-a")?
                     .unwrap();
-                let _ = row.set_field("detail".into(), Value::from("I-A-detail-after"))?;
+                row.set_field("detail".into(), Value::from("I-A-detail-after"))?;
                 Ok(("invitation", "I-A-detail-after"))
             } else {
                 let row = state.fixture_table("member").get_ref("member-a")?.unwrap();
-                let _ = row.set_field("detail".into(), Value::from("M-A-detail-after"))?;
+                row.set_field("detail".into(), Value::from("M-A-detail-after"))?;
                 Ok(("member", "M-A-detail-after"))
             }
         })?;

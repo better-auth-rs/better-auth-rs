@@ -4,11 +4,10 @@
 )]
 
 use super::*;
-use crate::field_value::FieldObjectSource;
 use crate::store::ephemeral::EphemeralStore;
 use crate::store::schema::EntityRole;
 use crate::{FieldMap, FieldValue};
-use std::sync::Weak;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 fn row(id: &str) -> FieldMap {
@@ -99,62 +98,39 @@ fn later_filter_errors_keep_nested_mutations_without_publishing_the_delete() -> 
 struct ComparisonSource {
     name: &'static str,
     events: Arc<Mutex<Vec<&'static str>>>,
-    append_to: Option<(Weak<Mutex<RowArray<FieldMap>>>, MemoryGate)>,
+    append_to: Option<TableRef<FieldMap>>,
     appended: AtomicBool,
 }
 
-impl FieldObjectSource for ComparisonSource {
-    fn own_property_descriptor(
-        &self,
-        name: &str,
-    ) -> AuthResult<Option<crate::field_value::FieldPropertyDescriptor>> {
-        Ok((name == "value")
-            .then_some(crate::field_value::FieldPropertyDescriptor { enumerable: true }))
+impl ComparisonSource {
+    fn object(self: &Arc<Self>) -> crate::FieldObject {
+        let source = self.clone();
+        crate::FieldObject::from(indexmap::IndexMap::from([(
+            "value".into(),
+            crate::field_value::FieldPropertyDescriptor {
+                enumerable: true,
+                configurable: true,
+                property: crate::field_value::FieldProperty::Accessor {
+                    get: Some(crate::FieldFunction::contextual(move |_receiver, _| {
+                        Ok(source.read()?.get("value").cloned().unwrap_or_default())
+                    })),
+                    set: None,
+                },
+            },
+        )]))
     }
 
-    fn own_keys(&self) -> AuthResult<Vec<String>> {
-        Ok(vec!["value".into()])
-    }
-
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        if name == "value" {
-            Ok(self.snapshot_fields()?.get(name).cloned())
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn snapshot_fields(&self) -> AuthResult<FieldMap> {
+    fn read(&self) -> AuthResult<FieldMap> {
         self.events
             .lock()
             .map_err(|_| AuthError::internal("Comparison events poisoned"))?
             .push(self.name);
-        if let Some((rows, gate)) = &self.append_to
+        if let Some(table) = &self.append_to
             && !self.appended.swap(true, Ordering::SeqCst)
         {
-            let rows = rows
-                .upgrade()
-                .ok_or_else(|| AuthError::internal("Live table was dropped"))?;
-            let table = TableRef {
-                rows,
-                gate: gate.clone(),
-                properties: FieldMap::new().into(),
-            };
             let _ = table.push(row("appended-during-comparison"))?;
         }
         Ok([("value".into(), 1.into())].into())
-    }
-
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
-        Err(AuthError::internal("Comparison probe is immutable"))
-    }
-
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
-        Err(AuthError::internal("Comparison probe is immutable"))
-    }
-
-    fn identity(&self) -> usize {
-        std::ptr::from_ref(self) as usize
     }
 }
 
@@ -171,13 +147,13 @@ fn reconciliation_compares_each_duplicate_lazily_and_visits_appended_live_rows()
         let source = ComparisonSource {
             name,
             events: events.clone(),
-            append_to: append.then(|| (Arc::downgrade(&live.rows), live.gate.clone())),
+            append_to: append.then(|| live.clone()),
             appended: AtomicBool::new(false),
         };
         let mut fields = row("duplicate");
         let _ = fields.insert(
             "probe".into(),
-            FieldValue::Object(crate::FieldObject::from_source(Arc::new(source))),
+            FieldValue::Object(Arc::new(source).object()),
         );
         let _ = table.push(fields)?;
     }
@@ -222,7 +198,7 @@ fn transaction_plans_preserve_rebound_rows_without_repeating_callbacks() -> Auth
         };
         let _ = fields.insert(
             "probe".into(),
-            FieldValue::Object(crate::FieldObject::from_source(Arc::new(source))),
+            FieldValue::Object(Arc::new(source).object()),
         );
         if name == "working" {
             let _ = fields.insert("changed".into(), true.into());
@@ -241,7 +217,7 @@ fn transaction_plans_preserve_rebound_rows_without_repeating_callbacks() -> Auth
     assert!(!plan.is_empty());
     assert_eq!(*events.lock().unwrap(), ["base", "working"]);
 
-    let _ = retained.set_field("nested".into(), true.into())?;
+    retained.set_field("nested".into(), true.into())?;
     let rebound = TableRef::new(gate.clone()).push(row("detached"))?;
     let latest = TableRef::from_refs(
         gate,
@@ -277,7 +253,7 @@ fn table_arrays_share_clone_identity_keep_first_origins_and_observe_later_append
     let table = TableRef::new(MemoryGate::default());
     let array = table.array();
     let source = table.push(row("before"))?;
-    let _ = source.set_field("table".into(), array.clone().into())?;
+    source.set_field("table".into(), array.clone().into())?;
     assert_eq!(array.len()?, 1);
     assert!(
         array
@@ -303,7 +279,7 @@ fn table_arrays_share_clone_identity_keep_first_origins_and_observe_later_append
         .ok_or_else(|| AuthError::internal("Missing second array alias"))?;
     assert!(retained.same_array(other));
     assert!(!retained.same_array(&array));
-    let _ = source.set_field("id".into(), "after-first-visit".into())?;
+    source.set_field("id".into(), "after-first-visit".into())?;
     let mut originals = Vec::new();
     let copied = table.deep_clone_with(&mut context, |original, target, before| {
         originals.push((original, target, before));

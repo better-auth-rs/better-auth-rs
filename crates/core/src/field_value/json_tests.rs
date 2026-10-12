@@ -160,8 +160,8 @@ fn prepared_results_do_not_invoke_another_json_method() -> AuthResult<()> {
 fn preparation_can_break_or_introduce_ancestor_cycles() -> AuthResult<()> {
     for text in [false, true] {
         let object = FieldObject::from(FieldMap::new());
-        let _ = object.set("self", FieldValue::Object(object.clone()))?;
-        let _ = object.set(
+        object.set("self", FieldValue::Object(object.clone()))?;
+        object.set(
             "toJSON",
             FieldFunction::contextual(|_, _| Ok("detached".into())).into(),
         )?;
@@ -170,7 +170,7 @@ fn preparation_can_break_or_introduce_ancestor_cycles() -> AuthResult<()> {
         assert_eq!(broken?, Some(r#""detached""#.into()));
 
         let object = FieldObject::from(FieldMap::new());
-        let _ = object.set(
+        object.set(
             "toJSON",
             FieldFunction::contextual(|receiver, arguments| {
                 if arguments.first().and_then(FieldValue::as_str) == Some("again") {
@@ -181,7 +181,7 @@ fn preparation_can_break_or_introduce_ancestor_cycles() -> AuthResult<()> {
             })
             .into(),
         )?;
-        let _ = object.set("again", FieldValue::Object(object.clone()))?;
+        object.set("again", FieldValue::Object(object.clone()))?;
         let broken = encode(&FieldValue::Object(object.clone()), text);
         let _ = object.delete("again")?;
         assert_eq!(broken?, Some(r#"{"again":7}"#.into()));
@@ -191,7 +191,7 @@ fn preparation_can_break_or_introduce_ancestor_cycles() -> AuthResult<()> {
             let parent = parent.clone();
             move |_, _| Ok(FieldValue::Object(parent.clone()))
         });
-        let _ = parent.set("child", child)?;
+        parent.set("child", child)?;
         let introduced = encode(&FieldValue::Object(parent.clone()), text);
         let _ = parent.delete("child")?;
         assert!(matches!(introduced, Err(AuthError::TypeError(message))
@@ -208,15 +208,15 @@ fn method_mutations_precede_property_name_capture() -> AuthResult<()> {
                 .as_object()
                 .ok_or_else(|| AuthError::internal("Missing toJSON receiver"))?;
             let _ = object.delete("drop")?;
-            let _ = object.set("added", true.into())?;
-            let _ = object.set("1", "numeric".into())?;
+            object.set("added", true.into())?;
+            object.set("1", "numeric".into())?;
             Ok(receiver.clone())
         });
         let object = value
             .as_object()
             .ok_or_else(|| AuthError::internal("Missing toJSON object"))?;
-        let _ = object.set("drop", "removed".into())?;
-        let _ = object.set("tail", "kept".into())?;
+        object.set("drop", "removed".into())?;
+        object.set("tail", "kept".into())?;
         assert_eq!(
             encode(&value, text)?,
             Some(r#"{"1":"numeric","tail":"kept","added":true}"#.into())

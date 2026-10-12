@@ -196,11 +196,11 @@ impl Hooks {
         if !matches!(self.case, Case::RemoveId) {
             let user = required(member.get("user"), "Expected lifecycle member user summary")?;
             let object = required(user.as_object(), "Expected native user summary object")?;
-            let _ = object.set("hook", "before".into())?;
+            object.set("hook", "before".into())?;
             if self.case.user() == "user-b" {
                 let value = required(object.get("name")?, "Expected summary name")?;
                 let name = required(value.as_object(), "Expected native summary name object")?;
-                let _ = name.set("touched", true.into())?;
+                name.set("touched", true.into())?;
             }
             observations.summary = Some(user.clone());
             ordered(user, &summary(self.case, true))?;

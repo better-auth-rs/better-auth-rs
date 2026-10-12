@@ -39,35 +39,58 @@ fn root_value(store: &EphemeralStore) -> AuthResult<FieldValue> {
     Ok(fields.into())
 }
 
-type ProbeRead = dyn Fn() -> AuthResult<FieldValue> + Send + Sync;
-struct RootProbe(Arc<ProbeRead>);
+struct RootProbe(FieldFunction);
 
 impl FieldObjectSource for RootProbe {
     fn own_property_descriptor(
         &self,
         name: &str,
     ) -> AuthResult<Option<crate::field_value::FieldPropertyDescriptor>> {
-        Ok((name == "value")
-            .then_some(crate::field_value::FieldPropertyDescriptor { enumerable: true }))
+        Ok(
+            (name == "value").then(|| crate::field_value::FieldPropertyDescriptor {
+                enumerable: true,
+                configurable: true,
+                property: crate::field_value::FieldProperty::Accessor {
+                    get: Some(self.0.clone()),
+                    set: None,
+                },
+            }),
+        )
     }
 
     fn own_keys(&self) -> AuthResult<Vec<String>> {
         Ok(vec!["value".into()])
     }
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
         if name == "value" {
-            (self.0)().map(Some)
+            self.0.call_with(receiver, &[]).map(Some)
         } else {
             Ok(None)
         }
     }
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
-        Ok([("value".into(), required(self.get("value")?)?)].into())
+        Ok([(
+            "value".into(),
+            required(self.get_with_receiver("value", &FieldValue::Undefined)?)?,
+        )]
+        .into())
     }
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(&self, _: String, _: FieldValue, _: &FieldValue) -> AuthResult<bool> {
         Err(AuthError::internal("The root probe is read-only"))
     }
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+
+    fn define_own_property(
+        &self,
+        _: String,
+        _: crate::field_value::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        Err(AuthError::internal("The root probe is read-only"))
+    }
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal("The root probe is read-only"))
     }
     fn identity(&self) -> usize {
@@ -76,9 +99,9 @@ impl FieldObjectSource for RootProbe {
 }
 
 fn probe(read: impl Fn() -> AuthResult<FieldValue> + Send + Sync + 'static) -> FieldValue {
-    FieldValue::Object(FieldObject::from_source(Arc::new(RootProbe(Arc::new(
-        read,
-    )))))
+    FieldValue::Object(FieldObject::from_source(Arc::new(RootProbe(
+        FieldFunction::contextual(move |_, _| read()),
+    ))))
 }
 
 fn probe_value(value: impl Into<FieldValue>) -> FieldValue {
@@ -338,7 +361,7 @@ async fn earlier_key_root_publishes_before_later_user_json_failure() -> AuthResu
     let target = required(captured_keys.row_at(0)?)?;
     let captured_users = rows(&store, [user("Before".into())])?;
     let owner = required(captured_users.row_at(0)?)?;
-    let _ = owner.set_field("name".into(), owner.field_value())?;
+    owner.set_field("name".into(), owner.field_value())?;
     bind(&store, "apikey", captured_keys.clone())?;
     bind(&store, "user", captured_users.clone())?;
     let expected_failure = required(owner.field_value().stringify().err())?;

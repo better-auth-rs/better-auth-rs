@@ -112,7 +112,7 @@ fn explicit_error_body_retains_order_extra_properties_and_identity() -> AuthResu
     let object = body
         .as_object()
         .ok_or_else(|| AuthError::internal("Expected explicit error object"))?;
-    let _ = object.set("message", "User not found".into())?;
+    object.set("message", "User not found".into())?;
     for (error, status) in errors {
         assert_eq!(error.status_value()?, status);
         assert!(error.is_api_error_instance(ApiErrorClass::BetterAuth));

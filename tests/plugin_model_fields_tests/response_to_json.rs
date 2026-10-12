@@ -78,9 +78,9 @@ impl Probe {
         let allocation = error_allocation.clone();
         let alias = callable("alias", &calls, move |key| {
             let fields = required(mutated.as_object(), "Expected the returned JSON object")?;
-            let _ = fields.set("tail", "after".into())?;
+            fields.set("tail", "after".into())?;
             let _ = fields.delete("drop")?;
-            let _ = fields.set("added", true.into())?;
+            fields.set("added", true.into())?;
             if matches!(mode, Mode::Error) {
                 let message = "original response toJSON error".to_owned();
                 allocation.store(message.as_ptr() as usize, Ordering::SeqCst);
@@ -101,7 +101,7 @@ impl Probe {
             ("tail", "before".into()),
             ("drop", true.into()),
         ] {
-            let _ = fields.set(name, value)?;
+            fields.set(name, value)?;
         }
         let returned = bundle.clone();
         let value = callable("name", &calls, move |_| {

@@ -63,7 +63,7 @@ impl AdapterRecord {
     fn begin_output(&mut self) -> AuthResult<()> {
         if let Some(object) = &self.storage_object {
             for (name, value) in std::mem::take(&mut self.storage) {
-                let _ = object.set(name, value)?;
+                object.set(name, value)?;
             }
         }
         if let Some(initialize) = self.output_initializer.take() {

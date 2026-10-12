@@ -56,13 +56,15 @@ pub mod server_api;
 pub mod store;
 pub mod wire;
 
+pub use better_auth_core::field_value::FieldObjectSource;
 pub use better_auth_core::session::{NativeSessionData, SessionData};
 pub use better_auth_core::{
     ApiErrorClass, ApiErrorInit, ApiKeyStart, Argon2PasswordHasher, AuthConfig, AuthError,
     AuthRecordFields, AuthResult, AuthSchema, FieldArray, FieldArrayIter, FieldDate, FieldFunction,
-    FieldMap, FieldValue, FromFieldMap, NativeResponseStatus, PasswordHasher, ResponseBlob,
-    ResponseBody, SchemaField, SchemaValue, ScryptPasswordHasher, StructuredCloneContext,
-    Utf16String, database_hooks,
+    FieldMap, FieldObject, FieldProperty, FieldPropertyDefinition, FieldPropertyDescriptor,
+    FieldPropertyUpdate, FieldValue, FromFieldMap, NativeResponseStatus, PasswordHasher,
+    ResponseBlob, ResponseBody, SchemaField, SchemaValue, ScryptPasswordHasher,
+    StructuredCloneContext, Utf16String, database_hooks,
 };
 pub use core::{AuthBuilder, BetterAuth};
 

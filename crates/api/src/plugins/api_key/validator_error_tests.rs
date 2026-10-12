@@ -34,7 +34,7 @@ impl Failure {
             Self::Ordinary => AuthError::internal("Validator operation failed"),
             Self::CyclicJson => {
                 let object = FieldObject::from(FieldMap::new());
-                let _ = object.set("self", FieldValue::Object(object.clone()))?;
+                object.set("self", FieldValue::Object(object.clone()))?;
                 let result = FieldValue::Object(object.clone()).stringify();
                 let _ = object.delete("self")?;
                 match result {

@@ -30,13 +30,7 @@ impl FieldObjectSource for Source {
             .lock()
             .map_err(poisoned)?
             .push(format!("keys:{}", self.name));
-        Ok(self
-            .fields
-            .lock()
-            .map_err(poisoned)?
-            .keys()
-            .cloned()
-            .collect())
+        FieldObject::from(self.fields.lock().map_err(poisoned)?.clone()).own_keys()
     }
 
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
@@ -44,11 +38,16 @@ impl FieldObjectSource for Source {
             .fields
             .lock()
             .map_err(poisoned)?
-            .contains_key(name)
-            .then_some(FieldPropertyDescriptor { enumerable: true }))
+            .get(name)
+            .cloned()
+            .map(FieldPropertyDescriptor::data))
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        _receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
         self.events
             .lock()
             .map_err(poisoned)?
@@ -57,12 +56,19 @@ impl FieldObjectSource for Source {
         Ok(self.fields.lock().map_err(poisoned)?.get(name).cloned())
     }
 
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        Ok(self.fields.lock().map_err(poisoned)?.insert(name, value))
+    fn set_with_receiver(
+        &self,
+        name: String,
+        value: FieldValue,
+        _receiver: &FieldValue,
+    ) -> AuthResult<bool> {
+        let _ = self.fields.lock().map_err(poisoned)?.insert(name, value);
+        Ok(true)
     }
 
-    fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        Ok(self.fields.lock().map_err(poisoned)?.remove(name))
+    fn delete(&self, name: &str) -> AuthResult<bool> {
+        let _ = self.fields.lock().map_err(poisoned)?.remove(name);
+        Ok(true)
     }
 
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
@@ -82,6 +88,16 @@ impl FieldObjectSource for Source {
         let seed = FieldObject::from(FieldMap::new()).clone_seed()?;
         *target.lock().map_err(poisoned)? = Some(seed.object.clone());
         Ok(Some(seed))
+    }
+
+    fn define_own_property(
+        &self,
+        _name: String,
+        _definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "This contract source does not define properties",
+        ))
     }
 }
 
@@ -116,14 +132,14 @@ fn getters_follow_depth_first_property_order_and_keep_undefined_distinct_from_de
             let root = weak
                 .upgrade()
                 .ok_or_else(|| AuthError::internal("Missing root source"))?;
-            let _ = root.set("later".into(), 2.into())?;
+            FieldObject::from_source(root.clone()).set("later", 2.into())?;
             let _ = root.delete("removed")?;
-            let _ = root.set("appended".into(), "not-enumerated".into())?;
+            FieldObject::from_source(root).set("appended", "not-enumerated".into())?;
             Ok(())
         }),
         target: None,
     }));
-    let _ = root.set("child".into(), FieldValue::Object(child))?;
+    FieldObject::from_source(root.clone()).set("child", FieldValue::Object(child))?;
     let value = FieldValue::Object(FieldObject::from_source(root.clone()));
     let cloned = StructuredCloneContext::new().clone_value(&value)?;
     assert_eq!(
@@ -136,7 +152,6 @@ fn getters_follow_depth_first_property_order_and_keep_undefined_distinct_from_de
             "keys:child",
             "get:child.value",
             "get:root.later",
-            "get:root.removed",
             "get:root.ownUndefined",
         ]
     );
@@ -184,7 +199,7 @@ fn failed_traversal_does_not_publish_partial_aliases_and_retry_observes_fresh_va
     let date = FieldValue::from(FieldDate::from_milliseconds(42.0));
     let existing = context.clone_value(&date)?;
     let cycle = FieldObject::from(FieldMap::from([("value".into(), 1.into())]));
-    let _ = cycle.set("self", FieldValue::Object(cycle.clone()))?;
+    cycle.set("self", FieldValue::Object(cycle.clone()))?;
     let fields = FieldMap::from([
         ("date".into(), date.clone()),
         ("cycle".into(), FieldValue::Object(cycle.clone())),
@@ -198,7 +213,7 @@ fn failed_traversal_does_not_publish_partial_aliases_and_retry_observes_fresh_va
         Err(AuthError::DataClone)
     ));
     assert_eq!(context.copies.len(), 1);
-    let _ = cycle.set("value", 2.into())?;
+    cycle.set("value", 2.into())?;
     let mut retry = fields;
     let _ = retry.remove("failure");
     let copied = context.clone_map(&retry)?;
@@ -236,14 +251,19 @@ impl FieldObjectSource for RejectedRecord {
     fn own_property_descriptor(&self, _: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
         Ok(None)
     }
-    fn get(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(&self, _: &str, _receiver: &FieldValue) -> AuthResult<Option<FieldValue>> {
         Ok(None)
     }
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
-        Ok(None)
+    fn set_with_receiver(
+        &self,
+        _: String,
+        _: FieldValue,
+        _receiver: &FieldValue,
+    ) -> AuthResult<bool> {
+        Ok(true)
     }
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
-        Ok(None)
+    fn delete(&self, _: &str) -> AuthResult<bool> {
+        Ok(true)
     }
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
         Ok(FieldMap::new())
@@ -265,8 +285,18 @@ impl FieldObjectSource for RejectedRecord {
             object,
             state: Vec::new(),
             original_record: None,
-            prepare: Box::new(move |_, _| Err(error)),
+            prepare: Box::new(move |_, _, _| Err(error)),
         }))
+    }
+
+    fn define_own_property(
+        &self,
+        _name: String,
+        _definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "This contract source does not define properties",
+        ))
     }
 }
 
@@ -287,8 +317,8 @@ fn failed_native_preparation_fills_no_objects_and_retains_the_original_error() -
         on_read: Box::new(|_| Ok(())),
         target: Some(cycle_target.clone()),
     }));
-    let _ = cycle.set("self", FieldValue::Object(cycle.clone()))?;
-    let _ = cycle.set("rejection", FieldValue::Object(rejection))?;
+    cycle.set("self", FieldValue::Object(cycle.clone()))?;
+    cycle.set("rejection", FieldValue::Object(rejection))?;
     let mut context = StructuredCloneContext::new();
     let result = context.clone_value(&FieldValue::Object(cycle.clone()));
     let _ = cycle.delete("self")?;
@@ -325,7 +355,7 @@ fn deferred_snapshot_failure_does_not_publish_an_earlier_cyclic_graph() -> AuthR
         on_read: Box::new(|_| Ok(())),
         target: Some(observed.clone()),
     }));
-    let _ = source.set("self", FieldValue::Object(source.clone()))?;
+    source.set("self", FieldValue::Object(source.clone()))?;
     let mut base = StructuredCloneContext::deferred();
     let first = base.clone_value(&FieldValue::Object(source.clone()))?;
     let first_target = observed
@@ -333,7 +363,7 @@ fn deferred_snapshot_failure_does_not_publish_an_earlier_cyclic_graph() -> AuthR
         .map_err(poisoned)?
         .clone()
         .ok_or_else(|| AuthError::internal("Missing first clone target"))?;
-    let _ = source.set(
+    source.set(
         "failure",
         crate::FieldFunction::contextual(|_, _| Ok(FieldValue::Undefined)).into(),
     )?;

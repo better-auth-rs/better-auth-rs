@@ -38,13 +38,13 @@ fn callback_reads_description_before_code_coercion_and_preserves_conversion_erro
                     .lock()
                     .map_err(|_| AuthError::internal("OAuth trace lock poisoned"))?
                     .push("code");
-                let _ = body.set("message", "changed description".into())?;
+                body.set("message", "changed description".into())?;
                 Ok("PROFILE_REJECTED".into())
             }
         })
         .into(),
     )]);
-    let _ = body.set("code", code.into())?;
+    body.set("code", code.into())?;
     let raw: FieldValue = FieldMap::from([
         ("name".into(), "APIError".into()),
         ("body".into(), FieldValue::Object(body.clone())),

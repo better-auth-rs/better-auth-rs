@@ -254,7 +254,7 @@ async fn field_reference_reuses_an_earlier_top_level_key_row() -> AuthResult<()>
     record(&trace, "transaction:enter")?;
     let selected = required(tx.get_api_key_record(&"holder".to_owned().into()).await?)?;
     assert!(!selected["name"].strict_equals(&target.field_value()));
-    let _ = required(selected["name"].as_object())?.set("remaining", 7.0.into())?;
+    required(selected["name"].as_object())?.set("remaining", 7.0.into())?;
     record(&trace, "graph:mutate-target")?;
     let updated = decrement(&tx).await?;
     let rows = listed(&tx).await?;
@@ -316,7 +316,7 @@ async fn user_field_reference_reuses_a_later_top_level_key_table() -> AuthResult
     record(&trace, "transaction:enter")?;
     let selected = required(tx.get_user_by_id("owner").await?)?.field_values()?;
     assert!(!selected["name"].strict_equals(&target.field_value()));
-    let _ = required(selected["name"].as_object())?.set("remaining", 7.0.into())?;
+    required(selected["name"].as_object())?.set("remaining", 7.0.into())?;
     record(&trace, "graph:mutate-target")?;
     let updated = decrement(&tx).await?;
     record(&trace, "transaction:return")?;
@@ -374,7 +374,7 @@ fn cyclic_name(
         CycleShape::Table => Ok(table.array().into()),
         CycleShape::ObjectArray => {
             let graph: FieldValue = FieldMap::from([("label".into(), "graph".into())]).into();
-            let _ = required(graph.as_object())?.set("nodes", vec![graph.clone()].into())?;
+            required(graph.as_object())?.set("nodes", vec![graph.clone()].into())?;
             Ok(graph)
         }
     }
@@ -435,7 +435,7 @@ async fn cycles_reach_transaction_work_then_keep_earlier_model_publication_on_js
         let captured_users = users(&store)?;
         let target = captured_keys.push(key("target", 5.0))?;
         let live_name = cyclic_name(&target.field_value(), &captured_keys, shape)?;
-        let _ = target.set_field("name".into(), live_name.clone())?;
+        target.set_field("name".into(), live_name.clone())?;
         let owner = captured_users.push(user("Before".into()))?;
         let expected_failure = required(target.field_value().stringify().err())?;
         let (base, tx, queue) = store.begin_adapter_transaction()?;
@@ -519,27 +519,31 @@ struct CloneProbe {
     function: FieldValue,
 }
 
-impl FieldObjectSource for CloneProbe {
-    fn own_property_descriptor(
-        &self,
-        name: &str,
-    ) -> AuthResult<Option<crate::field_value::FieldPropertyDescriptor>> {
-        Ok((name == "value")
-            .then_some(crate::field_value::FieldPropertyDescriptor { enumerable: true }))
+impl CloneProbe {
+    fn object(self: &Arc<Self>) -> crate::FieldObject {
+        let source = self.clone();
+        crate::FieldObject::from(indexmap::IndexMap::from([(
+            "value".into(),
+            crate::field_value::FieldPropertyDescriptor {
+                enumerable: true,
+                configurable: true,
+                property: crate::field_value::FieldProperty::Accessor {
+                    get: Some(crate::FieldFunction::contextual(move |receiver, _| {
+                        Ok(source.read("value", receiver)?.unwrap_or_default())
+                    })),
+                    set: None,
+                },
+            },
+        )]))
     }
 
-    fn own_keys(&self) -> AuthResult<Vec<String>> {
-        Ok(vec!["value".into()])
-    }
-
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn read(&self, name: &str, _receiver: &FieldValue) -> AuthResult<Option<FieldValue>> {
         if name != "value" {
             return Ok(None);
         }
         let read = self.reads.fetch_add(1, Ordering::SeqCst) + 1;
         record(&self.trace, format!("clone:{read}"))?;
-        let _ = self
-            .owner
+        self.owner
             .set_field("name".into(), format!("Live side effect {read}").into())?;
         record(&self.trace, format!("side-effect:{read}"))?;
         if read == self.fail_at {
@@ -554,22 +558,6 @@ impl FieldObjectSource for CloneProbe {
             return Ok(Some(self.function.clone()));
         }
         Ok(Some(format!("copied {read}").into()))
-    }
-
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
-        Err(AuthError::internal("The graph clone getter is immutable"))
-    }
-
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
-        Err(AuthError::internal("The graph clone getter is immutable"))
-    }
-
-    fn snapshot_fields(&self) -> AuthResult<FieldMap> {
-        Ok([("value".into(), required(self.get("value")?)?)].into())
-    }
-
-    fn identity(&self) -> usize {
-        std::ptr::from_ref(self) as usize
     }
 }
 
@@ -598,8 +586,8 @@ fn clone_getter_failures_preserve_original_errors_and_live_writes_before_work() 
                 })
                 .into(),
             });
-            let value = FieldValue::Object(FieldObject::from_source(probe.clone()));
-            let _ = target.set_field("name".into(), value.clone())?;
+            let value = FieldValue::Object(probe.object());
+            target.set_field("name".into(), value.clone())?;
             let mut returned = None;
             let result = store.begin_adapter_transaction().and_then(|_| {
                 record(&trace, "transaction:enter")?;

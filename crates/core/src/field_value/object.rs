@@ -1,5 +1,8 @@
-use super::{FieldMap, FieldValue};
+use super::{
+    FieldMap, FieldProperty, FieldPropertyDefinition, FieldPropertyDescriptor, FieldValue,
+};
 use crate::{AuthError, AuthResult};
+use indexmap::IndexMap;
 use std::{
     any::Any,
     cell::RefCell,
@@ -17,44 +20,41 @@ pub struct FieldObject(ObjectStorage);
 
 #[derive(Clone)]
 enum ObjectStorage {
-    Owned(Arc<Mutex<FieldMap>>),
+    Owned(Arc<Mutex<IndexMap<String, FieldPropertyDescriptor>>>),
     Live(Arc<dyn FieldObjectSource>),
-}
-
-/// Metadata used by operations that select an object's own enumerable properties.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct FieldPropertyDescriptor {
-    pub enumerable: bool,
 }
 
 /// A live object source. Property access must retain native values and child identities.
 pub trait FieldObjectSource: Send + Sync {
+    /// Return the completed native OwnPropertyKeys order or its original error.
+    /// The source validates operation invariants; wrappers do not sort or deduplicate this result.
     fn own_keys(&self) -> AuthResult<Vec<String>>;
     /// Inspect one current own property without evaluating its value or enumerating other keys.
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>>;
     fn has_property(&self, name: &str) -> AuthResult<bool> {
         Ok(self.own_keys()?.iter().any(|key| key == name))
     }
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>>;
-    /// Read a property with the native receiver that owns this source.
+    /// Read a property with the native receiver without performing a descriptor preflight.
     fn get_with_receiver(
         &self,
         name: &str,
-        _receiver: &FieldValue,
-    ) -> AuthResult<Option<FieldValue>> {
-        self.get(name)
-    }
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>>;
-    /// Assign a property without reading its previous value or replacing setter errors.
+        receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>>;
+    /// Assign without reading the previous value. `false` reports a rejected assignment.
     fn set_with_receiver(
         &self,
         name: String,
         value: FieldValue,
-        _receiver: &FieldValue,
-    ) -> AuthResult<()> {
-        self.set(name, value).map(drop)
-    }
-    fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>>;
+        receiver: &FieldValue,
+    ) -> AuthResult<bool>;
+    /// Define a current own property. The source owns validation and operation ordering.
+    fn define_own_property(
+        &self,
+        name: String,
+        definition: FieldPropertyDefinition,
+    ) -> AuthResult<bool>;
+    /// Delete an own property without reading its value. An absent property succeeds.
+    fn delete(&self, name: &str) -> AuthResult<bool>;
     fn snapshot_fields(&self) -> AuthResult<FieldMap>;
     fn identity(&self) -> usize;
 
@@ -130,7 +130,7 @@ impl FieldObject {
                 .keys()
                 .cloned()
                 .collect(),
-            ObjectStorage::Live(source) => source.own_keys()?,
+            ObjectStorage::Live(source) => return source.own_keys(),
         };
         keys.sort_by_key(|name| {
             crate::utils::json::array_index(name).map_or((true, 0), |index| (false, index))
@@ -147,8 +147,8 @@ impl FieldObject {
             ObjectStorage::Owned(fields) => Ok(fields
                 .lock()
                 .map_err(|_| AuthError::internal("Field object lock poisoned"))?
-                .contains_key(name)
-                .then_some(FieldPropertyDescriptor { enumerable: true })),
+                .get(name)
+                .cloned()),
             ObjectStorage::Live(source) => source.own_property_descriptor(name),
         }
     }
@@ -180,14 +180,17 @@ impl FieldObject {
         {
             return Ok(seed);
         }
-        let fields = Arc::new(Mutex::new(FieldMap::new()));
+        let fields = Arc::new(Mutex::new(IndexMap::new()));
         let object = Self(ObjectStorage::Owned(fields.clone()));
         Ok(super::ObjectCloneSeed {
             object,
             state: Vec::new(),
             original_record: None,
-            prepare: Box::new(move |values, _| {
-                Ok(super::structured_clone::prepare_clone(fields, values))
+            prepare: Box::new(move |values, _, _| {
+                Ok(super::structured_clone::prepare_clone(
+                    fields,
+                    data_properties(values),
+                ))
             }),
         })
     }
@@ -197,17 +200,23 @@ impl FieldObject {
         self.get_with_receiver(name, &FieldValue::Object(self.clone()))
     }
 
-    pub(crate) fn get_with_receiver(
+    /// Read with an explicit native receiver while preserving source operation traps.
+    pub fn get_with_receiver(
         &self,
         name: &str,
         receiver: &FieldValue,
     ) -> AuthResult<Option<FieldValue>> {
         match &self.0 {
-            ObjectStorage::Owned(fields) => Ok(fields
-                .lock()
-                .map_err(|_| AuthError::internal("Field object lock poisoned"))?
-                .get(name)
-                .cloned()),
+            ObjectStorage::Owned(fields) => {
+                let descriptor = fields
+                    .lock()
+                    .map_err(|_| AuthError::internal("Field object lock poisoned"))?
+                    .get(name)
+                    .cloned();
+                descriptor
+                    .map(|descriptor| descriptor.read(receiver))
+                    .transpose()
+            }
             ObjectStorage::Live(source) => source.get_with_receiver(name, receiver),
         }
     }
@@ -224,21 +233,9 @@ impl FieldObject {
         }
     }
 
-    /// Assign one own property and return its previous value. Cloned handles observe the assignment.
-    /// Existing properties keep their position; a new property is appended.
-    pub fn set(
-        &self,
-        name: impl Into<String>,
-        value: FieldValue,
-    ) -> AuthResult<Option<FieldValue>> {
-        let name = name.into();
-        match &self.0 {
-            ObjectStorage::Owned(fields) => Ok(fields
-                .lock()
-                .map_err(|_| AuthError::internal("Field object lock poisoned"))?
-                .insert(name, value)),
-            ObjectStorage::Live(source) => source.set(name, value),
-        }
+    /// Assign in strict mode without reading the previous value.
+    pub fn set(&self, name: impl Into<String>, value: FieldValue) -> AuthResult<()> {
+        self.assign(&name.into(), value, &FieldValue::Object(self.clone()))
     }
 
     pub(crate) fn assign(
@@ -247,9 +244,54 @@ impl FieldObject {
         value: FieldValue,
         receiver: &FieldValue,
     ) -> AuthResult<()> {
+        if self.set_with_receiver(name, value, receiver)? {
+            Ok(())
+        } else {
+            Err(AuthError::type_error(
+                "Attempted to assign to readonly property.",
+            ))
+        }
+    }
+
+    /// Apply ordinary assignment or delegate directly to the live source operation.
+    pub fn set_with_receiver(
+        &self,
+        name: &str,
+        value: FieldValue,
+        receiver: &FieldValue,
+    ) -> AuthResult<bool> {
+        if let ObjectStorage::Live(source) = &self.0 {
+            return source.set_with_receiver(name.into(), value, receiver);
+        }
+        if let Some(descriptor) = self.own_property_descriptor(name)?
+            && let Some(result) = descriptor.assign(receiver, value.clone())?
+        {
+            return Ok(result);
+        }
+        receiver.write_data_property(name, value)
+    }
+
+    /// Validate a partial own-property definition without evaluating accessors.
+    pub fn define_own_property(
+        &self,
+        name: impl Into<String>,
+        definition: FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        let name = name.into();
         match &self.0 {
-            ObjectStorage::Owned(_) => self.set(name, value).map(drop),
-            ObjectStorage::Live(source) => source.set_with_receiver(name.into(), value, receiver),
+            ObjectStorage::Owned(fields) => {
+                let mut fields = fields
+                    .lock()
+                    .map_err(|_| AuthError::internal("Field object lock poisoned"))?;
+                let Some(descriptor) = definition.apply(fields.get(&name)) else {
+                    return Ok(false);
+                };
+                let previous = fields.insert(name, descriptor);
+                drop(fields);
+                drop(previous);
+                Ok(true)
+            }
+            ObjectStorage::Live(source) => source.define_own_property(name, definition),
         }
     }
 
@@ -260,7 +302,7 @@ impl FieldObject {
         match &self.0 {
             ObjectStorage::Owned(target) => Ok(super::structured_clone::prepare_clone(
                 target.clone(),
-                fields,
+                data_properties(fields),
             )),
             ObjectStorage::Live(_) => Err(AuthError::internal(
                 "Structured clone requires an owned property target",
@@ -268,29 +310,57 @@ impl FieldObject {
         }
     }
 
-    /// Delete one own property without moving other properties. Return the removed value.
-    /// `None` means absent; `Some(Undefined)` means the property existed with an undefined value.
-    pub fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    /// Delete an own property without evaluating its value. An absent property succeeds.
+    pub fn delete(&self, name: &str) -> AuthResult<bool> {
         match &self.0 {
-            ObjectStorage::Owned(fields) => Ok(fields
-                .lock()
-                .map_err(|_| AuthError::internal("Field object lock poisoned"))?
-                .remove(name)),
+            ObjectStorage::Owned(fields) => {
+                let mut fields = fields
+                    .lock()
+                    .map_err(|_| AuthError::internal("Field object lock poisoned"))?;
+                if fields
+                    .get(name)
+                    .is_some_and(|descriptor| !descriptor.configurable)
+                {
+                    return Ok(false);
+                }
+                let previous = fields.shift_remove(name);
+                drop(fields);
+                drop(previous);
+                Ok(true)
+            }
             ObjectStorage::Live(source) => source.delete(name),
         }
     }
 
-    /// Copy current own fields while retaining child identities.
+    /// Explicitly read current own fields while retaining child identities.
+    /// Owned accessors run in property order; live sources own their projection boundary.
     pub fn snapshot_fields(&self) -> AuthResult<FieldMap> {
         let mut fields = match &self.0 {
-            ObjectStorage::Owned(fields) => fields
-                .lock()
-                .map_err(|_| AuthError::internal("Field object lock poisoned"))?
-                .clone(),
+            ObjectStorage::Owned(_) => {
+                let mut fields = FieldMap::new();
+                for name in self.own_keys()? {
+                    if let Some(value) = self.get(&name)? {
+                        let _ = fields.insert(name, value);
+                    }
+                }
+                fields
+            }
             ObjectStorage::Live(source) => source.snapshot_fields()?,
         };
         fields.sort_property_order();
         Ok(fields)
+    }
+
+    fn snapshot_descriptors(&self) -> AuthResult<IndexMap<String, FieldPropertyDescriptor>> {
+        match &self.0 {
+            ObjectStorage::Owned(fields) => fields
+                .lock()
+                .map_err(|_| AuthError::internal("Field object lock poisoned"))
+                .map(|fields| fields.clone()),
+            ObjectStorage::Live(_) => Err(AuthError::internal(
+                "Live object descriptors require explicit reflection",
+            )),
+        }
     }
 
     /// Compare object identity without reading either object's properties.
@@ -308,11 +378,45 @@ impl FieldObject {
     pub(crate) fn is_live(&self) -> bool {
         matches!(self.0, ObjectStorage::Live(_))
     }
+
+    // Infallible typed probing must retain descriptors and must not evaluate fallible accessors.
+    pub(crate) fn owned_fields(&self) -> Option<FieldMap> {
+        let ObjectStorage::Owned(fields) = &self.0 else {
+            return None;
+        };
+        let fields = fields.lock().ok()?;
+        let mut result = FieldMap::new();
+        for (name, descriptor) in fields.iter() {
+            let FieldPropertyDescriptor {
+                enumerable: true,
+                configurable: true,
+                property:
+                    FieldProperty::Data {
+                        value,
+                        writable: true,
+                    },
+            } = descriptor
+            else {
+                return None;
+            };
+            let _ = result.insert(name.clone(), value.clone());
+        }
+        result.sort_property_order();
+        Some(result)
+    }
+}
+
+impl From<IndexMap<String, FieldPropertyDescriptor>> for FieldObject {
+    fn from(properties: IndexMap<String, FieldPropertyDescriptor>) -> Self {
+        Self(ObjectStorage::Owned(Arc::new(Mutex::new(properties))))
+    }
 }
 
 impl From<FieldMap> for FieldObject {
     fn from(fields: FieldMap) -> Self {
-        Self(ObjectStorage::Owned(Arc::new(Mutex::new(fields))))
+        Self(ObjectStorage::Owned(Arc::new(Mutex::new(data_properties(
+            fields,
+        )))))
     }
 }
 
@@ -330,7 +434,7 @@ impl PartialEq for FieldObject {
                     return true;
                 };
                 // Snapshot each side separately; recursive comparisons must not retain either lock.
-                match (self.snapshot_fields(), other.snapshot_fields()) {
+                match (self.snapshot_descriptors(), other.snapshot_descriptors()) {
                     (Ok(left), Ok(right)) => left == right,
                     // Infallible equality cannot report a poisoned source. Explicit reads return the error.
                     _ => false,
@@ -351,7 +455,7 @@ impl fmt::Debug for FieldObject {
                 let Some(_guard) = FormattingGuard::enter(self.identity()) else {
                     return f.write_str("[Circular]");
                 };
-                match self.snapshot_fields() {
+                match self.snapshot_descriptors() {
                     Ok(fields) => fields.fmt(f),
                     Err(error) => f
                         .debug_struct("UnavailableObject")
@@ -365,4 +469,11 @@ impl fmt::Debug for FieldObject {
                 .finish_non_exhaustive(),
         }
     }
+}
+
+fn data_properties(fields: FieldMap) -> IndexMap<String, FieldPropertyDescriptor> {
+    fields
+        .into_iter()
+        .map(|(name, value)| (name, FieldPropertyDescriptor::data(value)))
+        .collect()
 }

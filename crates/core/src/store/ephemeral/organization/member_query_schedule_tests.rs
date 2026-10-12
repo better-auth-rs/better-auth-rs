@@ -84,7 +84,7 @@ impl FieldObjectSource for Operand {
         ))
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<Value>> {
+    fn get_with_receiver(&self, name: &str, _receiver: &Value) -> AuthResult<Option<Value>> {
         if name == "toString" {
             check_context(&self.marker)?;
             let read = self.reads.fetch_add(1, Ordering::SeqCst) + 1;
@@ -102,7 +102,7 @@ impl FieldObjectSource for Operand {
                         .into_iter()
                         .next()
                         .ok_or_else(|| AuthError::internal("Expected following Member"))?;
-                    let _ = row.set_field("role".into(), "zz".into())?;
+                    row.set_field("role".into(), "zz".into())?;
                     Ok(())
                 })?;
             }
@@ -115,12 +115,22 @@ impl FieldObjectSource for Operand {
         }
         Ok(None)
     }
-    fn set(&self, _: String, _: Value) -> AuthResult<Option<Value>> {
+    fn set_with_receiver(&self, _: String, _: Value, _: &Value) -> AuthResult<bool> {
         Err(AuthError::internal(
             "Member query must not mutate its operand",
         ))
     }
-    fn delete(&self, _: &str) -> AuthResult<Option<Value>> {
+
+    fn define_own_property(
+        &self,
+        _: String,
+        _: crate::field_value::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "Member query must not mutate its operand",
+        ))
+    }
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal(
             "Member query must not delete operand properties",
         ))

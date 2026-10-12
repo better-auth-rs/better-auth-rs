@@ -298,9 +298,9 @@ async fn serial_organization_joins_distinguish_native_owners_from_projected_owne
             let state = op.capture_state()?;
             let id = SchemaValue::from_field(Value::Number(1.0));
             let owner = Value::Array(vec![Value::Number(1.0)].into());
-            let _ = required(state.fixture_table("member").get_ref(&id)?)?
+            required(state.fixture_table("member").get_ref(&id)?)?
                 .set_field("organizationId".into(), owner.clone())?;
-            let _ = required(state.fixture_table("invitation").get_ref(&id)?)?
+            required(state.fixture_table("invitation").get_ref(&id)?)?
                 .set_field("organizationId".into(), owner)?;
             Ok(())
         })?;
@@ -346,7 +346,7 @@ async fn live_organization_id_projection_observes_prior_output_callbacks() -> Au
                     assert_eq!(counted.fetch_add(1, Ordering::SeqCst), 0);
                     let store = required(target.upgrade())?;
                     store.operation(|op| {
-                        let _ = required(
+                        required(
                             op.capture_table(EntityRole::Organization)?
                                 .get_ref(&SchemaValue::from_field(Value::Number(1.0)))?,
                         )?

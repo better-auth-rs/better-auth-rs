@@ -65,7 +65,11 @@ impl FieldObjectSource for ObservedOperand {
         ))
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        _receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
         if name == "toString" {
             record(&self.trace, "get toString")?;
             let read = self.reads.fetch_add(1, Ordering::SeqCst);
@@ -77,11 +81,19 @@ impl FieldObjectSource for ObservedOperand {
         Ok(None)
     }
 
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(&self, _: String, _: FieldValue, _: &FieldValue) -> AuthResult<bool> {
         Err(AuthError::internal("The query must not write its operand"))
     }
 
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(
+        &self,
+        _: String,
+        _: crate::field_value::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        Err(AuthError::internal("The query must not write its operand"))
+    }
+
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal(
             "The query must not delete operand properties",
         ))

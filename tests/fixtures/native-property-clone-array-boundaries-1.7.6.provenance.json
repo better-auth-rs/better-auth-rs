@@ -1,0 +1,51 @@
+{
+  "contract": "native-property-clone-array-boundaries",
+  "version": "1.7.6",
+  "status": "Two upstream captures are byte-identical. Rust replay is pending.",
+  "run": "38279254507",
+  "runURL": "https://github.com/better-auth-rs/better-auth-rs/actions/runs/38279254507",
+  "commit": "e0bfe7e55e096a6931894d97045205b109cd4991",
+  "runConclusion": "success",
+  "artifactName": "upstream-native-property-clone-array-boundaries-e0bfe7e55e096a6931894d97045205b109cd4991-1",
+  "runtime": {
+    "bun": "1.4.2"
+  },
+  "observations": 4,
+  "sources": [
+    {
+      "path": "compat-tests/reference-server/contracts/native-property-clone-array-boundaries-capture.mjs",
+      "bytes": 645,
+      "sha256": "7b4383e32ac86a64b90d8c6a1dad6669e700a4b610a0575d20ae058f2d90249b"
+    },
+    {
+      "path": "compat-tests/reference-server/contracts/native-property-clone-capture.mjs",
+      "bytes": 3648,
+      "sha256": "19645fdf938bdfc7cea8e600ba3c5883ac0fd534f5fd92e3add707800db63f1b"
+    },
+    {
+      "path": "compat-tests/reference-server/contracts/secondary-native-shared.mjs",
+      "bytes": 3625,
+      "sha256": "7f708484df4fec8a65d920d12a44fdce06278154e63b484d891f47e396b3193f"
+    },
+    {
+      "path": "compat-tests/reference-server/contracts/protected-function-shared.mjs",
+      "bytes": 20940,
+      "sha256": "4b833be668fe0e40075695641ac9593a9314a63babe98064ca4a4bf2475e7dea"
+    }
+  ],
+  "fixture": {
+    "path": "tests/fixtures/native-property-clone-array-boundaries-1.7.6.json",
+    "bytes": 69816,
+    "sha256": "36a231b7da51726e5d013304c6b0dce21003f4770c3460a5d3d0b843af00a877",
+    "uncompressedBytes": 69816,
+    "uncompressedSha256": "36a231b7da51726e5d013304c6b0dce21003f4770c3460a5d3d0b843af00a877"
+  },
+  "normalizations": [],
+  "boundary": "Array clone captures the initial length, reads current own indices including hidden and newly inserted indices, and selects named properties after indexed traversal. Complete descriptors, callbacks, aliases and source mutations remain frozen. General prototypes and function reflection require separate contracts.",
+  "coverage": {
+    "path": "tests/fixtures/native-property-clone-array-boundaries-1.7.6.coverage.json",
+    "cases": 4,
+    "unpairedReflectionPaths": 109,
+    "status": "Rust replay is pending. The coverage ledger retains exact unpaired function reflection paths."
+  }
+}

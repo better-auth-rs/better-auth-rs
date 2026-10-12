@@ -17,7 +17,17 @@ mod function;
 pub use function::FieldFunction;
 mod object;
 pub(crate) use object::ObjectIdentity;
-pub use object::{FieldObject, FieldObjectSource, FieldPropertyDescriptor};
+pub use object::{FieldObject, FieldObjectSource};
+mod descriptor;
+#[cfg(test)]
+#[path = "../../../tests/support/native_property_clone.rs"]
+mod native_property_clone;
+#[cfg(test)]
+#[path = "../../../tests/support/native_property_transition.rs"]
+mod native_property_transition;
+pub use descriptor::{
+    FieldProperty, FieldPropertyDefinition, FieldPropertyDescriptor, FieldPropertyUpdate,
+};
 mod structured_clone;
 #[doc(hidden)]
 pub use structured_clone::ObjectCloneSeed;
@@ -387,6 +397,17 @@ impl FieldValue {
             (Self::Object(left), Self::Object(right)) => left.same_object(right),
             (Self::Function(left), Self::Function(right)) => left == right,
             _ => false,
+        }
+    }
+
+    /// Apply JavaScript SameValue, preserving the distinction between positive and negative zero.
+    pub fn same_value(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Number(left), Self::Number(right)) => {
+                (left.is_nan() && right.is_nan())
+                    || (left == right && left.is_sign_negative() == right.is_sign_negative())
+            }
+            _ => self.strict_equals(other),
         }
     }
 

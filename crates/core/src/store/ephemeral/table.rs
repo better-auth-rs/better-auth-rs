@@ -2,16 +2,16 @@
 
 use super::operation::MemoryGate;
 use super::rows::{ObjectRow, RowCell, RowRef, TransactionId};
+use crate::field_value::{ArrayIdentity, FieldPropertyDefinition, FieldPropertyDescriptor};
 use crate::{AuthError, AuthResult, FieldArray, FieldValue, StructuredCloneContext};
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
-
-type RowArray<T> = Vec<Option<RowRef<T>>>;
+use std::marker::PhantomData;
+use std::sync::Arc;
 
 pub(super) struct TableRef<T> {
-    rows: Arc<Mutex<RowArray<T>>>,
+    rows: FieldArray,
     gate: MemoryGate,
-    properties: crate::FieldObject,
+    record: PhantomData<fn() -> T>,
 }
 
 pub(super) struct ReconcilePlan<T> {
@@ -19,7 +19,7 @@ pub(super) struct ReconcilePlan<T> {
     appended: Vec<RowRef<T>>,
 }
 
-impl<T> ReconcilePlan<T> {
+impl<T: ObjectRow> ReconcilePlan<T> {
     pub(super) fn is_empty(&self) -> bool {
         self.changed.is_empty() && self.appended.is_empty()
     }
@@ -50,57 +50,62 @@ impl<T> Clone for TableRef<T> {
     fn clone(&self) -> Self {
         Self {
             rows: self.rows.clone(),
-            properties: self.properties.clone(),
             gate: self.gate.clone(),
+            record: PhantomData,
         }
     }
 }
 
 impl<T> TableRef<T> {
     pub(super) fn new(gate: MemoryGate) -> Self {
-        Self {
-            gate,
-            rows: Arc::default(),
-            properties: crate::FieldMap::new().into(),
-        }
+        Self::from_array(gate, FieldArray::new())
     }
 
-    pub(super) fn from_refs(gate: MemoryGate, rows: Vec<RowRef<T>>) -> Self {
+    fn from_array(gate: MemoryGate, rows: FieldArray) -> Self {
         Self {
-            rows: Arc::new(Mutex::new(rows.into_iter().map(Some).collect())),
+            rows,
             gate,
-            properties: crate::FieldMap::new().into(),
+            record: PhantomData,
         }
-    }
-
-    fn lock(&self) -> AuthResult<std::sync::MutexGuard<'_, RowArray<T>>> {
-        self.rows
-            .lock()
-            .map_err(|_| AuthError::internal("Ephemeral table lock poisoned"))
     }
 
     pub(super) fn len(&self) -> AuthResult<usize> {
         let _operation = self.gate.lock();
-        Ok(self.lock()?.len())
+        self.rows.len()
+    }
+}
+
+impl<T: ObjectRow> TableRef<T> {
+    pub(super) fn from_refs(gate: MemoryGate, rows: Vec<RowRef<T>>) -> Self {
+        Self::from_array(gate, rows.iter().map(RowRef::field_value).collect())
+    }
+
+    fn value_at(&self, index: usize) -> AuthResult<Option<FieldValue>> {
+        let _operation = self.gate.lock();
+        self.rows
+            .get_with_receiver(index, &FieldValue::Array(self.array()))
     }
 
     pub(super) fn row_at(&self, index: usize) -> AuthResult<Option<RowRef<T>>> {
         let _operation = self.gate.lock();
-        Ok(self.lock()?.get(index).and_then(Option::as_ref).cloned())
+        self.value_at(index)?
+            .map(|value| RowRef::from_value(value, self.gate.clone()))
+            .transpose()
     }
 
     pub(super) fn snapshot_refs(&self) -> AuthResult<Vec<RowRef<T>>> {
         let _operation = self.gate.lock();
-        Ok(self.lock()?.iter().flatten().cloned().collect())
+        let length = self.len()?;
+        let mut rows = Vec::new();
+        for index in 0..length {
+            rows.extend(self.row_at(index)?);
+        }
+        Ok(rows)
     }
 
     pub(super) fn shallow_copy(&self) -> AuthResult<Self> {
         let _operation = self.gate.lock();
-        Ok(Self {
-            rows: Arc::new(Mutex::new(self.lock()?.clone())),
-            properties: crate::FieldMap::new().into(),
-            gate: self.gate.clone(),
-        })
+        Ok(Self::from_array(self.gate.clone(), self.array().map(Ok)?))
     }
 
     pub(super) fn push(&self, value: T) -> AuthResult<RowRef<T>> {
@@ -110,24 +115,27 @@ impl<T> TableRef<T> {
     fn push_cell(&self, value: RowCell<T>) -> AuthResult<RowRef<T>> {
         let _operation = self.gate.lock();
         let row = RowRef::from_cell(value, self.gate.clone());
-        self.lock()?.push(Some(row.clone()));
+        self.push_ref(&row)?;
         Ok(row)
+    }
+
+    fn push_ref(&self, row: &RowRef<T>) -> AuthResult<()> {
+        let length = self.len()?;
+        let receiver = FieldValue::Array(self.array());
+        receiver.set_model_property(&length.to_string(), row.field_value())?;
+        receiver.set_model_property("length", (length + 1).into())
     }
 
     pub(super) fn push_object(&self, object: crate::FieldObject) -> AuthResult<RowRef<T>> {
         let _operation = self.gate.lock();
         let row = RowRef::from_object(object, self.gate.clone());
-        self.lock()?.push(Some(row.clone()));
+        self.push_ref(&row)?;
         Ok(row)
     }
 
     pub(super) fn contains_ref(&self, source: &RowRef<T>) -> AuthResult<bool> {
         let _operation = self.gate.lock();
-        Ok(self
-            .lock()?
-            .iter()
-            .flatten()
-            .any(|row| row.same_row(source)))
+        Ok(self.snapshot_refs()?.iter().any(|row| row.same_row(source)))
     }
 
     pub(super) fn select_refs(
@@ -205,28 +213,57 @@ impl<T: ObjectRow> TableRef<T> {
 
 impl<T: ObjectRow> crate::field_value::FieldArraySource for TableRef<T> {
     fn properties(&self) -> &crate::FieldObject {
-        &self.properties
+        self.rows.properties()
     }
+
     fn len(&self) -> AuthResult<usize> {
         self.len()
     }
 
     fn own_indices(&self) -> AuthResult<Vec<usize>> {
         let _operation = self.gate.lock();
-        Ok(self
-            .lock()?
-            .iter()
-            .enumerate()
-            .filter_map(|(index, row)| row.as_ref().map(|_| index))
-            .collect())
+        self.rows.own_indices()
     }
 
-    fn get(&self, index: usize) -> AuthResult<Option<FieldValue>> {
-        Ok(self.row_at(index)?.map(|row| row.field_value()))
+    fn get(&self, index: usize, receiver: &FieldValue) -> AuthResult<Option<FieldValue>> {
+        let _operation = self.gate.lock();
+        self.rows.get_with_receiver(index, receiver)
+    }
+
+    fn own_property_descriptor(&self, index: usize) -> AuthResult<Option<FieldPropertyDescriptor>> {
+        let _operation = self.gate.lock();
+        self.rows.own_property_descriptor(index)
+    }
+
+    fn length_descriptor(&self) -> AuthResult<FieldPropertyDescriptor> {
+        let _operation = self.gate.lock();
+        self.rows.length_descriptor()
+    }
+
+    fn set(&self, index: usize, value: FieldValue, receiver: &FieldValue) -> AuthResult<bool> {
+        let _operation = self.gate.lock();
+        self.rows.assign_index(index, value, receiver)
+    }
+
+    fn define_index(&self, index: usize, definition: FieldPropertyDefinition) -> AuthResult<bool> {
+        let _operation = self.gate.lock();
+        self.rows.define_index(index, definition)
+    }
+
+    fn define_length(&self, definition: FieldPropertyDefinition) -> AuthResult<bool> {
+        let _operation = self.gate.lock();
+        self.rows.define_length(definition)
+    }
+
+    fn delete(&self, index: usize) -> AuthResult<bool> {
+        let _operation = self.gate.lock();
+        self.rows.delete_index(index)
     }
 
     fn identity(&self) -> usize {
-        Arc::as_ptr(&self.rows) as usize
+        match self.rows.identity() {
+            ArrayIdentity::Owned(identity) | ArrayIdentity::Live(identity) => identity,
+        }
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -234,24 +271,11 @@ impl<T: ObjectRow> crate::field_value::FieldArraySource for TableRef<T> {
     }
 
     fn clone_seed(&self) -> AuthResult<Option<crate::field_value::ArrayCloneSeed>> {
-        let target = Self::new(self.gate.clone());
+        let seed = self.rows.clone_seed()?;
+        let target = Self::from_array(self.gate.clone(), seed.array);
         Ok(Some(crate::field_value::ArrayCloneSeed {
             array: target.array(),
-            prepare: Box::new(move |length, entries| {
-                let length = entries
-                    .iter()
-                    .map(|(index, _)| index + 1)
-                    .fold(length, usize::max);
-                let mut rows = vec![None; length];
-                for (index, value) in entries {
-                    let source = RowRef::from_value(value, target.gate.clone())?;
-                    let slot = rows.get_mut(index).ok_or_else(|| {
-                        AuthError::internal("Structured clone lost its array index")
-                    })?;
-                    *slot = Some(source);
-                }
-                Ok(crate::field_value::prepare_clone(target.rows, rows))
-            }),
+            prepare: seed.prepare,
         }))
     }
 }
@@ -343,3 +367,7 @@ impl<T: ObjectRow> TableRef<T> {
 #[cfg(test)]
 #[path = "table_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "table_property_tests.rs"]
+mod property_tests;

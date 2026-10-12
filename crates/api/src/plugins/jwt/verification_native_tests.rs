@@ -200,7 +200,7 @@ async fn native_keyring_methods_keep_the_receiver_and_consumer_specific_length_c
             let owner = Arc::downgrade(&keyring);
             let selected = key.value();
             let events = trace.clone();
-            let _ = keyring.fields.set(
+            keyring.fields.set(
                 "find",
                 FieldFunction::contextual(move |receiver, arguments| {
                     assert!(receiver.strict_equals(&owner.upgrade().unwrap().value()));

@@ -8,8 +8,11 @@ use better_auth::plugins::{
 };
 use better_auth::server_api::EndpointInput;
 use better_auth_core::{
-    AuthPlugin, AuthRoute, FieldDate, FieldMap, FieldValue, HttpMethod,
-    field_value::{FieldObject, FieldObjectSource, FieldPropertyDescriptor},
+    AuthPlugin, AuthRoute, FieldDate, FieldFunction, FieldMap, FieldValue, HttpMethod,
+    field_value::{
+        FieldObject, FieldObjectSource, FieldProperty, FieldPropertyDefinition,
+        FieldPropertyDescriptor,
+    },
     store::{EphemeralStore, schema::EntityRole},
 };
 use std::collections::HashMap;
@@ -30,36 +33,77 @@ fn lock<T>(value: &Mutex<T>) -> AuthResult<std::sync::MutexGuard<'_, T>> {
 
 struct Unread(FieldObject);
 
+impl Unread {
+    fn new(fields: FieldMap) -> Self {
+        let mut properties = fields
+            .into_iter()
+            .map(|(name, value)| (name, FieldPropertyDescriptor::data(value)))
+            .collect::<indexmap::IndexMap<_, _>>();
+        let _ = properties.insert(
+            "unread".into(),
+            FieldPropertyDescriptor {
+                enumerable: true,
+                configurable: true,
+                property: FieldProperty::Accessor {
+                    get: Some(FieldFunction::contextual(|_, _| {
+                        Err(AuthError::internal("Body must not be enumerated"))
+                    })),
+                    set: None,
+                },
+            },
+        );
+        Self(properties.into())
+    }
+}
+
 impl FieldObjectSource for Unread {
     fn own_keys(&self) -> AuthResult<Vec<String>> {
-        Ok(vec!["ownUndefined".into(), "date".into(), "unread".into()])
+        self.0.own_keys()
     }
 
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
-        Ok(["ownUndefined", "date", "unread"]
-            .contains(&name)
-            .then_some(FieldPropertyDescriptor { enumerable: true }))
+        self.0.own_property_descriptor(name)
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        if name == "unread" {
-            return Err(AuthError::internal("Body must not be enumerated"));
-        }
-        self.0.get(name)
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
+        self.0.get_with_receiver(name, receiver)
     }
 
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        self.0.set(name, value)
+    fn set_with_receiver(
+        &self,
+        name: String,
+        value: FieldValue,
+        receiver: &FieldValue,
+    ) -> AuthResult<bool> {
+        self.0.set_with_receiver(&name, value, receiver)
     }
 
-    fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(
+        &self,
+        name: String,
+        definition: FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        self.0.define_own_property(name, definition)
+    }
+
+    fn delete(&self, name: &str) -> AuthResult<bool> {
         self.0.delete(name)
     }
 
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
         self.own_keys()?
             .into_iter()
-            .map(|name| Ok((name.clone(), self.get(&name)?.unwrap_or_default())))
+            .map(|name| {
+                Ok((
+                    name.clone(),
+                    self.get_with_receiver(&name, &FieldValue::Undefined)?
+                        .unwrap_or_default(),
+                ))
+            })
             .collect()
     }
 
@@ -89,13 +133,10 @@ struct Contract {
 impl Contract {
     fn new(input: Option<Value>, message: &str, http: bool) -> AuthResult<Self> {
         let date: FieldValue = FieldDate::from_milliseconds(1_893_456_000_000.0).into();
-        let shared = FieldObject::from_source(Arc::new(Unread(
-            FieldMap::from([
-                ("ownUndefined".into(), FieldValue::Undefined),
-                ("date".into(), date.clone()),
-            ])
-            .into(),
-        )))
+        let shared = FieldObject::from_source(Arc::new(Unread::new(FieldMap::from([
+            ("ownUndefined".into(), FieldValue::Undefined),
+            ("date".into(), date.clone()),
+        ]))))
         .into();
         let failure = AuthError::from_status(
             "CONFLICT",
@@ -172,7 +213,7 @@ impl BeforeEndpointHook<S> for Contract {
                 ("alias", self.shared.clone()),
                 ("self", body.clone()),
             ] {
-                let _ = fields.set(name, value)?;
+                fields.set(name, value)?;
             }
         }
         Ok(None)

@@ -303,7 +303,7 @@ async fn memory_user_id_slot_reads_primary_key_at_its_position() -> AuthResult<(
             UserFieldConfig {
                 transform: Some(FieldTransforms {
                     output: Some(UserFieldTransform::new(move |value| {
-                        let _ = target.set_field("id".into(), Value::Number(101.0))?;
+                        target.set_field("id".into(), Value::Number(101.0))?;
                         Ok(format!("{}:out", required(value.as_str())?).into())
                     })),
                     ..Default::default()

@@ -166,7 +166,7 @@ impl ConnectionTrait for LockConnection {
             .map_err(|_| DbErr::Custom("Statement log lock is poisoned".into()))?
             .push(statement);
         if let Some(object) = &self.mutate_after_lock {
-            let _ = object
+            object
                 .set("toString", FieldValue::Null)
                 .map_err(|error| DbErr::Custom(error.to_string()))?;
         }

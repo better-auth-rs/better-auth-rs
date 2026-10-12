@@ -76,7 +76,7 @@ async fn jwk_native_sort_replays_real_keyring_reads_and_complete_native_graphs()
         let receiver = ObservedFields::new(FieldMap::new(), Arc::new(Trace::default()), None);
         let expected_receiver = Arc::downgrade(&receiver);
         let observed = harness.clone();
-        let _ = receiver.fields.set(
+        receiver.fields.set(
             "getJwks",
             FieldFunction::asynchronous_contextual(move |receiver, arguments| {
                 assert_eq!(arguments.len(), 1);

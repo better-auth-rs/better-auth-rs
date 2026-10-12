@@ -335,7 +335,7 @@ async fn concurrent_consume_runs_hooks_once_and_invalidates_older_rows() {
                 .into_iter()
                 .next()
                 .unwrap();
-            let _ = row.set_field(
+            row.set_field(
                 "createdAt".into(),
                 crate::FieldDate::from_milliseconds(
                     old.created_at.typed().unwrap().milliseconds() - 1000.0,

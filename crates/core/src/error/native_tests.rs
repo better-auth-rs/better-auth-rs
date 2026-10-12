@@ -15,7 +15,8 @@ type ReadProperty = dyn Fn(&str) -> AuthResult<Option<FieldValue>> + Send + Sync
 
 struct Source {
     keys: Vec<String>,
-    read: Box<ReadProperty>,
+    read: Arc<ReadProperty>,
+    properties: FieldObject,
 }
 
 impl FieldObjectSource for Source {
@@ -27,29 +28,34 @@ impl FieldObjectSource for Source {
         &self,
         name: &str,
     ) -> AuthResult<Option<crate::field_value::FieldPropertyDescriptor>> {
-        Ok(self
-            .keys
-            .iter()
-            .any(|key| key == name)
-            .then_some(crate::field_value::FieldPropertyDescriptor { enumerable: true }))
+        self.properties.own_property_descriptor(name)
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        _receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
         (self.read)(name)
     }
 
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(
+        &self,
+        _: String,
+        _: FieldValue,
+        _receiver: &FieldValue,
+    ) -> AuthResult<bool> {
         Err(AuthError::type_error("The test source is read-only"))
     }
 
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::type_error("The test source is read-only"))
     }
 
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
         let mut fields = FieldMap::new();
         for name in &self.keys {
-            if let Some(value) = self.get(name)? {
+            if let Some(value) = self.get_with_receiver(name, &FieldValue::Undefined)? {
                 let _ = fields.insert(name.clone(), value);
             }
         }
@@ -59,15 +65,49 @@ impl FieldObjectSource for Source {
     fn identity(&self) -> usize {
         self as *const Self as usize
     }
+
+    fn define_own_property(
+        &self,
+        _name: String,
+        _definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        Err(AuthError::internal(
+            "This contract source does not define properties",
+        ))
+    }
 }
 
 fn source(
     keys: &[&str],
     read: impl Fn(&str) -> AuthResult<Option<FieldValue>> + Send + Sync + 'static,
 ) -> FieldObject {
+    let read: Arc<ReadProperty> = Arc::new(read);
+    let properties = keys
+        .iter()
+        .map(|key| {
+            let name = (*key).to_owned();
+            let read = read.clone();
+            let getter_name = name.clone();
+            (
+                name,
+                crate::FieldPropertyDescriptor {
+                    enumerable: true,
+                    configurable: true,
+                    property: crate::FieldProperty::Accessor {
+                        get: Some(FieldFunction::contextual(move |_, _| {
+                            Ok(read(&getter_name)?.unwrap_or_default())
+                        })),
+                        set: None,
+                    },
+                },
+            )
+        })
+        .collect::<indexmap::IndexMap<_, _>>()
+        .into();
     FieldObject::from_source(Arc::new(Source {
         keys: keys.iter().map(|key| (*key).to_owned()).collect(),
-        read: Box::new(read),
+        read,
+        properties,
     }))
 }
 
@@ -296,8 +336,7 @@ fn status_reads_preserve_dynamic_values_and_do_not_coerce_objects() -> AuthResul
         let raw: FieldValue = FieldMap::from([("statusCode".into(), value.clone())]).into();
         let error = AuthError::from_thrown(raw.clone());
         assert!(error.status_code()?.field_value().strict_equals(&value));
-        let _ = raw
-            .as_object()
+        raw.as_object()
             .ok_or_else(|| AuthError::internal("Expected raw error object"))?
             .set("statusCode", 201.0.into())?;
         assert_eq!(error.status_code()?, 201);
@@ -391,7 +430,7 @@ fn message_is_captured_once_without_serializing_the_body() -> AuthResult<()> {
         body: body.clone().into(),
         ..Default::default()
     })?;
-    let _ = body.set("message", "changed body".into())?;
+    body.set("message", "changed body".into())?;
     assert_eq!(error.instrumentation_message()?, "initial message");
     assert_eq!(
         error.body_value()?.model_property("message")?,
@@ -577,7 +616,7 @@ fn constructed_error_presence_and_enumeration_follow_error_properties() -> AuthR
     );
     let _ = object.delete("cause")?;
     assert!(!object.has_property("cause")?);
-    let _ = object.set("cause", false.into())?;
+    object.set("cause", false.into())?;
     assert_eq!(
         object.enumerable_keys()?.last().map(String::as_str),
         Some("cause")
@@ -618,7 +657,18 @@ fn better_auth_errors_keep_hidden_properties_and_remain_outside_api_error_brands
         for name in ["message", "stack"] {
             assert_eq!(
                 object.own_property_descriptor(name)?,
-                Some(crate::field_value::FieldPropertyDescriptor { enumerable: false })
+                Some(crate::field_value::FieldPropertyDescriptor {
+                    enumerable: false,
+                    configurable: true,
+                    property: crate::FieldProperty::Data {
+                        value: if name == "message" {
+                            message.clone().into()
+                        } else {
+                            "".into()
+                        },
+                        writable: true
+                    }
+                })
             );
         }
         assert_eq!(object.enumerable_keys()?, ["name"]);
@@ -636,7 +686,7 @@ fn better_auth_errors_keep_hidden_properties_and_remain_outside_api_error_brands
         for class in [ApiErrorClass::BetterCall, ApiErrorClass::BetterAuth] {
             assert!(!error.is_api_error_instance(class));
         }
-        let _ = object.set("name", "APIError".into())?;
+        object.set("name", "APIError".into())?;
         assert!(error.is_api_error()?);
         for class in [ApiErrorClass::BetterCall, ApiErrorClass::BetterAuth] {
             assert!(!error.is_api_error_instance(class));

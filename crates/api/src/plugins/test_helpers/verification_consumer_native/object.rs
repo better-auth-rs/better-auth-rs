@@ -1,31 +1,20 @@
 use super::*;
 use better_auth_core::{
     FieldFunction, FieldObject,
-    field_value::{FieldObjectSource, FieldPropertyDescriptor},
+    field_value::{FieldProperty, FieldPropertyDescriptor},
 };
 use std::sync::Weak;
-
-type Getter = Arc<dyn Fn(&FieldValue) -> AuthResult<FieldValue> + Send + Sync>;
-
-#[derive(Clone)]
-enum Property {
-    Value(FieldValue),
-    Getter { read: Getter, enumerable: bool },
-}
-
-#[derive(Default)]
-struct Properties(Mutex<indexmap::IndexMap<String, Property>>);
 
 pub(crate) struct Root {
     pub(crate) value: FieldValue,
     owner: Arc<OnceLock<FieldValue>>,
-    fields: Arc<Properties>,
+    fields: FieldObject,
 }
 
 impl Root {
     pub(crate) fn new(kind: &str) -> Self {
-        let fields = Arc::new(Properties::default());
-        let object = FieldObject::from_source(fields.clone());
+        let fields: FieldObject = FieldMap::new().into();
+        let object = fields.clone();
         let value: FieldValue = match kind {
             "date" => FieldDate::from_milliseconds_with_properties(NOW as f64, object).into(),
             "function" => {
@@ -48,12 +37,9 @@ impl Root {
     }
 
     pub(crate) fn data(&self, name: &str, value: FieldValue) {
-        let _ = self
-            .fields
-            .0
-            .lock()
-            .unwrap()
-            .insert(name.into(), Property::Value(value));
+        self.fields
+            .define_own_property(name, FieldPropertyDescriptor::data(value).into())
+            .unwrap();
     }
 
     pub(crate) fn getter(
@@ -62,74 +48,19 @@ impl Root {
         enumerable: bool,
         read: impl Fn(&FieldValue) -> AuthResult<FieldValue> + Send + Sync + 'static,
     ) {
-        let _ = self.fields.0.lock().unwrap().insert(
-            name.into(),
-            Property::Getter {
-                read: Arc::new(read),
-                enumerable,
-            },
-        );
-    }
-}
-
-impl FieldObjectSource for Properties {
-    fn own_keys(&self) -> AuthResult<Vec<String>> {
-        Ok(self.0.lock().unwrap().keys().cloned().collect())
-    }
-
-    fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
-        Ok(self
-            .0
-            .lock()
-            .unwrap()
-            .get(name)
-            .map(|property| FieldPropertyDescriptor {
-                enumerable: match property {
-                    Property::Value(_) => true,
-                    Property::Getter { enumerable, .. } => *enumerable,
-                },
-            }))
-    }
-
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
-        self.get_with_receiver(name, &FieldValue::Undefined)
-    }
-
-    fn get_with_receiver(
-        &self,
-        name: &str,
-        receiver: &FieldValue,
-    ) -> AuthResult<Option<FieldValue>> {
-        let property = self.0.lock().unwrap().get(name).cloned();
-        match property {
-            None => Ok(None),
-            Some(Property::Value(value)) => Ok(Some(value)),
-            Some(Property::Getter { read, .. }) => read(receiver).map(Some),
-        }
-    }
-
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        Ok(
-            match self.0.lock().unwrap().insert(name, Property::Value(value)) {
-                Some(Property::Value(value)) => Some(value),
-                _ => None,
-            },
-        )
-    }
-
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
-        Err(AuthError::internal(
-            "Consumer contract does not delete native input properties",
-        ))
-    }
-
-    fn snapshot_fields(&self) -> AuthResult<FieldMap> {
-        Err(AuthError::internal(
-            "Consumer inputs must retain getters until the actual property read",
-        ))
-    }
-
-    fn identity(&self) -> usize {
-        std::ptr::from_ref(self).addr()
+        self.fields
+            .define_own_property(
+                name,
+                FieldPropertyDescriptor {
+                    enumerable,
+                    configurable: true,
+                    property: FieldProperty::Accessor {
+                        get: Some(FieldFunction::contextual(move |receiver, _| read(receiver))),
+                        set: None,
+                    },
+                }
+                .into(),
+            )
+            .unwrap();
     }
 }

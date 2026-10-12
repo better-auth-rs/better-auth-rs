@@ -36,7 +36,7 @@ impl ApiKeyDefaultPermissions for Callbacks {
         lock(&self.0)?.push("permissions");
         assert_eq!(reference_id, &FieldValue::from("owner"));
         let captured = endpoint.body.model_property("permissions")?;
-        let _ = object(&captured)?.set("nodes", json!(["read", "write"]).into())?;
+        object(&captured)?.set("nodes", json!(["read", "write"]).into())?;
         let _ =
             object(endpoint.body)?.set("permissions", json!({"nodes": ["replacement"]}).into())?;
         Ok(permissions(&["default"]))
@@ -50,11 +50,11 @@ impl ApiKeyValidator for Callbacks {
         assert_eq!(key, "x".repeat(64));
         let scoped = !endpoint.body.model_property("configId")?.is_undefined();
         let captured = endpoint.body.model_property("permissions")?;
-        let _ = object(&captured)?.set(
+        object(&captured)?.set(
             "nodes",
             json!([if scoped { "read" } else { "write" }]).into(),
         )?;
-        let _ = object(endpoint.body)?.set(
+        object(endpoint.body)?.set(
             "permissions",
             json!({"nodes": [if scoped { "write" } else { "read" }]}).into(),
         )?;

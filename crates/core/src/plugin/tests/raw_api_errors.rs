@@ -50,30 +50,53 @@ impl FieldObjectSource for Probe {
         Ok(self.getters.iter().any(|(key, _)| *key == name) || self.fields.has_property(name)?)
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
         if let Some((_, getter)) = self.getters.iter().find(|(key, _)| *key == name) {
             return getter().map(Some);
         }
-        self.fields.get(name)
+        self.fields.get_with_receiver(name, receiver)
     }
 
-    fn set(&self, name: String, value: FieldValue) -> AuthResult<Option<FieldValue>> {
-        self.fields.set(name, value)
+    fn set_with_receiver(
+        &self,
+        name: String,
+        value: FieldValue,
+        receiver: &FieldValue,
+    ) -> AuthResult<bool> {
+        self.fields.set_with_receiver(&name, value, receiver)
     }
 
-    fn delete(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn delete(&self, name: &str) -> AuthResult<bool> {
         self.fields.delete(name)
     }
 
     fn snapshot_fields(&self) -> AuthResult<FieldMap> {
         self.own_keys()?
             .into_iter()
-            .map(|name| Ok((name.clone(), self.get(&name)?.unwrap())))
+            .map(|name| {
+                Ok((
+                    name.clone(),
+                    self.get_with_receiver(&name, &FieldValue::Undefined)?
+                        .unwrap(),
+                ))
+            })
             .collect()
     }
 
     fn identity(&self) -> usize {
         std::ptr::from_ref(self) as usize
+    }
+
+    fn define_own_property(
+        &self,
+        name: String,
+        definition: crate::FieldPropertyDefinition,
+    ) -> AuthResult<bool> {
+        self.fields.define_own_property(name, definition)
     }
 }
 

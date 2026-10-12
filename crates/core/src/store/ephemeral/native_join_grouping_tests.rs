@@ -241,8 +241,8 @@ async fn native_grouping_retains_first_parent_snapshot_and_live_child() -> AuthR
         "toString".into(),
         FieldFunction::contextual(move |_, _| {
             *lock(&observed)? += 1;
-            let _ = parent.set_field("accessToken".into(), "parent-0-after".into())?;
-            let _ = child.set_field("name".into(), "Live User".into())?;
+            parent.set_field("accessToken".into(), "parent-0-after".into())?;
+            child.set_field("name".into(), "Live User".into())?;
             Ok("shared".into())
         })
         .into(),

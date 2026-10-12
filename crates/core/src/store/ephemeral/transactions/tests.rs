@@ -56,8 +56,7 @@ fn merge_preserves_private_changes_and_concurrent_rows_without_resurrecting_dele
     let mut live = base
         .deep_clone(&mut crate::StructuredCloneContext::new())
         .unwrap();
-    let _ = live
-        .get_ref("untouched")
+    live.get_ref("untouched")
         .unwrap()
         .unwrap()
         .set_field("password".into(), "concurrent".into())
@@ -69,13 +68,13 @@ fn merge_preserves_private_changes_and_concurrent_rows_without_resurrecting_dele
     let working = base
         .deep_clone(&mut crate::StructuredCloneContext::new())
         .unwrap();
-    let _ = working
+    working
         .get_ref("private")
         .unwrap()
         .unwrap()
         .set_field("password".into(), "committed".into())
         .unwrap();
-    let _ = working
+    working
         .get_ref("removed")
         .unwrap()
         .unwrap()
@@ -154,7 +153,7 @@ fn merge_keeps_private_passkey_credential_updates() {
     let working = base
         .deep_clone(&mut crate::StructuredCloneContext::new())
         .unwrap();
-    let _ = working
+    working
         .get_ref("key")
         .unwrap()
         .unwrap()

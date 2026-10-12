@@ -10,8 +10,10 @@
 
 use super::*;
 use better_auth_core::{
-    AuthPlugin, CreateSession, CreateUser, HttpMethod,
-    field_value::{FieldObjectSource, FieldPropertyDescriptor},
+    AuthPlugin, CreateSession, CreateUser, FieldFunction, HttpMethod,
+    field_value::{
+        FieldObjectSource, FieldProperty, FieldPropertyDefinition, FieldPropertyDescriptor,
+    },
     hooks::{RequestHookContext, with_request_hook_context_value},
     store::{EphemeralStore, StatelessSchema},
 };
@@ -503,10 +505,26 @@ async fn generation_requires_session_before_client_policy_and_skips_both_generat
 }
 
 struct TokenRead {
-    events: Arc<Mutex<Vec<&'static str>>>,
-    event: &'static str,
-    token: &'static str,
-    failure: Option<FieldValue>,
+    getter: FieldFunction,
+}
+
+impl TokenRead {
+    fn new(
+        events: Arc<Mutex<Vec<&'static str>>>,
+        event: &'static str,
+        token: &'static str,
+        failure: Option<FieldValue>,
+    ) -> Self {
+        Self {
+            getter: FieldFunction::contextual(move |_, _| {
+                events.lock().unwrap().push(event);
+                match &failure {
+                    Some(error) => Err(AuthError::from_thrown(error.clone())),
+                    None => Ok(token.into()),
+                }
+            }),
+        }
+    }
 }
 
 impl FieldObjectSource for TokenRead {
@@ -515,23 +533,34 @@ impl FieldObjectSource for TokenRead {
     }
 
     fn own_property_descriptor(&self, name: &str) -> AuthResult<Option<FieldPropertyDescriptor>> {
-        Ok((name == "token").then_some(FieldPropertyDescriptor { enumerable: true }))
+        Ok((name == "token").then(|| FieldPropertyDescriptor {
+            enumerable: true,
+            configurable: true,
+            property: FieldProperty::Accessor {
+                get: Some(self.getter.clone()),
+                set: None,
+            },
+        }))
     }
 
-    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+    fn get_with_receiver(
+        &self,
+        name: &str,
+        receiver: &FieldValue,
+    ) -> AuthResult<Option<FieldValue>> {
         assert_eq!(name, "token");
-        self.events.lock().unwrap().push(self.event);
-        match &self.failure {
-            Some(error) => Err(AuthError::from_thrown(error.clone())),
-            None => Ok(Some(self.token.into())),
-        }
+        self.getter.call_with(receiver, &[]).map(Some)
     }
 
-    fn set(&self, _: String, _: FieldValue) -> AuthResult<Option<FieldValue>> {
+    fn set_with_receiver(&self, _: String, _: FieldValue, _: &FieldValue) -> AuthResult<bool> {
         Err(AuthError::internal("The token source must only be read"))
     }
 
-    fn delete(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+    fn define_own_property(&self, _: String, _: FieldPropertyDefinition) -> AuthResult<bool> {
+        Err(AuthError::internal("The token source must only be read"))
+    }
+
+    fn delete(&self, _: &str) -> AuthResult<bool> {
         Err(AuthError::internal("The token source must only be read"))
     }
 
@@ -561,12 +590,7 @@ async fn generation_reads_the_current_token_after_callbacks_and_preserves_failed
             let failure: FieldValue = FieldMap::from([("phase".into(), phase.into())]).into();
             let source = |event: &'static str, token: &'static str, fails: bool| {
                 FieldValue::from(better_auth_core::FieldObject::from_source(Arc::new(
-                    TokenRead {
-                        events: events.clone(),
-                        event,
-                        token,
-                        failure: fails.then(|| failure.clone()),
-                    },
+                    TokenRead::new(events.clone(), event, token, fails.then(|| failure.clone())),
                 )))
             };
             let initial = source("initial-token", "before", false);
