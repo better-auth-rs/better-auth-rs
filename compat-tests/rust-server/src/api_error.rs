@@ -131,7 +131,7 @@ impl AuthPlugin<StatelessSchema> for Fixture {
         if self.input["phase"] == "handler" {
             return Err(self.failure());
         }
-        Ok(Some(AuthResponse::json(200, &json!({"ok":true}))?))
+        Ok(Some(AuthResponse::json(None, &json!({"ok":true}))?))
     }
     async fn after_request(
         &self,
