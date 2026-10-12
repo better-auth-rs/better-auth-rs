@@ -1,0 +1,65 @@
+{
+  "contract": "native-radix-parsing",
+  "version": "1.7.6",
+  "bunVersion": "1.4.2",
+  "bunRevision": "744846f844374847c902b5e7fd59b4342a51ef99",
+  "webkitRevision": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057",
+  "fixtureSha256": "5d07fa70a5332c3dde954a8a7889213b7f3de262c79886f39afcdff0d9f65a6e",
+  "sources": [
+    {
+      "url": "https://raw.githubusercontent.com/oven-sh/bun/744846f844374847c902b5e7fd59b4342a51ef99/scripts/build/deps/webkit.ts",
+      "sha256": "21d397951be3ac93def2fea1756c4815e9ace068a6a01a8530c1f0c65ac4b343"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/oven-sh/WebKit/2e2aa2290fac856d6f451ceacb58f7f5b44dd057/Source/JavaScriptCore/runtime/ParseInt.h",
+      "sha256": "03ad78f317e6d832061781ff1eb2d4dcdf8bb477af627c8b096af74dd40534cc"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/oven-sh/WebKit/2e2aa2290fac856d6f451ceacb58f7f5b44dd057/Source/JavaScriptCore/runtime/JSGlobalObjectFunctions.cpp",
+      "sha256": "7b1f93f5e298c81edbb1c69f7ba00ddfed9e861660716bd39f7c49a05fb7bb52"
+    }
+  ],
+  "algorithms": [
+    {
+      "source": 1,
+      "lines": [
+        54,
+        73
+      ],
+      "function": "parseIntOverflow",
+      "behavior": "Accumulate digits from right to left using successive floating-point radix powers. Skip zero digits after multiplier overflow; a remaining nonzero digit returns infinity."
+    },
+    {
+      "source": 1,
+      "lines": [
+        223,
+        249
+      ],
+      "function": "parseInt",
+      "behavior": "Parse the accepted prefix forwards. Reparse power-of-two radices through parseIntOverflow when the first result reaches 2^53. Apply the sign after a nonempty prefix."
+    },
+    {
+      "source": 2,
+      "lines": [
+        251,
+        311
+      ],
+      "functions": [
+        "jsBinaryIntegerLiteral",
+        "jsOctalIntegerLiteral",
+        "jsHexIntegerLiteral"
+      ],
+      "behavior": "Use the same 2^53 threshold and parseIntOverflow operation for Number nondecimal literals."
+    },
+    {
+      "source": 2,
+      "lines": [
+        355,
+        391
+      ],
+      "function": "toDouble",
+      "behavior": "Retain Number grammar: trim surrounding whitespace, reject signed nondecimal prefixes, and reject trailing non-whitespace characters."
+    }
+  ],
+  "bunTree": "22bf02488635ecf658474da0264016217f3064e8"
+}

@@ -1,6 +1,6 @@
 //! Field policies shared by organization routes and persistence adapters.
 
-use crate::user_fields::UserConfig;
+use crate::{query::radix::Radix, user_fields::UserConfig};
 
 /// Prepare the Organization adapter's metadata value before database field policies run.
 pub fn metadata_input(
@@ -32,21 +32,15 @@ pub fn numeric_filter(value: &str) -> Option<f64> {
     let value =
         value.trim_matches(|ch: char| (ch.is_whitespace() && ch != '\u{85}') || ch == '\u{feff}');
     for (prefix, radix) in [
-        ("0x", 16),
-        ("0X", 16),
-        ("0o", 8),
-        ("0O", 8),
-        ("0b", 2),
-        ("0B", 2),
+        ("0x", Radix::Hexadecimal),
+        ("0X", Radix::Hexadecimal),
+        ("0o", Radix::Octal),
+        ("0O", Radix::Octal),
+        ("0b", Radix::Binary),
+        ("0B", Radix::Binary),
     ] {
         if let Some(digits) = value.strip_prefix(prefix) {
-            if digits.is_empty() {
-                return None;
-            }
-            return digits.chars().try_fold(0.0, |number, ch| {
-                ch.to_digit(radix)
-                    .map(|digit| number * f64::from(radix) + f64::from(digit))
-            });
+            return radix.parse(digits);
         }
     }
     if !matches!(value, "Infinity" | "+Infinity" | "-Infinity")

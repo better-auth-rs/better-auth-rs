@@ -1,5 +1,7 @@
 //! Raw query collection and validated endpoint scope.
 
+pub(crate) mod radix;
+
 use serde::Deserialize;
 use std::future::Future;
 
@@ -370,26 +372,20 @@ pub fn parse_integer(value: &str) -> f64 {
         .strip_prefix("0x")
         .or_else(|| value.strip_prefix("0X"))
     {
-        Some(value) => {
-            // shortcut: Long hexadecimal prefixes still round per digit; replace after shared radix source acceptance.
-            let mut digits = value.chars().map_while(|ch| ch.to_digit(16));
-            let Some(first) = digits.next() else {
-                return f64::NAN;
-            };
-            digits.fold(f64::from(first), |value, digit| {
-                value * 16.0 + f64::from(digit)
-            })
-        }
+        Some(value) => radix::Radix::Hexadecimal.parse_prefix(value),
         None => decimal_prefix(value),
     };
-    if negative { -value } else { value }
+    signed_integer(negative, value)
 }
 
 /// Apply JavaScript `parseInt(value, 10)` without inferring a hexadecimal radix.
 pub fn parse_decimal_integer(value: &str) -> f64 {
     let (negative, value) = integer_start(value);
-    let value = decimal_prefix(value);
-    if negative { -value } else { value }
+    signed_integer(negative, decimal_prefix(value))
+}
+
+fn signed_integer(negative: bool, value: Option<f64>) -> f64 {
+    value.map_or(f64::NAN, |value| if negative { -value } else { value })
 }
 
 fn integer_start(value: &str) -> (bool, &str) {
@@ -402,11 +398,11 @@ fn integer_start(value: &str) -> (bool, &str) {
     }
 }
 
-fn decimal_prefix(value: &str) -> f64 {
+fn decimal_prefix(value: &str) -> Option<f64> {
     let length = value.bytes().take_while(u8::is_ascii_digit).count();
     // Round the complete integer once; digit-by-digit floating-point addition loses low bits.
-    // The ASCII prefix ends at a UTF-8 boundary. An empty prefix parses as NaN.
-    value.split_at(length).0.parse().unwrap_or(f64::NAN)
+    // The ASCII prefix ends at a UTF-8 boundary. Reject an empty prefix before applying the sign.
+    value.split_at(length).0.parse().ok()
 }
 
 /// Convert a JSON string/number after the route's union validation and adapter defaulting.

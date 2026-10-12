@@ -759,6 +759,8 @@ PY_CHECK
         ./compat-tests/reference-server/contracts/verification-otp-consumer-native-capture.test.ts \
         ./compat-tests/reference-server/contracts/verification-auth-consumer-native-capture.test.ts \
         ./compat-tests/reference-server/contracts/native-method-diagnostics-capture.test.ts \
+        ./compat-tests/reference-server/contracts/native-radix-parsing-capture.test.ts \
+        ./compat-tests/reference-server/contracts/user-runtime-output.test.ts \
         ./compat-tests/reference-server/contracts/passkey-transport-methods.test.ts \
         ./compat-tests/reference-server/contracts/passkey-transport-methods-capture.test.ts \
         ./compat-tests/reference-server/contracts/two-factor-otp-native-capture.test.ts \
@@ -770,7 +772,7 @@ PY_CHECK
       cargo clippy --locked --keep-going -p better-auth-cli -- -D warnings || cache_status=1
       cargo test --locked -p better-auth-cli schema_config || cache_status=1
       cargo test --locked -p better-auth-seaorm-macros --lib || cache_status=1
-      cargo clippy --locked --features axum,seaorm2,redis-cache --test api_key_delete_expired_tests -- -D warnings || cache_status=1
+      cargo clippy --locked --features axum,seaorm2,redis-cache --test api_key_delete_expired_tests --test username_runtime_tests -- -D warnings || cache_status=1
       cargo test --locked -p better-auth-core --features redis-cache --lib -- \
         query:: request_runtime::concurrent:: background::tests:: plugin::tests::auth_context_clock_survives_clone_and_native_dispatch utils::password:: utils::json::runtime:: utils::json::syntax:: field_value:: schema_value:: store::cache:: store::secondary:: store::api_key_usage:: store::ephemeral::api_keys:: store::ephemeral::shared_column_contract_tests:: native_sort_ passkey wire::api_key_view::tests:: \
         store::ephemeral::native_storage_tests:: store::ephemeral::rows:: \
@@ -789,7 +791,8 @@ PY_CHECK
         --test secondary_storage_hooks_tests --test session_initial_defaults_tests \
         --test api_key_delete_expired_tests --test api_key_additional_fields_tests \
         --test passkey_additional_fields_tests --test async_field_transform_tests \
-        --test session_id_policy_tests --test query_binding_order_tests || cache_status=1
+        --test session_id_policy_tests --test query_binding_order_tests \
+        --test username_runtime_tests || cache_status=1
       cargo check --locked --manifest-path compat-tests/rust-server/Cargo.toml || cache_status=1
       return "$cache_status"
       ;;
