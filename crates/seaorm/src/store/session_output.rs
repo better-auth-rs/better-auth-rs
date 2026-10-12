@@ -121,10 +121,10 @@ where
         rows: &[SqlRow],
         db: &impl ConnectionTrait,
     ) -> AuthResult<Vec<SessionView>> {
-        let schema = better_auth_core::store::session_create_schema(
-            &self.config().session,
-            &FieldMap::new(),
-        );
+        let schema = self
+            .field_policy()
+            .session(&FieldMap::new())
+            .adapter_fields(&[]);
         self.output_sessions_with_schema(rows, &schema, db).await
     }
 
@@ -151,12 +151,12 @@ where
         S::User: SeaOrmUserModel,
     {
         let backend = self.connection().get_database_backend();
-        let schema = better_auth_core::store::session_create_schema(
-            &self.config().session,
-            &FieldMap::new(),
-        );
+        let schema = self
+            .field_policy()
+            .session(&FieldMap::new())
+            .adapter_fields(&[]);
         let records = self.session_records(rows, &schema, backend)?;
-        let user_fields = self.user_field_schema().adapter_fields(&[]);
+        let user_fields = self.field_policy().user().adapter_fields(&[]);
         let entity = <S::User as SeaOrmUserModel>::Entity::default();
         let physical = self
             .model_fields
@@ -237,10 +237,10 @@ where
         S::User: SeaOrmUserModel,
     {
         let backend = self.connection().get_database_backend();
-        let schema = better_auth_core::store::session_create_schema(
-            &self.config().session,
-            &FieldMap::new(),
-        );
+        let schema = self
+            .field_policy()
+            .session(&FieldMap::new())
+            .adapter_fields(&[]);
         let records = self.session_records(rows, &schema, backend)?;
         let continuation = Arc::new((rows.to_vec(), relation.clone(), schema.clone()));
         let store = self.clone();

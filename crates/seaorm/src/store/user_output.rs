@@ -1,7 +1,5 @@
 use better_auth_core::{
-    AuthResult, FieldMap, UserView,
-    store::schema::EntityRole,
-    user_fields::{AdapterRecord, UserConfig},
+    AuthResult, FieldMap, UserView, store::schema::EntityRole, user_fields::AdapterRecord,
 };
 use sea_orm::{ConnectionTrait, DbBackend};
 
@@ -14,12 +12,6 @@ where
     S: AuthSchema,
     S::User: SeaOrmUserModel,
 {
-    pub(super) fn user_field_schema(&self) -> UserConfig {
-        self.config()
-            .user
-            .user_field_schema_with_plugins(self.model_fields.user_plugin_fields())
-    }
-
     pub(super) async fn output_users(
         &self,
         rows: &[SqlRow],
@@ -39,7 +31,7 @@ where
         backend: DbBackend,
     ) -> AuthResult<AdapterRecord> {
         row.record::<<S::User as SeaOrmUserModel>::Entity>(
-            &self.user_field_schema().adapter_fields(&[]),
+            &self.field_policy().user().adapter_fields(&[]),
             backend,
             S::User::id_column(),
             S::User::field_column,
@@ -52,7 +44,7 @@ where
         records: Vec<AdapterRecord>,
         backend: DbBackend,
     ) -> AuthResult<Vec<UserView>> {
-        let fields = self.user_field_schema().adapter_fields(&[]);
+        let fields = self.field_policy().user().adapter_fields(&[]);
         super::plugin_rows::project_records(&fields, records, backend, UserView::try_from).await
     }
 
@@ -71,7 +63,7 @@ where
         &self,
         pages: Vec<&[SqlRow]>,
     ) -> AuthResult<Vec<Vec<FieldMap>>> {
-        let fields = self.user_field_schema().adapter_fields(&[]);
+        let fields = self.field_policy().user().adapter_fields(&[]);
         let backend = self.connection().get_database_backend();
         let record_fields = fields.clone();
         let runtime = self.model_fields.clone();

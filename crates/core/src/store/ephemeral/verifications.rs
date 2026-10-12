@@ -12,7 +12,7 @@ impl EphemeralStore {
         &self,
         records: Vec<RecordSource>,
     ) -> AuthResult<Vec<VerificationView>> {
-        let schema = self.config.verification.field_schema();
+        let schema = self.field_policy().verification();
         let order = schema
             .adapter_fields(&[])
             .fields()
@@ -43,7 +43,7 @@ impl EphemeralStore {
         super::raw_records::MemoryRecordModel::new(
             self,
             EntityRole::Verification,
-            self.config.verification.field_schema(),
+            self.field_policy().verification(),
         )
         .prepare(input.into(), create, force_allow_id)
         .await
@@ -54,7 +54,7 @@ impl EphemeralStore {
         let source = super::raw_records::MemoryRecordModel::new(
             self,
             EntityRole::Verification,
-            self.config.verification.field_schema(),
+            self.field_policy().verification(),
         )
         .create_ref(input.into(), FieldMap::new(), force_allow_id)
         .await?;
@@ -66,12 +66,7 @@ impl EphemeralStore {
         record: &RowRef<FieldMap>,
         name: &str,
     ) -> AuthResult<Option<Value>> {
-        record.field(
-            self.config
-                .verification
-                .field_schema()
-                .record_storage_key(name),
-        )
+        record.field(self.field_policy().verification().record_storage_key(name))
     }
 
     pub(super) async fn latest_verification_record(
@@ -80,7 +75,7 @@ impl EphemeralStore {
     ) -> AuthResult<Option<RowRef<FieldMap>>> {
         let (identifier_column, bound_identifier) = self.memory_query_field(
             EntityRole::Verification,
-            &self.config.verification.field_schema(),
+            &self.field_policy().verification(),
             "identifier",
             identifier.into(),
         )?;
@@ -169,7 +164,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         if let Err(error) = result {
             let (column, bound) = self.memory_query_field(
                 EntityRole::Verification,
-                &self.config.verification.field_schema(),
+                &self.field_policy().verification(),
                 "id",
                 id.into(),
             )?;
@@ -249,13 +244,13 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
     ) -> AuthResult<Option<VerificationView>> {
         let (identifier_column, bound_identifier) = self.memory_query_field(
             EntityRole::Verification,
-            &self.config.verification.field_schema(),
+            &self.field_policy().verification(),
             "identifier",
             identifier.into(),
         )?;
         let (value_column, bound_value) = self.memory_query_field(
             EntityRole::Verification,
-            &self.config.verification.field_schema(),
+            &self.field_policy().verification(),
             "value",
             value.into(),
         )?;
@@ -287,7 +282,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
     async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<VerificationView>> {
         let (value_column, bound_value) = self.memory_query_field(
             EntityRole::Verification,
-            &self.config.verification.field_schema(),
+            &self.field_policy().verification(),
             "value",
             value.into(),
         )?;
@@ -317,7 +312,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
     ) -> AuthResult<Option<VerificationView>> {
         let (identifier_column, bound_identifier) = self.memory_query_field(
             EntityRole::Verification,
-            &self.config.verification.field_schema(),
+            &self.field_policy().verification(),
             "identifier",
             identifier.into(),
         )?;
@@ -374,7 +369,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
                 || {
                     let (column, value) = self.memory_query_field(
                         EntityRole::Verification,
-                        &self.config.verification.field_schema(),
+                        &self.field_policy().verification(),
                         "identifier",
                         identifier.into(),
                     )?;
@@ -394,7 +389,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         let bind = || {
             let (column, value) = self.memory_query_field(
                 EntityRole::Verification,
-                &self.config.verification.field_schema(),
+                &self.field_policy().verification(),
                 "id",
                 id.into(),
             )?;
@@ -426,7 +421,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             || {
                 let (column, now) = self.memory_query_field(
                     EntityRole::Verification,
-                    &self.config.verification.field_schema(),
+                    &self.field_policy().verification(),
                     "expiresAt",
                     now.clone(),
                 )?;

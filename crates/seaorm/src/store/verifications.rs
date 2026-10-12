@@ -54,7 +54,7 @@ where
                         .insert_raw(
                             self.connection(),
                             super::create_readback::CreateReadback {
-                                schema: &self.config().verification.field_schema(),
+                                schema: &self.field_policy().verification(),
                                 policy: self.config().advanced.database.generate_id(),
                                 scope: super::create_readback::ReadbackScope::Direct(
                                     self.connection(),
@@ -462,7 +462,7 @@ where
             }
         }
         better_auth_core::store::database_hooks::await_adapter_lookup().await;
-        let fields = self.config().verification.field_schema();
+        let fields = self.field_policy().verification();
         let backend = db.get_database_backend();
         let selector = self.bind_query_field(
             EntityRole::Verification,
@@ -678,7 +678,7 @@ where
                     .insert_raw(
                         connection,
                         super::create_readback::CreateReadback {
-                            schema: &self.config().verification.field_schema(),
+                            schema: &self.field_policy().verification(),
                             policy: self.config().advanced.database.generate_id(),
                             scope: self.readback_scope(tx),
                             column: S::Verification::field_column,

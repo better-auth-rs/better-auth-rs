@@ -95,7 +95,7 @@ impl EphemeralStore {
         &self,
         mut input: FieldMap,
     ) -> AuthResult<FieldMap> {
-        let schema = crate::store::session_create_schema(&self.session_config, &input);
+        let schema = self.field_policy().session(&input).adapter_fields(&[]);
         let mut supplied_id = input.remove("id");
         let fields = self
             .model_fields

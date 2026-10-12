@@ -130,7 +130,7 @@ impl EphemeralStore {
         name: &str,
         value: Value,
     ) -> AuthResult<(String, Value)> {
-        let schema = crate::store::session_field_schema(&self.session_config, &FieldMap::new());
+        let schema = self.field_policy().session(&FieldMap::new());
         self.memory_query_field(EntityRole::Session, &schema, name, value)
     }
 }

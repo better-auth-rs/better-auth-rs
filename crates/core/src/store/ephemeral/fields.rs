@@ -292,10 +292,8 @@ impl EphemeralStore {
         &self,
         role: EntityRole,
     ) -> AuthResult<crate::user_fields::UserConfig> {
-        if role == EntityRole::TeamMember {
-            return Ok(self.model_fields.plugin_fields(role));
-        }
-        self.organization_fields()?.fields_for(role).cloned()
+        self.field_policy()
+            .fields(role, || self.organization_fields())
     }
 
     pub(super) async fn prepare_record_patch(

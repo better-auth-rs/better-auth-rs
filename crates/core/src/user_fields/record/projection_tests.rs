@@ -67,9 +67,11 @@ async fn registered_user_fields_keep_plugin_slots_before_metadata_fallback() -> 
             }
             runtime.register_user_fields(traced("role"));
             let (adapter, _, runtime) = runtime.resolve(&crate::AuthConfig::default());
-            let schema = adapter
-                .user
-                .user_field_schema_with_plugins(runtime.user_plugin_fields());
+            let schema = runtime.bind(&adapter).fields(EntityRole::User, || {
+                Err(crate::AuthError::internal(
+                    "User policies must not read Organization options",
+                ))
+            })?;
             let storage = FieldMap::from([
                 ("id".into(), "user-id".into()),
                 ("stored_marker".into(), "marker-value".into()),

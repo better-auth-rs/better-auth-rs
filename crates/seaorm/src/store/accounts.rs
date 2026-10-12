@@ -49,7 +49,7 @@ where
         }
         better_auth_core::store::database_hooks::await_adapter_lookup().await;
         let backend = db.get_database_backend();
-        let fields = self.config().account.field_schema();
+        let fields = self.field_policy().account();
         let selectors = selectors
             .iter()
             .map(|(name, value)| {
@@ -140,7 +140,7 @@ where
         let backend = self.connection().get_database_backend();
         let (column, value) = self.query_field_binding(
             EntityRole::Account,
-            &self.config().account.field_schema(),
+            &self.field_policy().account(),
             name,
             original,
             backend,
@@ -153,7 +153,7 @@ where
         selectors: [(&str, &FieldValue); N],
     ) -> AuthResult<sea_orm::Condition> {
         let backend = self.connection().get_database_backend();
-        let fields = self.config().account.field_schema();
+        let fields = self.field_policy().account();
         let bound = selectors
             .into_iter()
             .map(|(name, value)| {
@@ -198,7 +198,7 @@ where
         rows: &[SqlRow],
         db: &impl ConnectionTrait,
     ) -> AuthResult<Vec<better_auth_core::wire::AccountView>> {
-        let fields = self.config().account.field_schema();
+        let fields = self.field_policy().account();
         let records = rows
             .iter()
             .map(|row| {
@@ -229,7 +229,7 @@ where
     }
 
     pub(super) async fn output_native_account(&self, account: &SqlRow) -> AuthResult<AccountView> {
-        let fields = self.config().account.field_schema().adapter_fields(&[]);
+        let fields = self.field_policy().account().adapter_fields(&[]);
         let backend = self.connection().get_database_backend();
         let record = account
             .native_record(&fields, backend, S::Account::field_column)?
@@ -252,7 +252,7 @@ where
         if value.is_null() || value.is_undefined() {
             return Ok(Vec::new());
         }
-        let fields = self.config().account.field_schema();
+        let fields = self.field_policy().account();
         let backend = self.connection().get_database_backend();
         let (physical_to, value) =
             self.query_field_binding(EntityRole::Account, &fields, &relation.to, &value, backend)?;
@@ -289,8 +289,8 @@ where
         S::User: SeaOrmUserModel,
     {
         let backend = self.connection().get_database_backend();
-        let fields = self.config().account.field_schema();
-        let user_fields = self.user_field_schema().adapter_fields(&[]);
+        let fields = self.field_policy().account();
+        let user_fields = self.field_policy().user().adapter_fields(&[]);
         let entity = <S::User as SeaOrmUserModel>::Entity::default();
         let physical = self
             .model_fields
@@ -382,7 +382,7 @@ where
                 return Ok(None);
             }
         }
-        let fields = self.config().account.field_schema();
+        let fields = self.field_policy().account();
         let policy = self.config().advanced.database.generate_id();
         let backend = db.get_database_backend();
         let input = super::record_write::prepare_fields(
@@ -543,7 +543,7 @@ where
                     S::Account::field_column(&relation.from)?,
                     S::User::field_column(&relation.to)?,
                 ),
-                &self.user_field_schema().adapter_fields(&[]),
+                &self.field_policy().user().adapter_fields(&[]),
                 S::User::field_column,
             )?;
             let rows = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
@@ -571,7 +571,7 @@ where
         } else {
             (self.account_records(provider, account_id).await?, None)
         };
-        let fields = self.config().account.field_schema();
+        let fields = self.field_policy().account();
         let extracted = records
             .iter()
             .map(|record| {
@@ -718,7 +718,7 @@ where
             }
         }
         better_auth_core::store::database_hooks::await_adapter_lookup().await;
-        let fields = self.config().account.field_schema();
+        let fields = self.field_policy().account();
         let backend = self.connection().get_database_backend();
         let account_id = self.bind_query_field(EntityRole::Account, &fields, "id", id, backend)?;
         let policy = self.config().advanced.database.generate_id();

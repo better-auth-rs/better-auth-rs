@@ -88,10 +88,7 @@ where
         &self,
         bound: super::value_filter::BoundQueryField,
     ) -> AuthResult<(<S::Session as SeaOrmSessionModel>::Column, FieldValue)> {
-        let schema = better_auth_core::store::session_field_schema(
-            &self.config().session,
-            &Default::default(),
-        );
+        let schema = self.field_policy().session(&Default::default());
         let (column, value) = bound.resolve(EntityRole::Session, &schema)?;
         Ok((S::Session::field_column(&column)?, value))
     }
@@ -102,10 +99,7 @@ where
         original: &FieldValue,
         backend: DbBackend,
     ) -> AuthResult<super::value_filter::BoundQueryField> {
-        let schema = better_auth_core::store::session_field_schema(
-            &self.config().session,
-            &Default::default(),
-        );
+        let schema = self.field_policy().session(&Default::default());
         self.bind_query_field(EntityRole::Session, &schema, name, original, backend)
     }
 

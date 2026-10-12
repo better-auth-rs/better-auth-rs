@@ -168,7 +168,9 @@ async fn native_input_reads_follow_prior_callbacks_through_create_and_update() -
             let model = store
                 .model_fields
                 .resolve_model_key("badges", &|_, _| false)?;
-            let fields = store.model_fields.declared_fields(&model)?.clone();
+            let fields = store
+                .field_policy()
+                .fields(&model, || store.organization_fields())?;
             (model, fields)
         } else {
             (ModelKey::Native(EntityRole::Jwk), fields)
@@ -290,8 +292,13 @@ async fn custom_alias_preserves_serial_root_failure_and_logical_generator_name()
         runtime.register_custom_model("badge", Some("badges"), UserConfig::default())?;
         let model = runtime.resolve_model_key("badges", &|_, _| false)?;
         let store = EphemeralStore::from_schema(Arc::new(config), &runtime);
-        let records =
-            MemoryRecordModel::new(&store, &model, runtime.declared_fields(&model)?.clone());
+        let records = MemoryRecordModel::new(
+            &store,
+            &model,
+            store
+                .field_policy()
+                .fields(&model, || store.organization_fields())?,
+        );
         let before = store.operation(|op| op.root_keys())?;
         assert!(before.iter().any(|key| key == "badge"));
         assert!(!before.iter().any(|key| key == "badges"));

@@ -150,6 +150,10 @@ impl<S: AuthSchema> SeaOrmStore<S> {
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
     SeaOrmStore<S, O, P>
 {
+    fn field_policy(&self) -> better_auth_core::plugin_runtime::ModelFieldBinding<'_> {
+        self.model_fields.bind(&self.config)
+    }
+
     /// Invalidate checks after application-owned schema changes, including partially failed migrations.
     /// Clones of this store share invalidation; separately constructed stores do not.
     /// Direct SQL does not trigger invalidation automatically.

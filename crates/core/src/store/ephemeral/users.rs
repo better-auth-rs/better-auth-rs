@@ -18,8 +18,12 @@ impl EphemeralStore {
         name: &str,
         value: &Value,
     ) -> AuthResult<Option<RowRef<FieldMap>>> {
-        let (physical, value) =
-            self.memory_query_field(EntityRole::User, &self.user_schema(), name, value.clone())?;
+        let (physical, value) = self.memory_query_field(
+            EntityRole::User,
+            &self.field_policy().user(),
+            name,
+            value.clone(),
+        )?;
         self.user_ref(|user| {
             Ok(crate::query::field_matches_equality(
                 &user.field(&physical)?.unwrap_or_default(),
@@ -47,8 +51,12 @@ impl EphemeralStore {
         &self,
         id: &Value,
     ) -> AuthResult<Option<RowRef<FieldMap>>> {
-        let (column, id) =
-            self.memory_query_field(EntityRole::User, &self.user_schema(), "id", id.clone())?;
+        let (column, id) = self.memory_query_field(
+            EntityRole::User,
+            &self.field_policy().user(),
+            "id",
+            id.clone(),
+        )?;
         self.user_ref(|user| Ok(user.field(&column)?.unwrap_or_default().strict_equals(&id)))
             .await
     }
@@ -78,19 +86,13 @@ impl EphemeralStore {
         Ok(user)
     }
 
-    pub(super) fn user_schema(&self) -> crate::user_fields::UserConfig {
-        self.config
-            .user
-            .user_field_schema_with_plugins(self.model_fields.user_plugin_fields())
-    }
-
     #[cfg(test)]
     pub(super) async fn output_users(&self, users: Vec<FieldMap>) -> AuthResult<Vec<UserView>> {
         let sources = users
             .into_iter()
             .map(|user| super::rows::RecordSource::Snapshot(Box::new(user)))
             .collect::<Vec<_>>();
-        self.project_record_sources(EntityRole::User, &self.user_schema(), sources)
+        self.project_record_sources(EntityRole::User, &self.field_policy().user(), sources)
             .await?
             .into_iter()
             .map(UserView::try_from)
@@ -122,9 +124,13 @@ impl EphemeralStore {
     }
 
     async fn prepare_user_update_fields(&self, fields: FieldMap) -> AuthResult<FieldMap> {
-        super::raw_records::MemoryRecordModel::new(self, EntityRole::User, self.user_schema())
-            .prepare(fields.into(), false, false)
-            .await
+        super::raw_records::MemoryRecordModel::new(
+            self,
+            EntityRole::User,
+            self.field_policy().user(),
+        )
+        .prepare(fields.into(), false, false)
+        .await
     }
 
     async fn update_user_outcome(
@@ -136,8 +142,12 @@ impl EphemeralStore {
         let Some(update) = self.prepare_user_update_optional(update).await? else {
             return Ok(std::ops::ControlFlow::Break(()));
         };
-        let (physical, value) =
-            self.memory_query_field(EntityRole::User, &self.user_schema(), field, value.clone())?;
+        let (physical, value) = self.memory_query_field(
+            EntityRole::User,
+            &self.field_policy().user(),
+            field,
+            value.clone(),
+        )?;
         let update = self.prepare_user_update_fields(update).await?;
         self.finish_user_update(&physical, &value, update)
             .await
@@ -208,10 +218,13 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             }
         }
         let input = prepared.into_fields();
-        let user =
-            super::raw_records::MemoryRecordModel::new(self, EntityRole::User, self.user_schema())
-                .create_ref(input.into(), FieldMap::new(), true)
-                .await?;
+        let user = super::raw_records::MemoryRecordModel::new(
+            self,
+            EntityRole::User,
+            self.field_policy().user(),
+        )
+        .create_ref(input.into(), FieldMap::new(), true)
+        .await?;
         let user = self.output_user_refs(vec![user]).await?.remove(0);
         self.after(CommittedWrite::UserCreated(Some(user.clone())))
             .await?;
@@ -244,7 +257,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
     ) -> AuthResult<Vec<UserView>> {
         let (column, bound) = self.memory_query_field(
             EntityRole::User,
-            &self.user_schema(),
+            &self.field_policy().user(),
             "id",
             ids.to_vec().into(),
         )?;
@@ -368,8 +381,12 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         }
         self.delete_user_accounts_with_hooks(id).await?;
         let snapshot: AuthResult<Option<UserView>> = async {
-            let (column, stored_id) =
-                self.memory_query_field(EntityRole::User, &self.user_schema(), "id", id.clone())?;
+            let (column, stored_id) = self.memory_query_field(
+                EntityRole::User,
+                &self.field_policy().user(),
+                "id",
+                id.clone(),
+            )?;
             let user = self
                 .raw("user", "findMany", |op| {
                     Ok(op
@@ -412,8 +429,12 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             }
         }
         crate::store::database_hooks::await_adapter_lookup().await;
-        let (column, stored_id) =
-            self.memory_query_field(EntityRole::User, &self.user_schema(), "id", id.clone())?;
+        let (column, stored_id) = self.memory_query_field(
+            EntityRole::User,
+            &self.field_policy().user(),
+            "id",
+            id.clone(),
+        )?;
         self.raw("user", "delete", |op| {
             let table = op.capture_table(EntityRole::User)?;
             let selected = table.select_refs(|user| {
@@ -434,7 +455,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         let _ = params
             .limit
             .get_or_insert(self.config.advanced.database.find_many_limit());
-        let schema = self.user_schema();
+        let schema = self.field_policy().user();
         let bind =
             |name: &str, value| self.memory_query_field(EntityRole::User, &schema, name, value);
         let query = crate::user_query::PreparedUserQuery::for_memory_adapter(

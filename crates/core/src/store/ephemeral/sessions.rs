@@ -29,7 +29,10 @@ impl EphemeralStore {
     where
         F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send + 'static,
     {
-        let schema = crate::store::session_create_schema(&self.session_config, &FieldMap::new());
+        let schema = self
+            .field_policy()
+            .session(&FieldMap::new())
+            .adapter_fields(&[]);
         let rows: Vec<_> = sessions
             .into_iter()
             .map(|source| {
@@ -47,14 +50,14 @@ impl EphemeralStore {
                 let session = SessionView {
                     active: true,
                     visible_fields: Some(Default::default()),
-                    field_order: crate::store::session_create_schema(
-                        &self.session_config,
-                        &implicit,
-                    )
-                    .fields()
-                    .keys()
-                    .cloned()
-                    .collect(),
+                    field_order: self
+                        .field_policy()
+                        .session(&implicit)
+                        .adapter_fields(&[])
+                        .fields()
+                        .keys()
+                        .cloned()
+                        .collect(),
                     additional_fields: implicit,
                     ..Default::default()
                 };
@@ -113,7 +116,7 @@ impl EphemeralStore {
 
 impl EphemeralStore {
     async fn write_session_create_fields(&self, fields: FieldMap) -> AuthResult<SessionView> {
-        let schema = crate::store::session_create_schema(&self.session_config, &fields);
+        let schema = self.field_policy().session(&fields).adapter_fields(&[]);
         let force_allow_id = fields.contains_key("id");
         let source = super::raw_records::MemoryRecordModel::new(self, EntityRole::Session, schema)
             .create_ref(fields.into(), FieldMap::new(), force_allow_id)

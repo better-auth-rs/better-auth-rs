@@ -83,10 +83,11 @@ impl EphemeralStore {
                     Vec::new()
                 } else {
                     let (logical, physical) = join.fallback_target(
-                        (EntityRole::User, "user", &self.user_schema()),
+                        (EntityRole::User, "user", &self.field_policy().user()),
                         &self.model_fields,
                     )?;
-                    let value = self.memory_field_query(&self.user_schema(), &logical, value)?;
+                    let value =
+                        self.memory_field_query(&self.field_policy().user(), &logical, value)?;
                     self.raw(
                         "user",
                         if join.many { "findMany" } else { "findOne" },

@@ -55,7 +55,7 @@ impl EphemeralStore {
         let (mut user, accounts) = if native {
             let (email_field, email) = self.memory_query_field(
                 EntityRole::User,
-                &self.user_schema(),
+                &self.field_policy().user(),
                 "email",
                 email.clone(),
             )?;
@@ -107,7 +107,7 @@ impl EphemeralStore {
                 return Ok(None);
             };
             let mut projected = self
-                .project_record_sources(EntityRole::User, &self.user_schema(), vec![source])
+                .project_record_sources(EntityRole::User, &self.field_policy().user(), vec![source])
                 .await?;
             (
                 UserView::from_field_values(projected.remove(0))?,
@@ -153,7 +153,7 @@ impl EphemeralStore {
         if value.is_null() || value.is_undefined() {
             return Ok(fallback_relation(Vec::new(), relation.many, 0.0));
         }
-        let fields = self.config.account.field_schema();
+        let fields = self.field_policy().account();
         let (logical, physical) = relation.fallback_target(
             (EntityRole::Account, "account", &fields),
             &self.model_fields,
@@ -184,7 +184,7 @@ impl EphemeralStore {
         account_id: &Value,
         relation: &ResolvedJoin,
     ) -> AuthResult<Option<AccountOwner>> {
-        let fields = self.config.account.field_schema();
+        let fields = self.field_policy().account();
         let native = self.config.advanced.database.joins == Some(true);
         let (records, users) = if native {
             let selectors = self.account_identity_selectors(provider, account_id)?;
@@ -308,7 +308,7 @@ impl EphemeralStore {
             (EntityRole::User, "user", &self.config.user),
             &self.model_fields,
         )?;
-        let value = self.memory_field_query(&self.user_schema(), &logical, value)?;
+        let value = self.memory_field_query(&self.field_policy().user(), &logical, value)?;
         self.raw(
             "user",
             if relation.many { "findMany" } else { "findOne" },

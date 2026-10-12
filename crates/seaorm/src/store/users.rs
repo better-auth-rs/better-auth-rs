@@ -72,7 +72,7 @@ where
         let backend = self.connection().get_database_backend();
         let (physical_to, value) = self.query_field_binding(
             EntityRole::User,
-            &self.user_field_schema(),
+            &self.field_policy().user(),
             &relation.to,
             &value,
             backend,
@@ -140,7 +140,7 @@ where
     ) -> AuthResult<(String, FieldValue)> {
         self.query_field_binding(
             EntityRole::User,
-            &self.user_field_schema(),
+            &self.field_policy().user(),
             name,
             value,
             db.get_database_backend(),
@@ -192,7 +192,7 @@ where
         }
         let input = prepared.into_fields();
         let backend = db.get_database_backend();
-        let schema = self.user_field_schema();
+        let schema = self.field_policy().user();
         let policy = self.config().advanced.database.generate_id();
         let fields = super::record_write::prepare_fields(
             &schema,
@@ -338,12 +338,12 @@ where
         let backend = db.get_database_backend();
         let selector = self.bind_query_field(
             EntityRole::User,
-            &self.user_field_schema(),
+            &self.field_policy().user(),
             field,
             value,
             backend,
         )?;
-        let schema = self.user_field_schema();
+        let schema = self.field_policy().user();
         let fields = super::record_write::prepare_fields(
             &schema,
             input,
@@ -374,7 +374,7 @@ where
             "update",
             async {
                 let (physical, value) =
-                    selector.resolve(EntityRole::User, &self.user_field_schema())?;
+                    selector.resolve(EntityRole::User, &self.field_policy().user())?;
                 let (query, filter) = active.update_where_returning(
                     backend,
                     [super::value_filter::QueryPredicate::equals(
@@ -557,7 +557,7 @@ where
                     S::User::field_column(&relation.from)?,
                     S::Account::field_column(&relation.to)?,
                 ),
-                &self.config().account.field_schema().adapter_fields(&[]),
+                &self.field_policy().account().adapter_fields(&[]),
                 S::Account::field_column,
             )?;
             let rows = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
@@ -593,7 +593,7 @@ where
                 .storage_model_name(EntityRole::Account, entity.table_name());
             let raw = super::joins::raw_relation_value(
                 accounts,
-                &self.config().account.field_schema().adapter_fields(&[]),
+                &self.field_policy().account().adapter_fields(&[]),
                 relation.many,
                 S::Account::field_column,
             )?;

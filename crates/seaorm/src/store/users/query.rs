@@ -25,7 +25,7 @@ where
     S::User: SeaOrmUserModel,
 {
     fn bind_user_query(&self, params: &ListUsersParams) -> AuthResult<Vec<BoundUserFilter>> {
-        let fields = self.user_field_schema();
+        let fields = self.field_policy().user();
         let backend = self.connection().get_database_backend();
         let bind = |name: &str,
                     value: &FieldValue,
@@ -81,7 +81,7 @@ where
         bound: Vec<BoundUserFilter>,
         sort: Option<&ListUsersParams>,
     ) -> AuthResult<Select<<S::User as SeaOrmUserModel>::Entity>> {
-        let fields = self.user_field_schema();
+        let fields = self.field_policy().user();
         let bound = bound
             .into_iter()
             .map(|bound| {

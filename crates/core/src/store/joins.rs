@@ -66,13 +66,10 @@ impl AccountOwner {
         schema: &ModelFields,
         table_matches: impl Fn(EntityRole, &str) -> bool,
     ) -> AuthResult<ResolvedJoin> {
+        let fields = schema.bind(config);
         resolve_references(
-            (
-                EntityRole::Account,
-                "account",
-                &config.account.field_schema(),
-            ),
-            (EntityRole::User, "user", &config.user),
+            (EntityRole::Account, "account", &fields.account()),
+            (EntityRole::User, "user", &fields.user()),
             schema,
             table_matches,
         )
@@ -97,10 +94,11 @@ impl crate::session::SessionData {
         schema: &ModelFields,
         table_matches: impl Fn(EntityRole, &str) -> bool,
     ) -> AuthResult<ResolvedJoin> {
-        let fields = super::session_create_schema(&config.session, &crate::FieldMap::new());
+        let binding = schema.bind(config);
+        let fields = binding.session(&crate::FieldMap::new()).adapter_fields(&[]);
         resolve_references(
             (EntityRole::Session, "session", &fields),
-            (EntityRole::User, "user", &config.user),
+            (EntityRole::User, "user", &binding.user()),
             schema,
             table_matches,
         )
@@ -130,13 +128,10 @@ impl UserAccounts {
         schema: &ModelFields,
         table_matches: impl Fn(EntityRole, &str) -> bool,
     ) -> AuthResult<ResolvedJoin> {
+        let fields = schema.bind(config);
         resolve_references(
-            (EntityRole::User, "user", &config.user),
-            (
-                EntityRole::Account,
-                "account",
-                &config.account.field_schema(),
-            ),
+            (EntityRole::User, "user", &fields.user()),
+            (EntityRole::Account, "account", &fields.account()),
             schema,
             table_matches,
         )
@@ -300,7 +295,7 @@ impl MemberUser {
         let schema = schema.organization_join_schema();
         resolve_references(
             (EntityRole::Member, "member", member_fields),
-            (EntityRole::User, "user", &config.user),
+            (EntityRole::User, "user", &schema.bind(config).user()),
             &schema,
             table_matches,
         )

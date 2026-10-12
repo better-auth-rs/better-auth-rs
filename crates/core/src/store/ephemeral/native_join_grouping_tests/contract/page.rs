@@ -9,12 +9,16 @@ pub(super) async fn execute(store: &EphemeralStore, scenario: &Scenario) -> Auth
     let (role, fields, relation) = match scenario.model {
         Model::Account => (
             EntityRole::Account,
-            store.config.account.field_schema(),
+            store.field_policy().account(),
             AccountOwner::resolve_schema(&store.config, &store.model_fields, |_, _| false)?,
         ),
         Model::Session => (
             EntityRole::Session,
-            crate::store::session_create_schema(&store.config.session, &FieldMap::new()),
+            store
+                .model_fields
+                .bind(&store.config)
+                .session(&FieldMap::new())
+                .adapter_fields(&[]),
             SessionData::resolve_schema(&store.config, &store.model_fields, |_, _| false)?,
         ),
         Model::User => {

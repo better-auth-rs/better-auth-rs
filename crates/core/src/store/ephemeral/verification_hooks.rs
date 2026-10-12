@@ -30,7 +30,7 @@ impl EphemeralStore {
         crate::store::database_hooks::await_adapter_lookup().await;
         let (identifier_column, bound_identifier) = self.memory_query_field(
             EntityRole::Verification,
-            &self.config.verification.field_schema(),
+            &self.field_policy().verification(),
             "identifier",
             identifier.into(),
         )?;
@@ -178,7 +178,7 @@ impl EphemeralStore {
         }
         let (id_column, id) = self.memory_query_field(
             EntityRole::Verification,
-            &self.config.verification.field_schema(),
+            &self.field_policy().verification(),
             "id",
             snapshot.id.field_value(),
         )?;
@@ -209,7 +209,7 @@ impl EphemeralStore {
             .await?;
         let (identifier_column, bound_identifier) = self.memory_query_field(
             EntityRole::Verification,
-            &self.config.verification.field_schema(),
+            &self.field_policy().verification(),
             "identifier",
             identifier.into(),
         )?;

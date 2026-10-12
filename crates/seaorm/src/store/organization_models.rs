@@ -33,11 +33,8 @@ impl<S: crate::schema::AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate:
     super::SeaOrmStore<S, O, P>
 {
     pub(super) fn organization_query_schema(&self, role: EntityRole) -> AuthResult<UserConfig> {
-        if role == EntityRole::TeamMember {
-            Ok(self.model_fields.plugin_fields(role))
-        } else {
-            Ok(self.organization_fields()?.fields_for(role)?.clone())
-        }
+        self.field_policy()
+            .fields(role, || self.organization_fields())
     }
 
     pub(super) fn bind_organization_query_field(

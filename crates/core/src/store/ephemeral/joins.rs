@@ -26,7 +26,7 @@ impl EphemeralStore {
     {
         self.project_record_sources_owned_batches_then(
             EntityRole::User,
-            &self.user_schema(),
+            &self.field_policy().user(),
             users.into_iter().map(RecordSource::Live).collect(),
             |_, fields| UserView::from_field_values(fields),
             complete,
@@ -126,7 +126,11 @@ impl EphemeralStore {
             )
             .await?;
         let (sessions, users): (Vec<_>, Vec<_>) = rows.into_iter().unzip();
-        let fields = super::super::session_create_schema(&self.config.session, &FieldMap::new());
+        let fields = self
+            .model_fields
+            .bind(&self.config)
+            .session(&FieldMap::new())
+            .adapter_fields(&[]);
         let continuation = Arc::new((users, fields, relation));
         let store = self.clone();
         self.output_sessions_batches_then(sessions, move |ready| {

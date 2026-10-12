@@ -158,6 +158,12 @@ impl Default for EphemeralStore {
 }
 
 impl EphemeralStore {
+    fn field_policy(&self) -> crate::plugin_runtime::ModelFieldBinding<'_> {
+        self.model_fields
+            .bind(&self.config)
+            .with_session_config(&self.session_config)
+    }
+
     fn next_serial_id(&self, row_count: usize) -> Option<Value> {
         matches!(
             self.config.advanced.database.generate_id(),

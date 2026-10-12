@@ -145,10 +145,10 @@ where
             async { db.query_one_raw(query).await.map_err(map_db_err) },
         )
         .await?;
-        let schema = better_auth_core::store::session_create_schema(
-            &self.config().session,
-            &Default::default(),
-        );
+        let schema = self
+            .field_policy()
+            .session(&Default::default())
+            .adapter_fields(&[]);
         match row {
             Some(row) => self
                 .output_session_raw(&row.into(), &schema, db)
@@ -208,7 +208,7 @@ where
                 S::Session::field_column(&relation.from)?,
                 S::User::field_column(&relation.to)?,
             ),
-            &self.user_field_schema().adapter_fields(&[]),
+            &self.field_policy().user().adapter_fields(&[]),
             S::User::field_column,
         )?;
         let rows = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
@@ -285,7 +285,7 @@ where
                         S::Session::field_column(&relation.from)?,
                         S::User::field_column(&relation.to)?,
                     ),
-                    &self.user_field_schema().adapter_fields(&[]),
+                    &self.field_policy().user().adapter_fields(&[]),
                     S::User::field_column,
                 )?;
                 let rows = super::joins::joined_raw_rows(self.connection(), &query).await?;

@@ -231,7 +231,7 @@ impl EphemeralStore {
         } else {
             let (column, owners) = self.memory_query_field(
                 EntityRole::User,
-                &self.user_schema(),
+                &self.field_policy().user(),
                 "id",
                 owners.into(),
             )?;

@@ -48,7 +48,7 @@ where
                     O::Member::column(&relation.from)?,
                     S::User::field_column(&relation.to)?,
                 ),
-                &self.user_field_schema().adapter_fields(&[]),
+                &self.field_policy().user().adapter_fields(&[]),
                 S::User::field_column,
             )?;
             let rows = database_operation::<Entity<O::Member>, _>(
@@ -91,7 +91,7 @@ where
             (&self.model_fields, EntityRole::Member),
         )?;
         let record = if let Some(users) = &selected_users {
-            let user_fields = self.user_field_schema().adapter_fields(&[]);
+            let user_fields = self.field_policy().user().adapter_fields(&[]);
             let entity = <S::User as SeaOrmUserModel>::Entity::default();
             let physical = self
                 .model_fields

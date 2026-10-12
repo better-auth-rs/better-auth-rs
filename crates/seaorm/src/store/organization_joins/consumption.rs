@@ -34,7 +34,7 @@ where
                 .map(|member| member.get("userId").cloned().unwrap_or_default())
                 .collect::<Vec<_>>();
             let backend = self.connection().get_database_backend();
-            let fields = self.user_field_schema();
+            let fields = self.field_policy().user();
             let bound =
                 self.bind_query_field(EntityRole::User, &fields, "id", &owners.into(), backend)?;
             let rows = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(

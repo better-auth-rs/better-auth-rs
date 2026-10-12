@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod availability_tests;
+mod binding;
 mod declarations;
 mod device;
 #[cfg(test)]
@@ -15,6 +16,7 @@ use crate::id::AdapterIdInput;
 use crate::store::schema::{EntityRole, resolve_field_name};
 use crate::user_fields::{AdapterRecord, UserConfig, UserFieldType};
 use crate::{AuthConfig, AuthError, AuthResult, FieldMap, FieldValue as Value};
+pub use binding::ModelFieldBinding;
 use indexmap::{IndexMap, IndexSet};
 pub use models::ModelKey;
 use parking_lot::ReentrantMutex;

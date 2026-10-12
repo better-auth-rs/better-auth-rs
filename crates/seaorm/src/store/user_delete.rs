@@ -169,7 +169,7 @@ where
         .await?;
         let (column, value) = self.query_field_binding(
             better_auth_core::store::schema::EntityRole::User,
-            &self.user_field_schema(),
+            &self.field_policy().user(),
             "id",
             id,
             db.get_database_backend(),

@@ -1213,7 +1213,7 @@ PY_CHECK
         ./tests/fixtures/fallback-continuation-upstream.test.ts \
         ./tests/fixtures/organization-native-joins-upstream.test.ts \
         ./tests/fixtures/organization-join-continuation-upstream.test.ts || projection_status=1
-      cargo clippy --locked -p better-auth-core -p better-auth-seaorm -- -D warnings || projection_status=1
+      cargo clippy --locked --keep-going -p better-auth-core -p better-auth-seaorm --lib --tests -- -D warnings || projection_status=1
       cargo clippy --locked --features axum,seaorm2,redis-cache \
         --test schema_preflight_tests --test query_binding_order_tests --test telemetry_options_tests \
         --test async_field_transform_tests --test account_owner_batch_tests \
@@ -1223,6 +1223,7 @@ PY_CHECK
         -- -D warnings || projection_status=1
       cargo test --locked -p better-auth-core --lib -- \
         request_runtime::concurrent::tests:: organization_fields::tests:: user_fields:: \
+        plugin_runtime::fields::binding::tests:: store::ephemeral::raw_records::tests:: \
         field_value::function::tests:: store::ephemeral::rows::object_tests:: \
         store::ephemeral::invitation_accept::tests:: \
         store::ephemeral::sessions::live_output_tests:: store::ephemeral::sessions::native_owner_tests:: \

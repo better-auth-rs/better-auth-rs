@@ -156,8 +156,7 @@ where
         C: ConnectionTrait,
     {
         self.validate_session_fields()?;
-        let readback_schema =
-            better_auth_core::store::session_field_schema(&self.config().session, &fields);
+        let readback_schema = self.field_policy().session(&fields);
         let schema = readback_schema.adapter_fields(&[]);
         let policy = self.config().advanced.database.generate_id();
         let backend = db.get_database_backend();
@@ -310,7 +309,7 @@ where
     )> {
         let backend = db.get_database_backend();
         self.validate_session_fields()?;
-        let schema = better_auth_core::store::session_create_schema(&self.config().session, &input);
+        let schema = self.field_policy().session(&input).adapter_fields(&[]);
         let policy = self.config().advanced.database.generate_id();
         let fields = super::record_write::prepare_fields(
             &schema,

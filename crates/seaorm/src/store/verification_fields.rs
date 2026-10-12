@@ -20,11 +20,7 @@ where
         &self,
         name: &str,
     ) -> AuthResult<<S::Verification as SeaOrmVerificationModel>::Column> {
-        let fields = self
-            .config()
-            .verification
-            .field_schema()
-            .adapter_fields(&[]);
+        let fields = self.field_policy().verification().adapter_fields(&[]);
         let field = fields
             .fields()
             .get(name)
@@ -43,7 +39,7 @@ where
     )> {
         let (column, value) = self.query_field_binding(
             EntityRole::Verification,
-            &self.config().verification.field_schema(),
+            &self.field_policy().verification(),
             name,
             original,
             backend,
@@ -66,7 +62,7 @@ where
         selectors: [(&str, &FieldValue); N],
         backend: DbBackend,
     ) -> AuthResult<Condition> {
-        let fields = self.config().verification.field_schema();
+        let fields = self.field_policy().verification();
         let expires = self.bind_query_field(
             EntityRole::Verification,
             &fields,
@@ -106,11 +102,7 @@ where
         rows: &[SqlRow],
         db: &impl ConnectionTrait,
     ) -> AuthResult<Vec<VerificationView>> {
-        let fields = self
-            .config()
-            .verification
-            .field_schema()
-            .adapter_fields(&[]);
+        let fields = self.field_policy().verification().adapter_fields(&[]);
         let backend = db.get_database_backend();
         let records = rows
             .iter()
@@ -146,11 +138,7 @@ where
         row: &sea_orm::QueryResult,
         db: &impl ConnectionTrait,
     ) -> AuthResult<VerificationView> {
-        let fields = self
-            .config()
-            .verification
-            .field_schema()
-            .adapter_fields(&[]);
+        let fields = self.field_policy().verification().adapter_fields(&[]);
         let backend = db.get_database_backend();
         let record = plugin_rows::record_from_columns::<
             <S::Verification as SeaOrmVerificationModel>::Entity,
@@ -178,7 +166,7 @@ where
     ) -> AuthResult<
         super::record_write::RecordWrite<<S::Verification as SeaOrmVerificationModel>::Entity>,
     > {
-        let fields = self.config().verification.field_schema();
+        let fields = self.field_policy().verification();
         let backend = db.get_database_backend();
         let input = input.fields()?;
         let policy = self.config().advanced.database.generate_id();
