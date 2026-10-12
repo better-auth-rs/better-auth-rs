@@ -171,7 +171,7 @@ The [Admin plugin](docs/content/docs/plugins/admin.mdx) preserves a cancelled us
 
 Use `ctx.logger().error("message", &[])?` for fallible instance diagnostics. Configure `config.logger` with `LoggerConfig { .. }.into()`, or retain `LoggerOptions` for live callback replacement. An instance freezes its logging policy and retains its original callback owner; see [observability](docs/content/docs/concepts/observability.mdx) for configuration and error ownership.
 
-Passwords use Better Auth's scrypt format by default. Existing `PasswordHasher` implementations keep their string and boolean methods; override `verify_native` to consume a replaced Account password field without losing its native value. The [password guide](docs/content/docs/authentication/email-password.mdx) explains native verification and explicit Argon2 migration. Add [HaveIBeenPwnedPlugin](docs/content/docs/plugins/have-i-been-pwned.mdx) to reject compromised passwords before hashing.
+Passwords use Better Auth's scrypt format by default. Password sign-in sends verification mail only when verification is required and the user is unverified. Existing `PasswordHasher` implementations keep their string and boolean methods; override `verify_native` to consume a replaced Account password field without losing its native value. The [password guide](docs/content/docs/authentication/email-password.mdx) explains native verification and explicit Argon2 migration. Add [HaveIBeenPwnedPlugin](docs/content/docs/plugins/have-i-been-pwned.mdx) to reject compromised passwords before hashing.
 
 | Cargo feature | Purpose |
 | --- | --- |

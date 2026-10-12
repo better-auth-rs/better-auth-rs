@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { betterAuth } from "better-auth";
 import { serializeSignedCookie } from "better-call";
 import { admin } from "better-auth/plugins";
+import { assertSecondaryNativeVersions } from "./secondary-native-shared.mjs";
 import { build, cases, email, observe, options, owner, revive, secret, user } from "./user-runtime-contract";
 
 async function outputCase(name: string, replacement: unknown, fail = false, calls = 1) {
@@ -70,6 +71,47 @@ for (const sample of cases.verifiedConsumers) {
     expect(memory.session.length).toBe(sample.status === 200 ? 1 : 0);
     expect(response.headers.get("set-cookie")?.includes("better-auth.session_token=") ?? false).toBe(sample.status === 200);
     expect(memory.user[0].emailVerified).toBe(false);
+  });
+}
+
+for (const required of [false, true]) {
+  test(`Email sign-in sends verification only when required is ${required}`, async () => {
+    assertSecondaryNativeVersions(["better-auth", "@better-auth/core"]);
+    const memory = { user: [user()], session: [], verification: [], account: [{
+      id: "runtime-account", accountId: owner, userId: owner, providerId: "credential", password: "hashed:runtime-password",
+    }] };
+    const before = structuredClone(memory);
+    let deliveries = 0;
+    const auth = betterAuth({
+      ...options(memory),
+      emailAndPassword: { enabled: true, requireEmailVerification: required, password: {
+        hash: async (password: string) => `hashed:${password}`,
+        verify: async ({ hash, password }: { hash: string; password: string }) => hash === `hashed:${password}`,
+      } },
+      emailVerification: { sendOnSignIn: true, async sendVerificationEmail() {
+        deliveries++;
+        throw new Error("Delivery rejected");
+      } },
+    });
+    const response = await auth.handler(new Request("http://localhost:3000/api/auth/sign-in/email", {
+      method: "POST", headers: { "content-type": "application/json", origin: "http://localhost:3000" },
+      body: JSON.stringify({ email, password: "runtime-password" }),
+    }));
+    const body = await response.json();
+    expect(response.status).toBe(required ? 403 : 200);
+    expect(deliveries).toBe(required ? 1 : 0);
+    expect(memory.session.length).toBe(required ? 0 : 1);
+    expect(response.headers.get("set-cookie")?.includes("better-auth.session_token=") ?? false).toBe(!required);
+    expect(memory.user).toStrictEqual(before.user);
+    expect(memory.account).toStrictEqual(before.account);
+    expect(memory.verification).toStrictEqual(before.verification);
+    if (required) expect(body).toStrictEqual({ code: "EMAIL_NOT_VERIFIED", message: "Email not verified" });
+    else {
+      expect(body.redirect).toBe(false);
+      expect(body.user.emailVerified).toBe(false);
+      expect(body.token).toBeTypeOf("string");
+      expect(memory.session).toMatchObject([{ token: body.token, userId: owner }]);
+    }
   });
 }
 

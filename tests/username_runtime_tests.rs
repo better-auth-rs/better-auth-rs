@@ -40,89 +40,118 @@ impl better_auth_core::email::SendVerificationEmail for RejectedDelivery {
 }
 
 #[tokio::test]
-async fn username_login_only_sends_verification_when_required_and_logs_async_delivery_errors() {
+async fn credential_login_only_sends_verification_when_required_and_logs_async_delivery_errors() {
     use better_auth::plugins::{EmailPasswordPlugin, EmailVerificationPlugin};
-    for required in [false, true] {
-        let delivery = Arc::new(RejectedDelivery(AtomicUsize::new(0)));
-        let auth = BetterAuth::stateless(AuthConfig::new(
-            "username-runtime-test-secret-at-least-32-characters",
-        ))
-        .plugin(UsernamePlugin::default())
-        .plugin(
-            EmailPasswordPlugin::new()
-                .password_hasher(Arc::new(FixtureHasher))
-                .require_email_verification(required),
-        )
-        .plugin(
-            EmailVerificationPlugin::new()
-                .send_on_sign_in(true)
-                .custom_send_verification_email(delivery.clone()),
-        )
-        .build()
-        .await
-        .unwrap();
-        let user = auth
-            .store()
-            .create_user(
-                CreateUser::new()
-                    .with_email("unverified@example.com")
-                    .with_username("Unverified"),
+    for (path, body) in [
+        (
+            "/sign-in/email",
+            serde_json::json!({"email":"unverified@example.com","password":"Password123!"}),
+        ),
+        (
+            "/sign-in/username",
+            serde_json::json!({"username":"Unverified","password":"Password123!"}),
+        ),
+    ] {
+        for required in [false, true] {
+            let delivery = Arc::new(RejectedDelivery(AtomicUsize::new(0)));
+            let auth = BetterAuth::stateless(AuthConfig::new(
+                "username-runtime-test-secret-at-least-32-characters",
+            ))
+            .plugin(UsernamePlugin::default())
+            .plugin(
+                EmailPasswordPlugin::new()
+                    .password_hasher(Arc::new(FixtureHasher))
+                    .require_email_verification(required),
             )
+            .plugin(
+                EmailVerificationPlugin::new()
+                    .send_on_sign_in(true)
+                    .custom_send_verification_email(delivery.clone()),
+            )
+            .build()
             .await
             .unwrap();
-        let _ = auth
-            .store()
-            .create_account(better_auth_core::CreateAccount {
-                user_id: (user.id().into_owned()).into(),
-                account_id: (user.id().into_owned()).into(),
-                provider_id: "credential".into(),
-                access_token: Default::default(),
-                refresh_token: Default::default(),
-                id_token: Default::default(),
-                access_token_expires_at: Default::default(),
-                refresh_token_expires_at: Default::default(),
-                scope: Default::default(),
-                password: (Some("fixture:Password123!".into())).into(),
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-        let result = auth
-            .call_endpoint(
-                better_auth_core::HttpMethod::Post,
-                "/sign-in/username",
-                better_auth::server_api::EndpointInput {
-                    body: Some(
-                        serde_json::json!({"username":"Unverified","password":"Password123!"}),
-                    ),
-                    ..Default::default()
-                },
-            )
-            .await;
-        if required {
-            let response = result
-                .unwrap_err()
-                .to_auth_response()
-                .expect("fixture response succeeds")
-                .into_http_response()
+            let user = auth
+                .store()
+                .create_user(
+                    CreateUser::new()
+                        .with_email("unverified@example.com")
+                        .with_username("Unverified"),
+                )
+                .await
                 .unwrap();
-            assert_eq!(response.status, 403);
-            assert_eq!(
-                serde_json::from_slice::<serde_json::Value>(&response.body.bytes().unwrap())
-                    .unwrap(),
-                serde_json::json!({"code":"EMAIL_NOT_VERIFIED","message":"Email not verified"})
-            );
-            assert_eq!(delivery.0.load(Ordering::SeqCst), 1);
-            assert!(
-                auth.store()
+            let _ = auth
+                .store()
+                .create_account(better_auth_core::CreateAccount {
+                    user_id: (user.id().into_owned()).into(),
+                    account_id: (user.id().into_owned()).into(),
+                    provider_id: "credential".into(),
+                    access_token: Default::default(),
+                    refresh_token: Default::default(),
+                    id_token: Default::default(),
+                    access_token_expires_at: Default::default(),
+                    refresh_token_expires_at: Default::default(),
+                    scope: Default::default(),
+                    password: (Some("fixture:Password123!".into())).into(),
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+            let result = auth
+                .call_endpoint(
+                    better_auth_core::HttpMethod::Post,
+                    path,
+                    better_auth::server_api::EndpointInput {
+                        body: Some(body.clone()),
+                        ..Default::default()
+                    },
+                )
+                .await;
+            if required {
+                let response = result
+                    .unwrap_err()
+                    .to_auth_response()
+                    .expect("fixture response succeeds")
+                    .into_http_response()
+                    .unwrap();
+                assert_eq!(response.status, 403);
+                assert_eq!(
+                    serde_json::from_slice::<serde_json::Value>(&response.body.bytes().unwrap())
+                        .unwrap(),
+                    serde_json::json!({"code":"EMAIL_NOT_VERIFIED","message":"Email not verified"})
+                );
+                assert_eq!(delivery.0.load(Ordering::SeqCst), 1);
+                assert!(
+                    auth.store()
+                        .get_user_sessions(user.id().typed().unwrap())
+                        .await
+                        .unwrap()
+                        .is_empty()
+                );
+            } else {
+                let response = result.unwrap();
+                assert_eq!(response.status, 200);
+                let body = response.body.field_value().unwrap();
+                assert_eq!(body.model_property("redirect").unwrap(), false.into());
+                assert_eq!(
+                    body.model_property("user")
+                        .unwrap()
+                        .model_property("emailVerified")
+                        .unwrap(),
+                    false.into()
+                );
+                let sessions = auth
+                    .store()
                     .get_user_sessions(user.id().typed().unwrap())
                     .await
-                    .unwrap()
-                    .is_empty()
-            );
-        } else {
-            assert_eq!(result.unwrap().status, 200);
-            assert_eq!(delivery.0.load(Ordering::SeqCst), 0);
+                    .unwrap();
+                assert_eq!(sessions.len(), 1);
+                assert_eq!(
+                    sessions.first().unwrap().token.field_value(),
+                    body.model_property("token").unwrap()
+                );
+                assert_eq!(delivery.0.load(Ordering::SeqCst), 0);
+            }
         }
     }
 }

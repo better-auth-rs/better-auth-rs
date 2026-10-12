@@ -30,7 +30,7 @@ const MESSAGE_EMAIL_NOT_VERIFIED: &str = "Email not verified";
 pub struct EmailPasswordPlugin {
     config: EmailPasswordConfig,
     /// Optional reference to the email-verification plugin so that
-    /// `send_on_sign_in` can be triggered during the sign-in flow.
+    /// `send_on_sign_in` can run when verification blocks credential sign-in.
     email_verification: Option<Arc<EmailVerificationPlugin>>,
 }
 
@@ -184,8 +184,8 @@ impl EmailPasswordPlugin {
         }
     }
 
-    /// Attach an [`EmailVerificationPlugin`] so that `send_on_sign_in` is
-    /// automatically called when a user signs in with an unverified email.
+    /// Attach an [`EmailVerificationPlugin`] to send verification links when
+    /// required verification blocks sign-in for an unverified user.
     pub fn with_email_verification(mut self, plugin: Arc<EmailVerificationPlugin>) -> Self {
         self.email_verification = Some(plugin);
         self
@@ -332,8 +332,8 @@ async fn verify_user_password(
     .await
 }
 
-enum CredentialSignIn<'a> {
-    Email(Option<&'a EmailVerificationPlugin>),
+enum CredentialSignIn {
+    Email,
     Username,
 }
 
@@ -342,23 +342,11 @@ async fn finalize_sign_in_with_user_core(
     req: &AuthRequest,
     user: impl AuthUser,
     remember_me: Option<bool>,
-    method: CredentialSignIn<'_>,
+    method: CredentialSignIn,
     callback_url: Option<&str>,
     meta: &RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SignInCoreResult<UserView>> {
-    // Send verification email on sign-in if configured
-    if let CredentialSignIn::Email(Some(ev)) = &method
-        && let Err(e) = ev
-            .send_verification_on_sign_in_with_request(&user, callback_url, Some(req), ctx)
-            .await
-    {
-        better_auth_core::observability::logger::current().warn(
-            "Failed to send verification email on sign-in",
-            &[better_auth_core::observability::LogArgument::Error(&e)],
-        )?;
-    }
-
     let expires_in = if remember_me == Some(false) {
         chrono::Duration::days(1)
     } else {
@@ -375,10 +363,10 @@ async fn finalize_sign_in_with_user_core(
     .map_err(SessionIssueError::into_auth_error)?;
     let Some(issued) = issued else {
         let session_failure_status = match method {
-            CredentialSignIn::Email(_) => "UNAUTHORIZED",
+            CredentialSignIn::Email => "UNAUTHORIZED",
             CredentialSignIn::Username => "INTERNAL_SERVER_ERROR",
         };
-        if matches!(method, CredentialSignIn::Email(_)) {
+        if matches!(method, CredentialSignIn::Email) {
             better_auth_core::observability::logger::current()
                 .error("Failed to create session", &[])?;
         }
@@ -458,7 +446,7 @@ pub(crate) async fn sign_in_core(
         req,
         user,
         body.remember_me,
-        CredentialSignIn::Email(email_verification),
+        CredentialSignIn::Email,
         body.callback_url.as_deref(),
         meta,
         ctx,
