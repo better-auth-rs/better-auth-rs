@@ -52,6 +52,7 @@ pub(crate) mod test_helpers {
     #[path = "../../../../../tests/support/secondary_native_observation.rs"]
     pub(crate) mod native_observation;
     use native_observation as native_test_observation;
+    pub(crate) mod native_email_consumers;
     pub(crate) mod native_session;
     #[path = "../../../../../tests/support/native_sort_contract.rs"]
     pub(crate) mod native_sort_contract;

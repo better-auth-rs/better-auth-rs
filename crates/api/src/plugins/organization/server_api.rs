@@ -147,7 +147,7 @@ impl OrganizationPlugin {
                 "User not found",
             ))?;
         if let Some(existing) = store
-            .get_user_by_email(&crate::plugins::helpers::user_email(&user)?)
+            .get_user_by_email_value(&user.email().field_value())
             .await?
             && store
                 .get_member_value(&org_value, &existing.id().field_value())

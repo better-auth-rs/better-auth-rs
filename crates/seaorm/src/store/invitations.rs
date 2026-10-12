@@ -278,6 +278,12 @@ where
         &self,
         email: &str,
     ) -> AuthResult<Vec<better_auth_core::store::InvitationOrganization>> {
+        self.list_user_invitations_value(&email.into()).await
+    }
+    async fn list_user_invitations_value(
+        &self,
+        email: &better_auth_core::FieldValue,
+    ) -> AuthResult<Vec<better_auth_core::store::InvitationOrganization>> {
         self.list_invitation_organizations(email).await
     }
 }

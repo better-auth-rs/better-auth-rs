@@ -20,10 +20,24 @@ impl<'a, 'b, S: AuthSchema> MemberAdapter<'a, 'b, S> {
             None => self.0.auth.database.get_user_by_id_value(id).await,
         }
     }
-    pub(super) async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<UserView>> {
+    pub(super) async fn get_user_by_email_value(
+        &self,
+        email: &FieldValue,
+    ) -> AuthResult<Option<UserView>> {
+        let selector = email.lowercase_method("data.email")?;
         match self.0.transaction {
-            Some(transaction) => transaction.get_user_by_email(email).await,
-            None => self.0.auth.database.get_user_by_email(email).await,
+            Some(transaction) => {
+                transaction
+                    .get_user_by_field_value("email", &selector)
+                    .await
+            }
+            None => {
+                self.0
+                    .auth
+                    .database
+                    .get_user_by_field_value("email", &selector)
+                    .await
+            }
         }
     }
     pub(super) async fn get_member_value(

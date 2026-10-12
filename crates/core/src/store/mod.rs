@@ -1770,6 +1770,16 @@ pub trait InvitationStore: Send + Sync {
     }
     /// Read the email's adapter-limited page and projected relationships before status filtering.
     async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<InvitationOrganization>>;
+    /// Invoke the native email method and retain its selector through field binding and relationship projection.
+    async fn list_user_invitations_value(
+        &self,
+        email: &crate::FieldValue,
+    ) -> AuthResult<Vec<InvitationOrganization>> {
+        let email = email.as_str().ok_or_else(|| {
+            AuthError::config("The store must support native invitation email queries")
+        })?;
+        self.list_user_invitations(email).await
+    }
 }
 
 #[async_trait]

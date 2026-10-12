@@ -545,3 +545,134 @@ async fn real_many_user_relationships_reach_change_and_delete_consumers() -> Aut
     }
     Ok(())
 }
+
+#[tokio::test]
+async fn change_email_token_branches_consume_native_methods_before_delivery() -> AuthResult<()> {
+    for branch in ["verification", "confirmation", "existing"] {
+        for fail in [false, true] {
+            let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let called = calls.clone();
+            let original = FieldValue::from(FieldMap::from([("failure".into(), branch.into())]));
+            let thrown = original.clone();
+            let email = FieldValue::from(FieldMap::from([
+                ("marker".into(), "selected-email".into()),
+                (
+                    "toLowerCase".into(),
+                    better_auth_core::FieldFunction::contextual(move |receiver, arguments| {
+                        assert!(arguments.is_empty());
+                        assert_eq!(receiver.model_property("marker")?, "selected-email".into());
+                        called.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        if fail {
+                            Err(better_auth_core::AuthError::from_thrown(thrown.clone()))
+                        } else {
+                            Ok("SELECTED@NATIVE-USER.TEST".into())
+                        }
+                    })
+                    .into(),
+                ),
+            ]));
+            let messages = Arc::new(Mutex::new(Vec::new()));
+            let delivered = messages.clone();
+            let verification =
+                EmailVerificationPlugin::new().callbacks(EmailVerificationCallbacks::<
+                    StatelessSchema,
+                >::send(
+                    move |message, _| {
+                        delivered
+                            .lock()
+                            .unwrap()
+                            .push((message.user.clone(), message.token.clone()));
+                        Ok(None)
+                    },
+                ));
+            let mut callbacks = UserManagementCallbacks::<StatelessSchema>::new();
+            if branch == "confirmation" {
+                let delivered = messages.clone();
+                callbacks = callbacks.change_email_confirmation(move |message, _| {
+                    delivered
+                        .lock()
+                        .unwrap()
+                        .push((message.user.clone(), message.token.clone()));
+                    Ok(None)
+                });
+            }
+            let management = UserManagementPlugin::new()
+                .change_email_enabled(true)
+                .callbacks(callbacks);
+            let fixture = Fixture::new(&[&verification, &management], false).await?;
+            if branch == "existing" {
+                let _ = fixture
+                    .ctx
+                    .database
+                    .create_user(CreateUser::new().with_email("new@native-user.test"))
+                    .await?;
+            }
+            let mut fields = FieldMap::from(fixture.user.clone());
+            let _ = fields.insert("email".into(), email.clone());
+            let _ = fields.insert("emailVerified".into(), true.into());
+            let user = FieldValue::from(fields);
+            let request = fixture.request(
+                user.clone(),
+                HttpMethod::Post,
+                "/change-email",
+                json!({"newEmail":"NEW@native-user.test"}),
+            )?;
+            let result = dispatch_plugin(&request, &fixture.ctx, &management).await;
+            assert_eq!(
+                calls.load(std::sync::atomic::Ordering::SeqCst),
+                1,
+                "{branch}"
+            );
+            assert!(request.new_session()?.is_none());
+            assert_eq!(
+                fixture
+                    .ctx
+                    .database
+                    .get_user_by_id_value(&fixture.user.id.field_value())
+                    .await?,
+                Some(fixture.user.clone())
+            );
+            let messages = messages.lock().unwrap();
+            if fail {
+                assert!(
+                    result
+                        .unwrap_err()
+                        .raw_value()
+                        .unwrap()
+                        .strict_equals(&original)
+                );
+                assert!(messages.is_empty());
+                continue;
+            }
+            let response = result?.unwrap();
+            assert_eq!(response.status, 200);
+            assert_eq!(response.body.json()?, Some(json!({"status":true})));
+            if branch == "existing" {
+                assert!(messages.is_empty());
+                continue;
+            }
+            assert_eq!(messages.len(), 1);
+            let (recipient, token) = &messages[0];
+            let claims =
+                crate::plugins::email_verification::token::decode_email_verification_token(
+                    fixture.ctx.config.signing_secret(),
+                    token,
+                )?;
+            assert_eq!(claims.email, "SELECTED@NATIVE-USER.TEST");
+            assert_eq!(claims.update_to, Some("new@native-user.test".into()));
+            assert_eq!(
+                claims.request_type,
+                Some(format!("change-email-{branch}").into())
+            );
+            if branch == "confirmation" {
+                assert!(recipient.strict_equals(&user));
+                assert!(recipient.model_property("email")?.strict_equals(&email));
+            } else {
+                let mut expected = user.enumerable_fields()?;
+                let _ = expected.insert("email".into(), "new@native-user.test".into());
+                assert_eq!(recipient, &FieldValue::from(expected));
+            }
+        }
+    }
+    Ok(())
+}

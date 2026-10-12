@@ -638,7 +638,7 @@ async fn invitation_read_case(teams_enabled: bool) {
         .unwrap();
     assert!(matches!(
         list_user_invitations_core(Some(&data), None, &ctx).await,
-        Err(AuthError::TypeError(message)) if message == "user.email.toLowerCase is not a function"
+        Err(AuthError::TypeError(message)) if message == "email.toLowerCase is not a function. (In 'email.toLowerCase()', 'email.toLowerCase' is undefined)"
     ));
     let mut request = test_helpers::create_auth_request_no_query(
         HttpMethod::Get,

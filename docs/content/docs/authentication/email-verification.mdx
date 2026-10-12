@@ -21,7 +21,8 @@ struct VerificationEmail;
 #[async_trait::async_trait]
 impl SendVerificationEmail for VerificationEmail {
     async fn send(&self, user: &FieldValue, url: &str, _token: &str) -> AuthResult<()> {
-        let email = user.as_object().and_then(|fields| fields.get("email")).and_then(FieldValue::as_str)
+        let email = user.model_property("email")?;
+        let email = email.as_str()
             .ok_or_else(|| AuthError::bad_request("Email is required"))?;
         ConsoleEmailProvider
             .send(email, "Verify your email", "", url)
@@ -52,7 +53,7 @@ Fractional durations retain fractional JWT `exp` values. Verification compares `
 | `verification_token_expiry` | `Option<chrono::Duration>` | `None` (one hour) | How long verification tokens stay valid |
 | `send_email_notifications` | `bool` | `true` | Use the default email provider for sign-in notifications; custom callbacks are independent |
 | `require_verification_for_signin` | `bool` | `false` | Require verification for username sign-in when attached with `with_email_verification` |
-| `send_on_sign_in` | `bool` | `false` | Send to unverified users when attached with `EmailPasswordPlugin::with_email_verification` |
+| `send_on_sign_in` | `bool` | `false` | Send when required verification blocks an unverified user's password sign-in |
 | `send_on_sign_up` | `Option<bool>` | `None` | Send for new unverified OAuth users; `None` follows the provider's `require_email_verification` |
 | `auto_sign_in_after_verification` | `bool` | `false` | Create a session after verification |
 
@@ -104,6 +105,8 @@ GET /verify-email?token=<verification_token>
 Verification failures use `TOKEN_EXPIRED`, `INVALID_TOKEN`, `USER_NOT_FOUND`, or `INVALID_USER`. A nonempty trusted `callbackURL` receives a redirect with the same uppercase code in its `error` parameter; the existing query and fragment are preserved.
 
 Verification hooks and `SendVerificationEmail::send` receive `&FieldValue`. `VerificationEmail.user` also retains the complete native value. Use `VerificationEmail::user_view()` when an application requires an object with ordinary Rust field access. Before hooks receive the selected internal User, including hidden fields. After hooks receive the updated internal User or `FieldValue::Null` when the update is cancelled or no row matches. Public output applies visibility only at the response boundary.
+
+The send endpoint invokes the selected email's native `toLowerCase` method. Session email comparison and token creation read the email separately, preserving getters and method results. Token creation retains native values until JOSE's structured-clone and JSON boundaries. An enumerable function in the claims fails during cloning; an application's `toJSON` callback does not bypass that boundary. Registration, password sign-in, OAuth verification, and email changes share the same native token path. Anonymous delivery waits at least 500 ms, then rethrows only a truthy caught value, matching the upstream catch condition. Session-backed delivery propagates every rejection. Ordinary string inputs keep the existing typed API.
 
 Use `EmailVerificationCallbacks::<AppAuthSchema>::default().before(callback).after(callback)` when lifecycle callbacks need `EndpointContext`. These builders also compose with `EmailVerificationCallbacks::send(callback)`. Each lifecycle callback receives the native User and endpoint. Return `Ok(None)` for synchronous completion or `Ok(Some(BackgroundFuture))` for asynchronous work. Lifecycle futures are always awaited, and errors propagate before the next lifecycle step. A typed callback takes precedence over the legacy callback for the same stage. Hook-only registration does not enable email delivery. Email OTP verification uses the same lifecycle dispatcher.
 

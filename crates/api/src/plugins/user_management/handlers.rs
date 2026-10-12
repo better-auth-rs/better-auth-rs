@@ -9,7 +9,7 @@ use better_auth_core::{
 use super::UserManagementConfig;
 use super::types::{ChangeEmailRequest, DeleteUserRequest};
 use crate::plugins::email_verification::{
-    EmailVerificationConfig, token::create_email_verification_token,
+    EmailVerificationConfig, token::create_native_token_with_clock,
 };
 use better_auth_core::SuccessMessageResponse;
 
@@ -68,12 +68,13 @@ pub(crate) async fn change_email_core<S: better_auth_core::AuthSchema>(
         |options| options.verification_token_expiry(),
     );
     if ctx.database.get_user_by_email(&new_email).await?.is_some() {
-        let _ = create_email_verification_token(
+        let _ = create_native_token_with_clock(
             ctx.config.signing_secret(),
-            &crate::plugins::helpers::user_email_field(&data.user_property("email")?)?,
-            Some(&new_email),
+            &data.user_property("email")?,
+            Some(&new_email.as_str().into()),
             expires_in,
             None,
+            || ctx.now(),
         )?;
         return Ok(StatusResponse { status: true });
     }
@@ -99,26 +100,31 @@ pub(crate) async fn change_email_core<S: better_auth_core::AuthSchema>(
         }
     }
     let (email, update_to, request_type) = if update_now {
-        (new_email.clone(), None, None)
+        (
+            better_auth_core::FieldValue::from(new_email.as_str()),
+            None,
+            None,
+        )
     } else if confirmation {
         (
-            crate::plugins::helpers::user_email_field(&data.user_property("email")?)?,
-            Some(new_email.as_str()),
+            data.user_property("email")?,
+            Some(better_auth_core::FieldValue::from(new_email.as_str())),
             Some("change-email-confirmation"),
         )
     } else {
         (
-            crate::plugins::helpers::user_email_field(&data.user_property("email")?)?,
-            Some(new_email.as_str()),
+            data.user_property("email")?,
+            Some(better_auth_core::FieldValue::from(new_email.as_str())),
             Some("change-email-verification"),
         )
     };
-    let token = create_email_verification_token(
+    let token = create_native_token_with_clock(
         ctx.config.signing_secret(),
         &email,
-        update_to,
+        update_to.as_ref(),
         expires_in,
         request_type,
+        || ctx.now(),
     )?;
     let callback = body
         .callback_url

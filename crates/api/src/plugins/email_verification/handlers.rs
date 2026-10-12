@@ -7,10 +7,7 @@ use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResult, FieldMap, FieldValue, UpdateUser,
 };
 
-use super::token::{
-    create_email_verification_token, create_native_email_verification_token,
-    decode_email_verification_token,
-};
+use super::token::{create_native_token_with_clock, decode_email_verification_token};
 use super::types::*;
 use super::{EmailVerificationConfig, StatusResponse, VerificationEmail};
 
@@ -24,18 +21,18 @@ fn verification_url(base_url: &str, token: &str, callback_url: Option<&str>) -> 
 
 async fn send_for_user<S: better_auth_core::AuthSchema>(
     user: FieldValue,
-    email: &FieldValue,
     body: &SendVerificationEmailRequest,
     config: &EmailVerificationConfig,
     endpoint: &EndpointContext<'_, S>,
 ) -> AuthResult<()> {
     let ctx = endpoint.auth;
-    let token = create_email_verification_token(
+    let token = create_native_token_with_clock(
         ctx.config.signing_secret(),
-        &crate::plugins::helpers::user_email_field(email)?,
+        &user.model_property("email")?,
         None,
         config.verification_token_expiry(),
         None,
+        || ctx.now(),
     )?;
     let url = verification_url(&ctx.base_url(), &token, body.callback_url.as_deref());
     if let Some(task) = super::delivery::delivery(
@@ -69,8 +66,9 @@ pub(super) async fn send_verification_email_core(
     endpoint.session = ctx.native_session(req, SessionRead::Cached).await?;
     if let Some(data) = &endpoint.session {
         let email = data.user_property("email")?;
-        if crate::plugins::helpers::user_email_field(&email)?.to_lowercase()
-            != body.email.to_lowercase()
+        if !email
+            .lowercase_method("session?.user.email")?
+            .strict_equals(&FieldValue::from(body.email.as_str()).lowercase_method("email")?)
         {
             return Err(AuthError::from_code(
                 "BAD_REQUEST",
@@ -85,22 +83,20 @@ pub(super) async fn send_verification_email_core(
                 "Email is already verified",
             ));
         }
-        send_for_user(data.user_value()?, &email, body, config, &endpoint).await?;
+        send_for_user(data.user_value()?, body, config, &endpoint).await?;
     } else {
         let start = std::time::Instant::now();
         let user = ctx.database.get_user_by_email(&body.email).await?;
         let result = match user.filter(|user| !user.email_verified.field_value().is_truthy()) {
-            Some(user) => {
-                let email = user.email.field_value();
-                send_for_user(FieldMap::from(user).into(), &email, body, config, &endpoint).await
-            }
+            Some(user) => send_for_user(FieldMap::from(user).into(), body, config, &endpoint).await,
             None => {
-                let _ = create_email_verification_token(
+                let _ = create_native_token_with_clock(
                     ctx.config.signing_secret(),
-                    &body.email,
+                    &body.email.as_str().into(),
                     None,
                     config.verification_token_expiry(),
                     None,
+                    || ctx.now(),
                 )?;
                 Ok(())
             }
@@ -110,7 +106,12 @@ pub(super) async fn send_verification_email_core(
         {
             tokio::time::sleep(remaining).await;
         }
-        result?;
+        // Upstream only rethrows a truthy captured rejection after the timing floor.
+        if let Err(error) = result
+            && error.raw_value().is_none_or(FieldValue::is_truthy)
+        {
+            return Err(error);
+        }
     }
     Ok(StatusResponse { status: true })
 }
@@ -206,12 +207,13 @@ pub(super) async fn verify_email_core(
         }
         let request_type = claims.request_type.as_ref().and_then(FieldValue::as_str);
         if request_type == Some("change-email-confirmation") {
-            let token = create_native_email_verification_token(
+            let token = create_native_token_with_clock(
                 ctx.config.signing_secret(),
                 &claims.email.as_str().into(),
-                Some(&update_to.display_utf16()?),
+                Some(update_to),
                 config.verification_token_expiry(),
                 Some("change-email-verification"),
+                || ctx.now(),
             )?;
             let url = verification_url(&ctx.base_url(), &token, query.callback_url.as_deref());
             if super::delivery::available(Some(config), ctx) {
@@ -258,12 +260,13 @@ pub(super) async fn verify_email_core(
         if verified {
             super::delivery::after(&updated_value, Some(config), &endpoint).await?;
         } else {
-            let token = create_native_email_verification_token(
+            let token = create_native_token_with_clock(
                 ctx.config.signing_secret(),
-                &update_to.display_utf16()?,
+                update_to,
                 None,
                 chrono::Duration::hours(1),
                 None,
+                || ctx.now(),
             )?;
             let url = verification_url(&ctx.base_url(), &token, query.callback_url.as_deref());
             if super::delivery::available(Some(config), ctx) {

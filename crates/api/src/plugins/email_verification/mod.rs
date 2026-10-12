@@ -17,6 +17,12 @@ pub(crate) mod delivery;
 pub use callbacks::{EmailVerificationCallbacks, VerificationEmail};
 
 #[cfg(test)]
+mod anonymous_failure_tests;
+#[cfg(test)]
+mod caller_tests;
+#[cfg(test)]
+mod native_consumer_contract;
+#[cfg(test)]
 mod native_tests;
 #[cfg(test)]
 mod tests;
@@ -235,13 +241,14 @@ impl EmailVerificationPlugin {
         endpoint: &crate::plugins::endpoint_context::EndpointContext<'_, S>,
     ) -> AuthResult<()> {
         let ctx = endpoint.auth;
-        let email = crate::plugins::helpers::user_email(user)?;
-        let verification_token = token::create_email_verification_token(
+        let email = user.email().field_value();
+        let verification_token = token::create_native_token_with_clock(
             ctx.config.signing_secret(),
             &email,
             None,
             self.config.verification_token_expiry(),
             None,
+            || ctx.now(),
         )?;
         let callback_url = callback_url.unwrap_or("/");
         let verification_url = format!(
@@ -259,7 +266,7 @@ impl EmailVerificationPlugin {
             && crate::plugins::email_otp::callbacks::overrides_verification(ctx)
         {
             let retained = endpoint.to_owned();
-            let email = email.to_owned();
+            let email = crate::plugins::helpers::user_email_field(&email)?;
             better_auth_core::background::run_or_await(
                 Some(better_auth_core::background::BackgroundFuture::new(
                     async move {

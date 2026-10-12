@@ -2,7 +2,7 @@ use chrono::{DateTime, Duration, Utc};
 use jsonwebtoken::{EncodingKey, Header, encode, errors::ErrorKind};
 use serde::{Deserialize, Serialize, de::Error as _};
 
-use better_auth_core::{AuthResult, FieldMap, FieldValue, Utf16String};
+use better_auth_core::{AuthResult, FieldMap, FieldValue};
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct EmailVerificationClaims {
@@ -48,6 +48,7 @@ impl VerificationPayload {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn create_email_verification_token(
     secret: &str,
     email: &str,
@@ -55,16 +56,17 @@ pub(crate) fn create_email_verification_token(
     expires_in: Duration,
     request_type: Option<&str>,
 ) -> AuthResult<String> {
-    create_email_verification_token_at(
+    create_native_token_with_clock(
         secret,
-        email,
-        update_to,
+        &email.into(),
+        update_to.map(FieldValue::from).as_ref(),
         expires_in,
         request_type,
-        Utc::now(),
+        Utc::now,
     )
 }
 
+#[cfg(test)]
 fn create_email_verification_token_at(
     secret: &str,
     email: &str,
@@ -73,63 +75,47 @@ fn create_email_verification_token_at(
     request_type: Option<&str>,
     now: DateTime<Utc>,
 ) -> AuthResult<String> {
-    create_native_token_at(
+    create_native_token_with_clock(
         secret,
         &email.into(),
-        update_to.map(Utf16String::from).as_ref(),
+        update_to.map(FieldValue::from).as_ref(),
         expires_in,
         request_type,
-        now,
+        || now,
     )
 }
 
-pub(super) fn create_native_email_verification_token(
+pub(crate) fn create_native_token_with_clock(
     secret: &str,
-    email: &Utf16String,
-    update_to: Option<&Utf16String>,
+    email: &FieldValue,
+    update_to: Option<&FieldValue>,
     expires_in: Duration,
     request_type: Option<&str>,
+    mut clock: impl FnMut() -> DateTime<Utc>,
 ) -> AuthResult<String> {
-    create_native_token_at(
-        secret,
-        email,
-        update_to,
-        expires_in,
-        request_type,
-        Utc::now(),
-    )
-}
-
-fn create_native_token_at(
-    secret: &str,
-    email: &Utf16String,
-    update_to: Option<&Utf16String>,
-    expires_in: Duration,
-    request_type: Option<&str>,
-    now: DateTime<Utc>,
-) -> AuthResult<String> {
-    #[derive(Serialize)]
-    #[serde(transparent)]
-    struct Claims(#[serde(with = "better_auth_core::field_value::serde::map")] FieldMap);
-
-    let mut claims = FieldMap::from([("email".into(), email.to_lowercase().into())]);
-    if let Some(update_to) = update_to {
-        let _ = claims.insert("updateTo".into(), update_to.to_lowercase().into());
+    let mut claims = FieldMap::from([("email".into(), email.lowercase_method("email")?)]);
+    if let Some(update_to) = update_to.filter(|value| !value.is_null() && !value.is_undefined()) {
+        let _ = claims.insert("updateTo".into(), update_to.lowercase_method("updateTo")?);
     }
     if let Some(request_type) = request_type {
         let _ = claims.insert("requestType".into(), request_type.into());
     }
-    let _ = claims.insert("iat".into(), (now.timestamp() as f64).into());
+    let mut claims = better_auth_core::StructuredCloneContext::new().clone_map(&claims)?;
+    let _ = claims.insert("iat".into(), (clock().timestamp() as f64).into());
     let _ = claims.insert(
         "exp".into(),
-        (now.timestamp() as f64 + expires_in.as_seconds_f64()).into(),
+        (clock().timestamp() as f64 + expires_in.as_seconds_f64()).into(),
     );
+    // Serialize the cloned native graph before Serde can replace native errors with text.
+    let claims = serde_json::value::RawValue::from_string(
+        better_auth_core::utils::jwt::serialize_claims(claims)?,
+    )?;
     Ok(encode(
         &Header {
             typ: None,
             ..Default::default()
         },
-        &Claims(claims),
+        &claims,
         &EncodingKey::from_secret(secret.as_bytes()),
     )?)
 }

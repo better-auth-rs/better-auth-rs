@@ -412,6 +412,12 @@ impl<S: AuthSchema> InvitationStore for SecondaryStore<S> {
     ) -> AuthResult<Vec<super::super::InvitationOrganization>> {
         self.inner.list_user_invitations(email).await
     }
+    async fn list_user_invitations_value(
+        &self,
+        email: &crate::FieldValue,
+    ) -> AuthResult<Vec<super::super::InvitationOrganization>> {
+        self.inner.list_user_invitations_value(email).await
+    }
 }
 
 #[async_trait]

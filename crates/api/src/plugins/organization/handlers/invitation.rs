@@ -415,11 +415,14 @@ pub(crate) async fn get_invitation_core(
         return Ok(None);
     }
 
-    let recipient = invitation.email().typed()?;
-    if recipient.to_lowercase()
-        != crate::plugins::helpers::user_email_field(&session.user_property("email")?)?
-            .to_lowercase()
-    {
+    let recipient = invitation
+        .email()
+        .field_value()
+        .lowercase_method("invitation.email")?;
+    let user_email = session
+        .user_property("email")?
+        .lowercase_method("session.user.email")?;
+    if !recipient.strict_equals(&user_email) {
         return Err(AuthError::from_code(
             "FORBIDDEN",
             "YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION",
@@ -550,9 +553,7 @@ pub(crate) async fn list_user_invitations_core(
             .into(),
         ));
     }
-    let user_email = crate::plugins::helpers::user_email_field(&email)?;
-
-    let all_invitations = ctx.database.list_user_invitations(&user_email).await?;
+    let all_invitations = ctx.database.list_user_invitations_value(&email).await?;
     let pending = all_invitations
         .into_iter()
         .filter(|row| row.invitation.status == InvitationStatus::Pending)
@@ -598,10 +599,15 @@ pub(crate) async fn accept_invitation_core(
         ));
     }
 
-    let recipient = crate::plugins::helpers::user_email_field(&invitation.email().field_value())?;
-    let user_email = crate::plugins::helpers::user_email_field(&session.user_property("email")?)?;
+    let recipient = invitation
+        .email()
+        .field_value()
+        .lowercase_method("invitation.email")?;
+    let user_email = session
+        .user_property("email")?
+        .lowercase_method("session.user.email")?;
 
-    if recipient.to_lowercase() != user_email.to_lowercase() {
+    if !recipient.strict_equals(&user_email) {
         return Err(AuthError::from_code(
             "FORBIDDEN",
             "YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION",
@@ -721,10 +727,15 @@ pub(crate) async fn reject_invitation_core(
             )
         })?;
 
-    let recipient = crate::plugins::helpers::user_email_field(&invitation.email().field_value())?;
-    let user_email = crate::plugins::helpers::user_email_field(&session.user_property("email")?)?;
+    let recipient = invitation
+        .email()
+        .field_value()
+        .lowercase_method("invitation.email")?;
+    let user_email = session
+        .user_property("email")?
+        .lowercase_method("session.user.email")?;
 
-    if recipient.to_lowercase() != user_email.to_lowercase() {
+    if !recipient.strict_equals(&user_email) {
         return Err(AuthError::from_code(
             "FORBIDDEN",
             "YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION",

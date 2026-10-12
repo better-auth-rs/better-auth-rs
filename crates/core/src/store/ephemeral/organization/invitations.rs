@@ -178,6 +178,12 @@ impl InvitationStore for EphemeralStore {
         &self,
         email: &str,
     ) -> AuthResult<Vec<crate::store::InvitationOrganization>> {
+        self.list_user_invitations_value(&email.into()).await
+    }
+    async fn list_user_invitations_value(
+        &self,
+        email: &Value,
+    ) -> AuthResult<Vec<crate::store::InvitationOrganization>> {
         self.joined_user_invitations(email).await
     }
 }

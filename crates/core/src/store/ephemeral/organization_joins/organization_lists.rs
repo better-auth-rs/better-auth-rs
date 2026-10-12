@@ -29,14 +29,14 @@ impl EphemeralStore {
 
     pub(in crate::store::ephemeral) async fn joined_user_invitations(
         &self,
-        email: &str,
+        email: &Value,
     ) -> AuthResult<Vec<InvitationOrganization>> {
         self.organization_relations(
             ParentModel {
                 role: EntityRole::Invitation,
                 name: "invitation",
             },
-            ("email", email.to_lowercase().into()),
+            ("email", email.lowercase_method("email")?),
         )
         .await?
         .into_iter()

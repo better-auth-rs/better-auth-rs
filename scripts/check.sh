@@ -1079,15 +1079,27 @@ PY_CHECK
       ;;
     email-verification)
       cargo fmt --all -- --check
-      cargo clippy --locked -p better-auth-api --lib -- -D warnings
-      cargo clippy --locked --features seaorm2 \
-        --test email_verification_duration_tests --test email_verification_payload_tests -- -D warnings
-      cargo test --locked -p better-auth-api --lib -- plugins::email_verification plugins::user_management::tests::test_change_email
-      cargo test --locked --features seaorm2 \
+      local email_status=0
+      local email_tests=(
         --test email_verification_duration_tests --test email_verification_payload_tests
+        --test email_verification_claims_tests --test plugin_display_json_tests
+        --test session_field_queries_tests --test account_user_auth_boundary_reference_tests
+        --test username_runtime_tests
+      )
+      cargo clippy --locked --keep-going -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib --tests -- -D warnings || email_status=1
+      cargo clippy --locked --keep-going --features axum,seaorm2,redis-cache "${email_tests[@]}" -- -D warnings || email_status=1
+      cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache "${email_tests[@]}" || email_status=1
+      cargo test --locked -p better-auth-core --lib query::radix_tests:: || email_status=1
+      cargo test --locked -p better-auth-api --lib -- \
+        plugins::email_verification plugins::user_management \
+        plugins::organization::handlers::native_tests::native_invitation_reads_preserve_email_fallback_and_verification_order \
+        plugins::one_time_token::callback_tests::generation_error_keeps_callback_effects_without_hashing_persisting_or_final_headers || email_status=1
       bun --no-install test \
         ./compat-tests/reference-server/contracts/email-verification-duration.test.ts \
-        ./compat-tests/reference-server/contracts/email-verification-payload.test.ts
+        ./compat-tests/reference-server/contracts/email-verification-payload.test.ts \
+        ./compat-tests/reference-server/contracts/native-email-consumers-capture.test.ts \
+        ./compat-tests/reference-server/contracts/native-radix-parsing-capture.test.ts || email_status=1
+      return "$email_status"
       ;;
     telemetry)
       cargo fmt --all -- --check

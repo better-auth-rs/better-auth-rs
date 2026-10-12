@@ -39,13 +39,13 @@ where
 
     pub(super) async fn list_invitation_organizations(
         &self,
-        email: &str,
+        email: &FieldValue,
     ) -> AuthResult<Vec<InvitationOrganization>> {
         let query = super::plugin_rows::select_all::<Entity<O::Invitation>>().filter(
             self.organization_field_equals::<O::Invitation>(
                 EntityRole::Invitation,
                 "email",
-                &email.to_lowercase().into(),
+                &email.lowercase_method("email")?,
             )?,
         );
         self.read_parent_organizations::<O::Invitation>(query, EntityRole::Invitation, "invitation")

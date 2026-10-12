@@ -302,22 +302,19 @@ fn native_follow_up_tokens_match_captured_bytes_and_keep_expiration_before_busin
         };
         let now = DateTime::from_timestamp_millis(case.issued_at).expect("Captured clock");
         let input = decode_email_verification_token_at(SECRET, &case.jwt.token, now)?;
-        let update_to = input
-            .update_to
-            .expect("Captured native updateTo")
-            .display_utf16()?;
+        let update_to = input.update_to.expect("Captured native updateTo");
         let email = if confirmation {
             input.email.into()
         } else {
             update_to.clone()
         };
-        let token = create_native_token_at(
+        let token = create_native_token_with_clock(
             SECRET,
             &email,
             confirmation.then_some(&update_to),
             Duration::hours(1),
             confirmation.then_some("change-email-verification"),
-            now,
+            || now,
         )?;
         assert_eq!(token, jwt.token, "{} {}", case.backend, case.scenario);
         verify_capture(jwt)?;
