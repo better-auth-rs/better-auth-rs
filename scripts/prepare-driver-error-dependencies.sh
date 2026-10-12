@@ -35,11 +35,18 @@ import tomllib
 from pathlib import Path
 
 root = Path.cwd().resolve()
-vendor = root / "vendor/sqlx-postgres"
-package = tomllib.loads((vendor / "Cargo.toml").read_text())["package"]
-assert (package["name"], package["version"]) == ("sqlx-postgres", "0.8.6")
-assert (vendor / "LICENSE-MIT").is_file()
-assert (vendor / "LICENSE-APACHE").is_file()
+vendor_packages = {
+    "sqlx-postgres": "0.8.6",
+    "sea-query": "1.0.0-rc.31",
+    "sea-query-sqlx": "0.8.0-rc.14",
+    "sea-orm": "2.0.0-rc.37",
+}
+for name, version in vendor_packages.items():
+    vendor = root / "vendor" / name
+    package = tomllib.loads((vendor / "Cargo.toml").read_text())["package"]
+    assert (package["name"], package["version"]) == (name, version), package
+    assert (vendor / "LICENSE-MIT").is_file(), name
+    assert (vendor / "LICENSE-APACHE").is_file(), name
 before = json.loads(Path(sys.argv[1]).read_text())
 dependencies = tomllib.loads(Path("crates/seaorm/Cargo.toml").read_text())["dependencies"]
 for name, original in before.items():
@@ -52,8 +59,9 @@ root_manifest = Path("Cargo.toml")
 text = root_manifest.read_text()
 workspace = tomllib.loads(text)["workspace"]
 excluded = workspace.get("exclude", [])
-if "vendor/sqlx-postgres" not in excluded:
-    excluded.append("vendor/sqlx-postgres")
+missing = [f"vendor/{name}" for name in vendor_packages if f"vendor/{name}" not in excluded]
+if missing:
+    excluded.extend(missing)
     start = text.index("[workspace]") + len("[workspace]")
     next_table = re.search(r"(?m)^\[", text[start:])
     end = start + next_table.start() if next_table else len(text)
@@ -76,11 +84,16 @@ for relative in (
     text = manifest.read_text()
     data = tomllib.loads(text)
     patch = data.get("patch", {}).get("crates-io", {})
-    relative_vendor = os.path.relpath(vendor, manifest.resolve().parent)
-    if "sqlx-postgres" in patch:
-        assert patch["sqlx-postgres"] == {"path": relative_vendor}, relative
+    entries = []
+    for name in vendor_packages:
+        relative_vendor = os.path.relpath(root / "vendor" / name, manifest.resolve().parent)
+        if name in patch:
+            assert patch[name] == {"path": relative_vendor}, (relative, name, patch[name])
+        else:
+            entries.append(name + ' = { path = ' + json.dumps(relative_vendor) + ' }\n')
+    if not entries:
         continue
-    entry = 'sqlx-postgres = { path = ' + json.dumps(relative_vendor) + ' }\n'
+    entry = "".join(entries)
     if "crates-io" in data.get("patch", {}):
         match = re.search(r"(?m)^\[patch\.crates-io\][ \t]*$", text)
         assert match, f"Cannot locate the crates.io patch table in {relative}"
@@ -191,6 +204,7 @@ manifests = [
     "examples/fullstack/backend/Cargo.toml",
 ]
 registry = "registry+https://github.com/rust-lang/crates.io-index"
+patched_packages = {"sqlx-postgres", "sea-query", "sea-query-sqlx", "sea-orm"}
 summary = []
 files = ["crates/seaorm/Cargo.toml"]
 for index, relative in enumerate(manifests):
@@ -201,9 +215,9 @@ for index, relative in enumerate(manifests):
         assert len(packages) == 1, (relative, name, packages)
         package = packages[0]
         assert package["version"] == version, (relative, name, package["version"])
-        if name == "sqlx-postgres":
+        if name in patched_packages:
             assert package["source"] is None, (relative, package)
-            assert Path(package["manifest_path"]).resolve() == root / "vendor/sqlx-postgres/Cargo.toml"
+            assert Path(package["manifest_path"]).resolve() == root / "vendor" / name / "Cargo.toml"
             assert package["id"] not in graph["workspace_members"], "Vendor package must not join workspace-wide checks"
         else:
             assert package["source"] == registry, (relative, package)

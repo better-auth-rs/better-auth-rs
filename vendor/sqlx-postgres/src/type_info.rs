@@ -1306,13 +1306,13 @@ fn name_eq(name1: &str, name2: &str) -> bool {
     let mut chars1 = identifier_chars(name1);
     let mut chars2 = identifier_chars(name2);
 
-    while let (Some(a), Some(b)) = (chars1.next(), chars2.next()) {
-        if !a.eq(&b) {
-            return false;
+    loop {
+        match (chars1.next(), chars2.next()) {
+            (Some(a), Some(b)) if a.eq(&b) => {}
+            (None, None) => return true,
+            _ => return false,
         }
     }
-
-    chars1.next().is_none() && chars2.next().is_none()
 }
 
 struct IdentifierChar {
@@ -1360,6 +1360,9 @@ fn test_name_eq() {
         ("foo", "foo", true),
         ("foo", "Foo", true),
         ("foo", "FOO", true),
+        ("int", "int8", false),
+        ("foo", "foo1", false),
+        ("foo", r#""foo1""#, false),
         ("foo", r#""foo""#, true),
         ("foo", r#""Foo""#, false),
         ("foo", "foo.foo", false),

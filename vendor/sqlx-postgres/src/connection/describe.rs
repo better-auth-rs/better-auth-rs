@@ -641,21 +641,23 @@ fn explain_parsing() {
 ]"#;
 
     // https://github.com/launchbadge/sqlx/issues/2622
-    let extra_field = r#"[
-   {
-     "Plan": {
-       "Node Type": "Result",
-       "Parallel Aware": false,
-       "Async Capable": false,
-       "Startup Cost": 0.00,
-       "Total Cost": 0.01,
-       "Plan Rows": 1,
-       "Plan Width": 4,
-       "Output": ["1"]
-     },
-     "Query Identifier": 1147616880456321454
-   }
-]"#;
+    let extra_field = concat!(
+        "[\n",
+        "   {                                        \n",
+        "     \"Plan\": {                              \n",
+        "       \"Node Type\": \"Result\",               \n",
+        "       \"Parallel Aware\": false,             \n",
+        "       \"Async Capable\": false,              \n",
+        "       \"Startup Cost\": 0.00,                \n",
+        "       \"Total Cost\": 0.01,                  \n",
+        "       \"Plan Rows\": 1,                      \n",
+        "       \"Plan Width\": 4,                     \n",
+        "       \"Output\": [\"1\"]                      \n",
+        "     },                                     \n",
+        "     \"Query Identifier\": 1147616880456321454\n",
+        "   }                                        \n",
+        "]",
+    );
 
     // https://github.com/launchbadge/sqlx/issues/1449
     let utility_statement = r#"["Utility Statement"]"#;

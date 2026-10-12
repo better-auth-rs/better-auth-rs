@@ -5,8 +5,9 @@ use std::sync::Arc;
 use crate::encode::{Encode, IsNull};
 use crate::error::Error;
 use crate::ext::ustr::UStr;
+use crate::types::Oid;
 use crate::types::Type;
-use crate::{PgConnection, PgTypeInfo, Postgres};
+use crate::{PgConnection, PgTypeInfo, PgValueFormat, Postgres};
 
 use crate::type_info::PgArrayOf;
 pub(crate) use sqlx_core::arguments::Arguments;
@@ -76,17 +77,38 @@ pub struct PgArguments {
     // Types of each bind parameter
     pub(crate) types: Vec<PgTypeInfo>,
 
+    // Format of each bind parameter
+    pub(crate) formats: Vec<PgValueFormat>,
+
     // Buffer of encoded bind parameters
     pub(crate) buffer: PgArgumentBuffer,
 }
 
 impl PgArguments {
+    /// Add a text parameter whose PostgreSQL type is inferred from the query (OID 0).
+    ///
+    /// `None` encodes SQL NULL. Existing typed arguments retain their binary format.
+    pub fn add_text(&mut self, value: Option<&str>) -> Result<(), BoxDynError> {
+        self.add_encoded(value, PgTypeInfo::with_oid(Oid(0)), PgValueFormat::Text)
+    }
+
     pub(crate) fn add<'q, T>(&mut self, value: T) -> Result<(), BoxDynError>
     where
         T: Encode<'q, Postgres> + Type<Postgres>,
     {
         let type_info = value.produces().unwrap_or_else(T::type_info);
+        self.add_encoded(value, type_info, PgValueFormat::Binary)
+    }
 
+    fn add_encoded<'q, T>(
+        &mut self,
+        value: T,
+        type_info: PgTypeInfo,
+        format: PgValueFormat,
+    ) -> Result<(), BoxDynError>
+    where
+        T: Encode<'q, Postgres>,
+    {
         let buffer_snapshot = self.buffer.snapshot();
 
         // encode the value into our buffer
@@ -99,6 +121,7 @@ impl PgArguments {
 
         // remember the type information for this value
         self.types.push(type_info);
+        self.formats.push(format);
         // increment the number of arguments we are tracking
         self.buffer.count += 1;
 
@@ -143,6 +166,7 @@ impl<'q> Arguments<'q> for PgArguments {
 
     fn reserve(&mut self, additional: usize, size: usize) {
         self.types.reserve(additional);
+        self.formats.reserve(additional);
         self.buffer.reserve(size);
     }
 
@@ -294,3 +318,6 @@ pub(crate) fn value_size_int4_checked(size: usize) -> Result<i32, String> {
         )
     })
 }
+
+#[cfg(test)]
+mod tests;

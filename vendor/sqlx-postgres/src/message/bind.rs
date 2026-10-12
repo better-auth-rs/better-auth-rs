@@ -52,7 +52,7 @@ impl FrontendMessage for Bind<'_> {
 
         // Parameter formats and length prefix
         size += 2;
-        size += self.formats.len();
+        size += self.formats.len().saturating_mul(2);
 
         // `num_params`
         size += 2;
@@ -61,7 +61,7 @@ impl FrontendMessage for Bind<'_> {
 
         // Result formats and length prefix
         size += 2;
-        size += self.result_formats.len();
+        size += self.result_formats.len().saturating_mul(2);
 
         size
     }
@@ -89,8 +89,12 @@ impl FrontendMessage for Bind<'_> {
 
         buf.extend(self.params);
 
-        let result_formats_len = u16::try_from(self.formats.len())
-            .map_err(|_| err_protocol!("too many result format codes ({})", self.formats.len()))?;
+        let result_formats_len = u16::try_from(self.result_formats.len()).map_err(|_| {
+            err_protocol!(
+                "too many result format codes ({})",
+                self.result_formats.len()
+            )
+        })?;
 
         buf.extend(result_formats_len.to_be_bytes());
 
@@ -102,5 +106,50 @@ impl FrontendMessage for Bind<'_> {
     }
 }
 
-// TODO: Unit Test Bind
 // TODO: Benchmark Bind
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::PgArguments;
+
+    #[test]
+    fn mixed_parameter_formats_encode_an_independent_result_count() {
+        let mut arguments = PgArguments::default();
+        arguments.add(7_i32).unwrap();
+        arguments.add_text(Some("8")).unwrap();
+        let message = Bind {
+            portal: PortalId::UNNAMED,
+            statement: StatementId::UNNAMED,
+            formats: &arguments.formats,
+            num_params: 2,
+            params: &arguments.buffer,
+            result_formats: &[PgValueFormat::Binary],
+        };
+        assert_eq!(message.body_size_hint().0, 27);
+        let mut encoded = Vec::new();
+        message.encode_msg(&mut encoded).unwrap();
+        assert_eq!(
+            encoded,
+            b"B\0\0\0\x1f\0\0\0\x02\0\x01\0\0\0\x02\0\0\0\x04\0\0\0\x07\0\0\0\x018\0\x01\0\x01"
+        );
+    }
+
+    #[test]
+    fn result_format_count_overflow_is_rejected() {
+        let result_formats = vec![PgValueFormat::Binary; usize::from(u16::MAX) + 1];
+        let message = Bind {
+            portal: PortalId::UNNAMED,
+            statement: StatementId::UNNAMED,
+            formats: &[],
+            num_params: 0,
+            params: &[],
+            result_formats: &result_formats,
+        };
+        let error = message.encode_body(&mut Vec::new()).unwrap_err();
+        let crate::Error::Protocol(message) = error else {
+            panic!("expected a protocol format-count error, got {error}");
+        };
+        assert!(message.starts_with("too many result format codes (65536) ("));
+    }
+}

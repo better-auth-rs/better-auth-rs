@@ -1,0 +1,216 @@
+use super::{ReturningSelector, SelectModel};
+use crate::{
+    ColumnTrait, ConnectionTrait, DeleteMany, DeleteOne, EntityTrait, Iterable, ValidatedDeleteOne,
+    error::*,
+};
+use sea_query::{DeleteStatement, Query};
+
+/// Handles DELETE operations in a ActiveModel using [DeleteStatement]
+#[derive(Clone, Debug)]
+pub struct Deleter {
+    query: DeleteStatement,
+}
+
+/// The result of a DELETE operation
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeleteResult {
+    /// The number of rows affected by the DELETE operation
+    pub rows_affected: u64,
+}
+
+impl<E> ValidatedDeleteOne<E>
+where
+    E: EntityTrait,
+{
+    /// Execute a DELETE operation on one ActiveModel
+    pub async fn exec<C>(self, db: &C) -> Result<DeleteResult, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        exec_delete_only(self.query, db).await
+    }
+
+    /// Execute an delete operation and return the deleted model
+    pub async fn exec_with_returning<C>(self, db: &C) -> Result<Option<E::Model>, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        exec_delete_with_returning_one::<E, _>(self.query, db).await
+    }
+}
+
+impl<E> DeleteOne<E>
+where
+    E: EntityTrait,
+{
+    /// Execute a DELETE operation on one ActiveModel
+    pub async fn exec<C>(self, db: &C) -> Result<DeleteResult, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        self.0?.exec(db).await
+    }
+
+    /// Execute an delete operation and return the deleted model
+    pub async fn exec_with_returning<C>(self, db: &C) -> Result<Option<E::Model>, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        self.0?.exec_with_returning(db).await
+    }
+}
+
+impl<'a, E> DeleteMany<E>
+where
+    E: EntityTrait,
+{
+    /// Execute a DELETE operation on many ActiveModels
+    pub async fn exec<C>(self, db: &'a C) -> Result<DeleteResult, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        exec_delete_only(self.query, db).await
+    }
+
+    /// Execute an delete operation and return the deleted model
+    pub async fn exec_with_returning<C>(self, db: &C) -> Result<Vec<E::Model>, DbErr>
+    where
+        E: EntityTrait,
+        C: ConnectionTrait,
+    {
+        exec_delete_with_returning_many::<E, _>(self.query, db).await
+    }
+}
+
+impl Deleter {
+    /// Instantiate a new [Deleter] by passing it a [DeleteStatement]
+    pub fn new(query: DeleteStatement) -> Self {
+        Self { query }
+    }
+
+    /// Execute a DELETE operation
+    pub async fn exec<C>(self, db: &C) -> Result<DeleteResult, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        exec_delete(self.query, db).await
+    }
+
+    /// Execute an delete operation and return the deleted model
+    pub async fn exec_with_returning<E, C>(self, db: &C) -> Result<Vec<E::Model>, DbErr>
+    where
+        E: EntityTrait,
+        C: ConnectionTrait,
+    {
+        exec_delete_with_returning_many::<E, _>(self.query, db).await
+    }
+}
+
+impl DeleteResult {
+    #[doc(hidden)]
+    pub fn empty() -> Self {
+        Self { rows_affected: 0 }
+    }
+
+    #[doc(hidden)]
+    pub fn merge(&mut self, other: DeleteResult) {
+        self.rows_affected += other.rows_affected;
+    }
+}
+
+async fn exec_delete_only<C>(query: DeleteStatement, db: &C) -> Result<DeleteResult, DbErr>
+where
+    C: ConnectionTrait,
+{
+    Deleter::new(query).exec(db).await
+}
+
+async fn exec_delete<C>(query: DeleteStatement, db: &C) -> Result<DeleteResult, DbErr>
+where
+    C: ConnectionTrait,
+{
+    let result = db.execute(&query).await?;
+    Ok(DeleteResult {
+        rows_affected: result.rows_affected(),
+    })
+}
+
+async fn exec_delete_with_returning_one<E, C>(
+    mut query: DeleteStatement,
+    db: &C,
+) -> Result<Option<E::Model>, DbErr>
+where
+    E: EntityTrait,
+    C: ConnectionTrait,
+{
+    let db_backend = db.get_database_backend();
+    match db.support_returning() {
+        true => {
+            let returning = Query::returning().exprs(
+                E::Column::iter().map(|c| c.select_enum_as(c.into_returning_expr(db_backend))),
+            );
+            query.returning(returning);
+            ReturningSelector::<SelectModel<<E>::Model>, _>::from_query(query)
+                .one(db)
+                .await
+        }
+        false => Err(DbErr::BackendNotSupported {
+            db: db_backend.as_str(),
+            ctx: "DELETE RETURNING",
+        }),
+    }
+}
+
+async fn exec_delete_with_returning_many<E, C>(
+    mut query: DeleteStatement,
+    db: &C,
+) -> Result<Vec<E::Model>, DbErr>
+where
+    E: EntityTrait,
+    C: ConnectionTrait,
+{
+    let db_backend = db.get_database_backend();
+    match db.support_returning() {
+        true => {
+            let returning = Query::returning().exprs(
+                E::Column::iter().map(|c| c.select_enum_as(c.into_returning_expr(db_backend))),
+            );
+            query.returning(returning);
+            ReturningSelector::<SelectModel<<E>::Model>, _>::from_query(query)
+                .all(db)
+                .await
+        }
+        false => Err(DbErr::BackendNotSupported {
+            db: db_backend.as_str(),
+            ctx: "DELETE RETURNING",
+        }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::tests_cfg::cake;
+
+    #[smol_potat::test]
+    async fn delete_error() {
+        use crate::{DbBackend, DbErr, Delete, EntityTrait, MockDatabase};
+
+        let db = MockDatabase::new(DbBackend::MySql).into_connection();
+
+        assert!(matches!(
+            Delete::one(cake::ActiveModel {
+                ..Default::default()
+            })
+            .exec(&db)
+            .await,
+            Err(DbErr::PrimaryKeyNotSet { .. })
+        ));
+
+        assert!(matches!(
+            cake::Entity::delete(cake::ActiveModel::default())
+                .exec(&db)
+                .await,
+            Err(DbErr::PrimaryKeyNotSet { .. })
+        ));
+    }
+}

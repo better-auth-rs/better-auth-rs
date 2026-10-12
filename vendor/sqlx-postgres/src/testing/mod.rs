@@ -135,22 +135,24 @@ async fn test_context(args: &TestArgs) -> Result<TestContext<Postgres>, Error> {
         // but a clearly related bug with `CREATE TABLE` has been known since 2007:
         // https://www.postgresql.org/message-id/200710222037.l9MKbCJZ098744%40wwwmaster.postgresql.org
         // magic constant 8318549251334697844 is just 8 ascii bytes 'sqlxtest'.
-        r#"
-        select pg_advisory_xact_lock(8318549251334697844);
-
-        create schema if not exists _sqlx_test;
-
-        create table if not exists _sqlx_test.databases (
-            db_name text primary key,
-            test_path text not null,
-            created_at timestamptz not null default now()
-        );
-
-        create index if not exists databases_created_at
-            on _sqlx_test.databases(created_at);
-
-        create sequence if not exists _sqlx_test.database_ids;
-    "#,
+        concat!(
+            "\n",
+            "        select pg_advisory_xact_lock(8318549251334697844);\n",
+            "\n",
+            "        create schema if not exists _sqlx_test;\n",
+            "\n",
+            "        create table if not exists _sqlx_test.databases (\n",
+            "            db_name text primary key,\n",
+            "            test_path text not null,\n",
+            "            created_at timestamptz not null default now()\n",
+            "        );\n",
+            "\n",
+            "        create index if not exists databases_created_at \n",
+            "            on _sqlx_test.databases(created_at);\n",
+            "\n",
+            "        create sequence if not exists _sqlx_test.database_ids;\n",
+            "    ",
+        ),
     )
     .await?;
 

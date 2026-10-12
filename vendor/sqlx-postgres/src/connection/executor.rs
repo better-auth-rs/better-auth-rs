@@ -76,6 +76,7 @@ async fn prepare(
         // we already have metadata
         metadata
     } else {
+        let requested_parameters = parameters.to_vec();
         let parameters = recv_desc_params(conn).await?;
 
         let rows = recv_desc_rows(conn).await?;
@@ -92,6 +93,7 @@ async fn prepare(
         conn.wait_until_ready().await?;
 
         Arc::new(PgStatementMetadata {
+            requested_parameters,
             parameters,
             columns,
             column_names: Arc::new(column_names),
@@ -175,9 +177,13 @@ impl PgConnection {
         metadata: Option<Arc<PgStatementMetadata>>,
     ) -> Result<(StatementId, Arc<PgStatementMetadata>), Error> {
         if let Some(statement) = self.inner.cache_statement.get_mut(sql) {
-            return Ok((*statement).clone());
+            if statement.1.matches_parameters(parameters) {
+                return Ok((*statement).clone());
+            }
         }
 
+        // Explicit statements can carry metadata from a different Parse signature.
+        let metadata = metadata.filter(|metadata| metadata.matches_parameters(parameters));
         let statement = prepare(self, sql, parameters, metadata, persistent).await?;
 
         if persistent && self.inner.cache_statement.is_enabled() {
@@ -241,7 +247,7 @@ impl PgConnection {
             self.inner.stream.write_msg(Bind {
                 portal: PortalId::UNNAMED,
                 statement,
-                formats: &[PgValueFormat::Binary],
+                formats: &arguments.formats,
                 num_params,
                 params: &arguments.buffer,
                 result_formats: &[PgValueFormat::Binary],
@@ -340,6 +346,7 @@ impl PgConnection {
                             column_names: Arc::new(column_names),
                             columns,
                             parameters: Vec::default(),
+                            requested_parameters: Vec::default(),
                         });
                     }
 
@@ -484,3 +491,6 @@ impl<'c> Executor<'c> for &'c mut PgConnection {
         })
     }
 }
+
+#[cfg(test)]
+mod protocol_tests;
