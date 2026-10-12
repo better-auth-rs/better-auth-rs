@@ -7,6 +7,7 @@
 )]
 
 use super::*;
+use crate::plugins::test_helpers::ReplayFailures;
 use crate::plugins::test_helpers::{self, native_observation::NativeObservation, native_session};
 use better_auth_core::{
     ApiErrorClass, AuthConfig, AuthPlugin, FieldDate, HttpMethod,
@@ -24,8 +25,6 @@ use std::sync::{
 
 #[path = "native_error_contract_observation.rs"]
 mod observation;
-#[path = "../../../../../tests/support/replay_failures.rs"]
-mod replay_failures;
 #[path = "../../../../../tests/support/store_facade.rs"]
 mod store_facade;
 mod intercepted_store {
@@ -434,7 +433,7 @@ async fn native_error_fixture_preserves_frozen_inputs_errors_and_complete_storag
     assert_eq!(fixture["backend"], "memory");
     let cases = fixture["cases"].as_array().unwrap();
     assert_eq!(cases.len(), 33);
-    let mut failures = replay_failures::ReplayFailures::default();
+    let mut failures = ReplayFailures::default();
     for case in cases {
         let name = case["name"].as_str().unwrap();
         let (actual, expected) = replay_case(case).await?;

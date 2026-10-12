@@ -2,6 +2,8 @@
 
 use super::EphemeralStore;
 use crate as auth_core;
+use crate::native_test_observation::assert_replay;
+use crate::native_test_replay_failures::ReplayFailures;
 use crate::{AuthConfig, AuthError, AuthResult, FieldMap, FieldValue, store::schema::EntityRole};
 use std::sync::Arc;
 

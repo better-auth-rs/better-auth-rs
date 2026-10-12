@@ -21,13 +21,11 @@ use std::sync::{Arc, Mutex};
 
 mod object;
 use crate::native_test_observation as observation;
+use crate::native_test_replay_failures::ReplayFailures;
 mod read_write;
-#[path = "../../../../../../tests/support/replay_failures.rs"]
-mod replay_failures;
 mod values;
 
 use observation::{NativeObservation, assert_replay};
-use replay_failures::ReplayFailures;
 
 const NOW: i64 = 2_000_000_000_000;
 const TARGET: &str = "verification:subject";

@@ -2,7 +2,6 @@
 
 #![expect(
     clippy::unwrap_used,
-    clippy::expect_used,
     clippy::panic_in_result_fn,
     clippy::panic,
     clippy::indexing_slicing,
@@ -17,8 +16,7 @@ use crate::{
 use serde_json::{Value as Json, json};
 use std::sync::{Arc, Mutex};
 
-#[path = "native_property_graph.rs"]
-mod graph;
+use crate::native_property_graph as graph;
 
 struct Transition<'a> {
     expected: &'a Json,

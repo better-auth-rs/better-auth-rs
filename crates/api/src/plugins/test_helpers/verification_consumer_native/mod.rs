@@ -20,12 +20,10 @@ use std::sync::{
 use super::native_observation as observation;
 
 pub(crate) mod object;
-#[path = "../../../../../../tests/support/replay_failures.rs"]
-mod replay_failures;
 mod storage;
 mod values;
 
-pub(crate) use replay_failures::ReplayFailures;
+pub(crate) use super::ReplayFailures;
 pub(crate) use storage::Storage;
 
 /// Compare business runtime observations. JavaScript APIError stacks remain unpaired host metadata.

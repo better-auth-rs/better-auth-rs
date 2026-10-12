@@ -19,6 +19,14 @@ extern crate self as better_auth;
 mod native_test_observation;
 
 #[cfg(test)]
+#[path = "../../../tests/support/native_property_graph.rs"]
+mod native_property_graph;
+
+#[cfg(test)]
+#[path = "../../../tests/support/replay_failures.rs"]
+mod native_test_replay_failures;
+
+#[cfg(test)]
 #[path = "../../../tests/support/native_sort_contract.rs"]
 mod native_sort_contract;
 

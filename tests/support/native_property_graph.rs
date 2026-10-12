@@ -1,16 +1,26 @@
 //! Inspect shared descriptors without invoking getters or converting native identities.
 
-use super::*;
+#![expect(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic_in_result_fn,
+    clippy::panic,
+    clippy::indexing_slicing,
+    reason = "Frozen graphs define complete descriptors, native aliases, and callback identities."
+)]
+
 use crate::native_test_observation::{NativeObservation, assert_replay};
+use crate::{AuthResult, FieldProperty, FieldValue};
+use serde_json::{Value as Json, json};
 
 #[derive(Default)]
-pub(super) struct PropertyGraph {
+pub(crate) struct PropertyGraph {
     observer: NativeObservation,
     unpaired: Vec<String>,
 }
 
 impl PropertyGraph {
-    pub(super) fn assert_snapshot(
+    pub(crate) fn assert_snapshot(
         &mut self,
         actual: &FieldValue,
         expected: &Json,
@@ -137,7 +147,7 @@ impl PropertyGraph {
         Ok(())
     }
 
-    pub(super) fn finish(mut self, functions: &Json, path: &str) -> Vec<String> {
+    pub(crate) fn finish(mut self, functions: &Json, path: &str) -> Vec<String> {
         let functions = functions.as_array().unwrap();
         assert_eq!(
             self.observer.function_ids(),

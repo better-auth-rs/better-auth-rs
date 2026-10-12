@@ -17,6 +17,13 @@ use std::marker::PhantomData;
 #[path = "../../../../tests/support/shared_column_contract.rs"]
 mod contract;
 
+#[path = "../../../../tests/support/observation_replay.rs"]
+mod replay;
+#[path = "../../../../tests/support/replay_failures.rs"]
+mod replay_failures;
+use replay::assert_replay;
+use replay_failures::ReplayFailures;
+
 // The record engine reads raw driver values; these entities supply only physical table and column metadata.
 // Runtime declarations select the actual model role. Generated model types have a separate consumer contract.
 macro_rules! sql_model {

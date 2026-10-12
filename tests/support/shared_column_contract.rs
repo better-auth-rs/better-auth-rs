@@ -1,6 +1,6 @@
 //! Replay captured bare-adapter operations through the production shared record boundary.
 
-use super::auth_core as core;
+use super::{ReplayFailures, assert_replay, auth_core as core};
 use core::{
     AuthConfig, AuthError, AuthResult, FieldMap, FieldValue, SchemaValue,
     plugin_runtime::ModelFields,
@@ -10,11 +10,6 @@ use core::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
-
-#[path = "observation_replay.rs"]
-mod replay;
-#[path = "replay_failures.rs"]
-mod replay_failures;
 
 mod values {
     use super::core as better_auth;
@@ -221,7 +216,7 @@ pub(super) async fn run(adapter: &impl Adapter, case: &Value, trace: &Trace) -> 
         .as_array()
         .ok_or_else(|| AuthError::internal("Missing shared-column operations"))?;
     assert_eq!(operations.len(), 8);
-    let mut failures = replay_failures::ReplayFailures::default();
+    let mut failures = ReplayFailures::default();
     for operation in operations {
         let method = operation["method"]
             .as_str()
@@ -299,9 +294,7 @@ pub(super) async fn run(adapter: &impl Adapter, case: &Value, trace: &Trace) -> 
         // A driver error difference must not prevent callback and persisted-state comparisons.
         for (field, expected) in expected_fields {
             let path = format!("{label}/{field}");
-            failures.record(&path, || {
-                replay::assert_replay(&actual[field], expected, &path)
-            });
+            failures.record(&path, || assert_replay(&actual[field], expected, &path));
         }
     }
     failures.finish();
