@@ -22,7 +22,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: mysql-native-values
+          - contract: native-endpoint-context
+            regressions: []
+          - contract: native-property-transition
             regressions: []
     runs-on: ubuntu-latest
     timeout-minutes: 10
