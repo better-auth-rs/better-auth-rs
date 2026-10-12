@@ -1,5 +1,5 @@
 use super::*;
-use crate::store::{bundled_schema::BundledSchema, entities};
+use crate::store::{bundled_schema::BundledSchema, entities, map_db_err};
 use better_auth_core::{
     AuthConfig, AuthError, FieldValue,
     store::{

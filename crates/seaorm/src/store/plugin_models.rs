@@ -1,8 +1,8 @@
 use crate::{SeaOrmPluginModel, schema::AuthSchema};
+use better_auth_core::AuthResult;
 use better_auth_core::store::schema::{EntityRole, resolve_field_name};
-use better_auth_core::{AuthResult, id::IdGeneration};
 use better_auth_core::{FieldMap, FromFieldMap};
-use sea_orm::{ColumnTrait, DbBackend, QueryResult};
+use sea_orm::QueryResult;
 
 pub(super) type Write<M> = super::record_write::RecordWrite<Entity<M>>;
 
@@ -11,6 +11,20 @@ pub(super) type Entity<M> = <M as SeaOrmPluginModel>::Entity;
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
     super::SeaOrmStore<S, O, P>
 {
+    pub(super) fn plugin_record_model<M: SeaOrmPluginModel>(
+        &self,
+        role: EntityRole,
+    ) -> super::raw_records::SqlRecordModel<'_, Entity<M>> {
+        super::raw_records::SqlRecordModel::new(
+            self.config(),
+            &self.model_fields,
+            role,
+            self.model_fields.plugin_fields(role),
+            self.connection().get_database_backend(),
+            M::column,
+        )
+    }
+
     pub(super) fn plugin_column<M: SeaOrmPluginModel>(
         &self,
         role: EntityRole,
@@ -91,20 +105,10 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         input: FieldMap,
         create: bool,
     ) -> AuthResult<Write<M>> {
-        let fields = self.model_fields.plugin_fields(role);
-        let backend = self.connection().get_database_backend();
-        let policy = self.config().advanced.database.generate_id();
-        let stored = super::record_write::prepare_fields(
-            &fields,
-            input,
-            create.then_some(model),
-            (&self.model_fields, role),
-            policy,
-            backend,
-            |name, field, value| additional_field_input::<M>(name, field, value, policy, backend),
-        )
-        .await?;
-        Write::<M>::from_fields(stored, M::column)
+        let force_allow_id = create && input.contains_key("id");
+        self.plugin_record_model::<M>(role)
+            .prepare(input.into(), create.then_some(model), force_allow_id)
+            .await
     }
 
     pub(super) async fn project_plugin_rows<M: SeaOrmPluginModel, T: FromFieldMap>(
@@ -112,46 +116,6 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         role: EntityRole,
         rows: &[QueryResult],
     ) -> AuthResult<Vec<T>> {
-        let backend = self.connection().get_database_backend();
-        let fields = self.model_fields.plugin_fields(role);
-        let records = rows
-            .iter()
-            .map(|row| {
-                super::plugin_rows::record::<M>(row, &fields, backend)
-                    .map(|record| record.with_id_output(&self.model_fields, role))
-            })
-            .collect::<AuthResult<Vec<_>>>()?;
-        super::plugin_rows::project_records(
-            &fields.adapter_fields(&[]),
-            records,
-            backend,
-            T::from_field_values,
-        )
-        .await
+        self.plugin_record_model::<M>(role).project(rows).await
     }
-}
-
-fn additional_field_input<M: SeaOrmPluginModel>(
-    name: &str,
-    field: &better_auth_core::user_fields::UserFieldConfig,
-    value: better_auth_core::FieldValue,
-    policy: &IdGeneration,
-    backend: DbBackend,
-) -> AuthResult<better_auth_core::FieldValue> {
-    crate::reference_id::input_binding(
-        name,
-        field,
-        value,
-        policy,
-        M::column,
-        |name| {
-            M::column(name).is_ok_and(|column| {
-                matches!(
-                    column.def().get_column_type(),
-                    sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
-                )
-            })
-        },
-        backend,
-    )
 }

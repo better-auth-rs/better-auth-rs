@@ -39,7 +39,6 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         self.update_plugin_record::<P::WalletAddress>(
             self.connection(),
             EntityRole::WalletAddress,
-            "walletAddress",
             id,
             input,
         )
@@ -99,7 +98,6 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             .update_plugin_record::<P::WalletAddress>(
                 &self.tx,
                 EntityRole::WalletAddress,
-                "walletAddress",
                 id,
                 input,
             )

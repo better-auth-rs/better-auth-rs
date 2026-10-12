@@ -215,14 +215,6 @@ pub(super) async fn project_records<T>(
         .collect()
 }
 
-pub(super) fn record<M: SeaOrmPluginModel>(
-    row: &QueryResult,
-    fields: &UserConfig,
-    backend: DbBackend,
-) -> AuthResult<AdapterRecord> {
-    record_from_columns::<M::Entity>(row, fields, backend, M::column("id")?, M::column)
-}
-
 pub(super) fn record_from_columns<E: EntityTrait>(
     row: &QueryResult,
     fields: &UserConfig,

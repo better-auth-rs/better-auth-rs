@@ -8,7 +8,7 @@
 
 use super::{ReplayFailures, assert_replay, auth_core as core};
 use core::{
-    AuthConfig, AuthError, AuthResult, FieldMap, FieldValue, SchemaValue,
+    AuthConfig, AuthError, AuthResult, FieldMap, FieldValue,
     plugin_runtime::ModelFields,
     store::schema::EntityRole,
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform, UserFieldType},
@@ -178,43 +178,25 @@ pub(super) fn runtime(case: &Value) -> AuthResult<(ModelFields, EntityRole, Trac
 
 #[core::__private_async_trait::async_trait]
 pub(super) trait Adapter: Sync {
-    async fn execute(&self, method: &str, input: FieldMap) -> AuthResult<FieldValue>;
+    async fn execute(&self, method: &str, input: FieldValue) -> AuthResult<FieldValue>;
     async fn stored(&self) -> AuthResult<Vec<FieldMap>>;
 }
 
-pub(super) fn identifier(input: &FieldMap) -> AuthResult<SchemaValue<String>> {
-    let selectors = input
-        .get("where")
-        .and_then(FieldValue::as_array)
+pub(super) fn identifier(input: &FieldValue) -> AuthResult<FieldValue> {
+    let selectors = input.model_property("where")?;
+    let selectors = selectors
+        .as_array()
         .ok_or_else(|| AuthError::internal("Missing shared-column selector"))?;
     assert_eq!(selectors.len()?, 1);
     let selector = selectors
         .get(0)?
         .ok_or_else(|| AuthError::internal("Missing shared-column selector"))?;
-    let fields = record(selector)?;
-    assert_eq!(fields.get("field"), Some(&FieldValue::from("id")));
-    Ok(SchemaValue::from_field(
-        fields
-            .get("value")
-            .cloned()
-            .ok_or_else(|| AuthError::internal("Missing shared-column selector value"))?,
-    ))
-}
-
-pub(super) fn record(value: FieldValue) -> AuthResult<FieldMap> {
-    value
+    assert_eq!(selector.model_property("field")?, FieldValue::from("id"));
+    selector
         .as_object()
         .ok_or_else(|| AuthError::internal("A captured record must be an object"))?
-        .snapshot_fields()
-}
-
-pub(super) fn parameter(input: &FieldMap, name: &str) -> AuthResult<FieldMap> {
-    record(
-        input
-            .get(name)
-            .cloned()
-            .ok_or_else(|| AuthError::internal("Missing captured record parameter"))?,
-    )
+        .get("value")?
+        .ok_or_else(|| AuthError::internal("Missing shared-column selector value"))
 }
 
 pub(super) async fn run(adapter: &impl Adapter, case: &Value, trace: &Trace) -> AuthResult<()> {
@@ -234,7 +216,7 @@ pub(super) async fn run(adapter: &impl Adapter, case: &Value, trace: &Trace) -> 
         }
         let input = values::revive(&operation["input"])?;
         let input_observation = values::observe(&input)?;
-        let result = adapter.execute(method, record(input)?).await;
+        let result = adapter.execute(method, input).await;
         let mut actual = json!({
             "name": operation["name"], "method": method, "input": input_observation,
         });

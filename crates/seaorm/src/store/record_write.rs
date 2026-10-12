@@ -33,28 +33,48 @@ pub(super) async fn prepare_fields(
     backend: DbBackend,
     bind: impl Fn(&str, &UserFieldConfig, FieldValue) -> AuthResult<FieldValue>,
 ) -> AuthResult<FieldMap> {
-    let supplied = input.get("id").cloned();
+    let force_allow_id = create_model.is_some() && input.contains_key("id");
+    prepare_fields_from_source(
+        schema,
+        input.into(),
+        (create_model, force_allow_id),
+        (runtime, role),
+        policy,
+        backend,
+        bind,
+    )
+    .await
+}
+
+/// The caller resolves ID admission before source reads begin.
+pub(super) async fn prepare_fields_from_source(
+    schema: &UserConfig,
+    input: FieldValue,
+    (create_model, force_allow_id): (Option<&str>, bool),
+    (runtime, role): (&ModelFields, EntityRole),
+    policy: &IdGeneration,
+    backend: DbBackend,
+    bind: impl Fn(&str, &UserFieldConfig, FieldValue) -> AuthResult<FieldValue>,
+) -> AuthResult<FieldMap> {
     runtime
         .with_id_input(
             role,
             AdapterIdInput {
-                force_allow_id: create_model.is_some() && supplied.is_some(),
+                force_allow_id,
                 supports_native_uuid: backend == DbBackend::Postgres,
             },
-            schema.storage_fields_with_bound_id(
-                input,
+            schema.storage_fields_from_source_with_bound_id(
                 create_model.is_some(),
+                |name| input.model_property(name).map(Some),
                 || {
+                    let supplied = Some(input.model_property("id")?);
                     // Earlier callbacks can replace the runtime ID policy before this declaration slot.
                     let Some(current) = runtime.id_input_policy(role)? else {
-                        return Ok(supplied.clone());
+                        return Ok(supplied);
                     };
                     match create_model {
-                        Some(model) => {
-                            policy.adapter_create_id_input(model, supplied.clone(), current)
-                        }
+                        Some(model) => policy.adapter_create_id_input(model, supplied, current),
                         None => supplied
-                            .clone()
                             .map(|value| policy.adapter_id_input(value, current))
                             .transpose()
                             .map(Option::flatten),

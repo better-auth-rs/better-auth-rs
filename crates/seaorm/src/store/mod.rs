@@ -40,6 +40,7 @@ mod plugin_records;
 mod plugin_rows;
 mod query_compile;
 mod rate_limits;
+mod raw_records;
 pub(crate) mod record_bindings;
 mod record_write;
 mod runtime;

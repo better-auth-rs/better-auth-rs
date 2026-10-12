@@ -63,7 +63,6 @@ where
         self.update_plugin_record::<P::DeviceCode>(
             self.connection(),
             EntityRole::DeviceCode,
-            "deviceCode",
             id,
             input,
         )

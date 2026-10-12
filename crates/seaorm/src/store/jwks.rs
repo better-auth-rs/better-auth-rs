@@ -70,7 +70,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         id: &SchemaValue<String>,
         input: FieldMap,
     ) -> AuthResult<Option<FieldMap>> {
-        self.update_plugin_record::<P::Jwk>(self.connection(), EntityRole::Jwk, "jwks", id, input)
+        self.update_plugin_record::<P::Jwk>(self.connection(), EntityRole::Jwk, id, input)
             .await
     }
 
@@ -113,7 +113,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         input: FieldMap,
     ) -> AuthResult<Option<FieldMap>> {
         self.store
-            .update_plugin_record::<P::Jwk>(&self.tx, EntityRole::Jwk, "jwks", id, input)
+            .update_plugin_record::<P::Jwk>(&self.tx, EntityRole::Jwk, id, input)
             .await
     }
 

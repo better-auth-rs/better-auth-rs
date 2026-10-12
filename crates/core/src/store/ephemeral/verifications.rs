@@ -1,11 +1,11 @@
 use super::hooks::CommittedWrite;
 use super::rows::{RecordSource, RowRef};
 use super::*;
+use crate::store::schema::EntityRole;
 use crate::store::{
     VerificationCreateWriter,
     database_hooks::{DatabaseHookControl, VerificationUpdate},
 };
-use crate::{id::AdapterIdInput, store::schema::EntityRole};
 
 impl EphemeralStore {
     pub(super) async fn output_verifications(
@@ -39,70 +39,25 @@ impl EphemeralStore {
         input: FieldMap,
         create: bool,
     ) -> AuthResult<FieldMap> {
-        let supplied = input.get("id").cloned();
-        let schema = self.config.verification.field_schema();
-        self.model_fields
-            .with_id_input(
-                EntityRole::Verification,
-                AdapterIdInput {
-                    force_allow_id: create && supplied.is_some(),
-                    supports_native_uuid: false,
-                },
-                schema.storage_fields_with_bound_id(
-                    input,
-                    create,
-                    || {
-                        let Some(policy) = self
-                            .model_fields
-                            .id_input_policy(EntityRole::Verification)?
-                        else {
-                            return Ok(supplied.clone());
-                        };
-                        if create {
-                            self.memory_create_id_input(
-                                EntityRole::Verification,
-                                supplied.clone(),
-                                policy,
-                            )
-                        } else {
-                            supplied
-                                .clone()
-                                .map(|value| {
-                                    self.config
-                                        .advanced
-                                        .database
-                                        .generate_id()
-                                        .adapter_id_input(value, policy)
-                                })
-                                .transpose()
-                                .map(Option::flatten)
-                        }
-                    },
-                    |name, field, value| {
-                        self.memory_record_input(
-                            EntityRole::Verification,
-                            name,
-                            field,
-                            value,
-                            create,
-                        )
-                    },
-                ),
-            )
-            .await
+        let force_allow_id = create && input.contains_key("id");
+        super::raw_records::MemoryRecordModel::new(
+            self,
+            EntityRole::Verification,
+            self.config.verification.field_schema(),
+        )
+        .prepare(input.into(), create, force_allow_id)
+        .await
     }
 
     async fn create_verification_record(&self, input: FieldMap) -> AuthResult<VerificationView> {
-        let mut record = self.verification_storage_fields(input, true).await?;
-        let source = self
-            .raw("verification", "create", |op| {
-                let table = op.create_table(EntityRole::Verification)?;
-                if let Some(id) = self.next_serial_id(table.len()?) {
-                    let _ = record.insert("id".into(), id);
-                }
-                table.push(record)
-            })
-            .await?;
+        let force_allow_id = input.contains_key("id");
+        let source = super::raw_records::MemoryRecordModel::new(
+            self,
+            EntityRole::Verification,
+            self.config.verification.field_schema(),
+        )
+        .create_ref(input.into(), FieldMap::new(), force_allow_id)
+        .await?;
         self.output_verification(RecordSource::Live(source)).await
     }
 

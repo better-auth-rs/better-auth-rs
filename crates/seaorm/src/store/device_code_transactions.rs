@@ -50,13 +50,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         input: FieldMap,
     ) -> AuthResult<Option<FieldMap>> {
         self.store
-            .update_plugin_record::<P::DeviceCode>(
-                &self.tx,
-                EntityRole::DeviceCode,
-                "deviceCode",
-                id,
-                input,
-            )
+            .update_plugin_record::<P::DeviceCode>(&self.tx, EntityRole::DeviceCode, id, input)
             .await
     }
 

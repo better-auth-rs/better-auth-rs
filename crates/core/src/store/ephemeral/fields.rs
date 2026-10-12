@@ -338,37 +338,11 @@ impl EphemeralStore {
         extras: FieldMap,
         create: bool,
     ) -> AuthResult<FieldMap> {
-        let schema = self.field_config(role)?;
-        let supplied = core.get("id").or_else(|| extras.get("id")).cloned();
-        self.model_fields
-            .with_id_input(
-                role,
-                crate::id::AdapterIdInput {
-                    force_allow_id: create && supplied.is_some(),
-                    supports_native_uuid: false,
-                },
-                schema.organization_storage_fields_with_bound_id(
-                    core,
-                    extras,
-                    create,
-                    || {
-                        let Some(policy) = self.model_fields.id_input_policy(role)? else {
-                            return Ok(supplied.clone());
-                        };
-                        let generation = self.config.advanced.database.generate_id();
-                        if create {
-                            self.memory_create_id_input(role, supplied.clone(), policy)
-                        } else {
-                            supplied
-                                .clone()
-                                .map(|value| generation.adapter_id_input(value, policy))
-                                .transpose()
-                                .map(Option::flatten)
-                        }
-                    },
-                    |name, field, value| self.memory_record_input(role, name, field, value, create),
-                ),
-            )
+        let mut input = extras;
+        input.extend(core);
+        let force_allow_id = create && input.contains_key("id");
+        super::raw_records::MemoryRecordModel::new(self, role, self.field_config(role)?)
+            .prepare(input.into(), create, force_allow_id)
             .await
     }
 

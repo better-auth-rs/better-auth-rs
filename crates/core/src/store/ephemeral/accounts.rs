@@ -1,51 +1,19 @@
 use super::hooks::CommittedWrite;
 use super::rows::{RecordSource, RowRef};
 use super::*;
-use crate::id::AdapterIdInput;
 use crate::store::database_hooks::{DatabaseHookControl, DatabaseUpdateResult};
 use crate::store::schema::EntityRole;
 
 impl EphemeralStore {
     async fn account_storage_fields(&self, input: FieldMap, create: bool) -> AuthResult<FieldMap> {
-        let supplied = input.get("id").cloned();
-        let schema = self.config.account.field_schema();
-        self.model_fields
-            .with_id_input(
-                EntityRole::Account,
-                AdapterIdInput {
-                    force_allow_id: create && supplied.is_some(),
-                    supports_native_uuid: false,
-                },
-                schema.storage_fields_with_bound_id(
-                    input,
-                    create,
-                    || {
-                        let Some(policy) =
-                            self.model_fields.id_input_policy(EntityRole::Account)?
-                        else {
-                            return Ok(supplied.clone());
-                        };
-                        let generation = self.config.advanced.database.generate_id();
-                        if create {
-                            self.memory_create_id_input(
-                                EntityRole::Account,
-                                supplied.clone(),
-                                policy,
-                            )
-                        } else {
-                            supplied
-                                .clone()
-                                .map(|value| generation.adapter_id_input(value, policy))
-                                .transpose()
-                                .map(Option::flatten)
-                        }
-                    },
-                    |name, field, value| {
-                        self.memory_record_input(EntityRole::Account, name, field, value, create)
-                    },
-                ),
-            )
-            .await
+        let force_allow_id = create && input.contains_key("id");
+        super::raw_records::MemoryRecordModel::new(
+            self,
+            EntityRole::Account,
+            self.config.account.field_schema(),
+        )
+        .prepare(input.into(), create, force_allow_id)
+        .await
     }
 
     pub(super) fn account_matches_selectors(

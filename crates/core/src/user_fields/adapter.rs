@@ -118,6 +118,28 @@ impl UserConfig {
         &self,
         input: FieldMap,
         create: bool,
+        resolve_id: impl FnMut() -> AuthResult<Option<Value>>,
+        bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
+    ) -> AuthResult<FieldMap> {
+        self.storage_fields_from_source_with_bound_id(
+            create,
+            |name| Ok(input.get(name).cloned()),
+            resolve_id,
+            bind,
+        )
+        .await
+    }
+
+    /// Read source fields in declaration order, after preceding field callbacks complete.
+    /// The ID resolver runs in the ID slot. The caller supplies the resolved ID admission policy.
+    /// Return `None` for an absent property or `Some(Undefined)` for an explicit undefined value.
+    /// Both values follow the same defaults and update-omission rules at the adapter boundary.
+    /// Preserve native object handles until the field callback or backend binding consumes them.
+    #[doc(hidden)]
+    pub async fn storage_fields_from_source_with_bound_id(
+        &self,
+        create: bool,
+        mut read: impl FnMut(&str) -> AuthResult<Option<Value>>,
         mut resolve_id: impl FnMut() -> AuthResult<Option<Value>>,
         bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
     ) -> AuthResult<FieldMap> {
@@ -128,7 +150,7 @@ impl UserConfig {
                 let value = if name == "id" {
                     resolve_id()?
                 } else {
-                    field.storage_input(input.get(name), create).await?
+                    field.storage_input(read(name)?.as_ref(), create).await?
                 };
                 if let Some(value) = value {
                     let storage_name = resolve_field_name(field.field_name.as_deref(), name);

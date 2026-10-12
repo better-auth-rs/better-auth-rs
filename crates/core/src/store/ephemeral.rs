@@ -82,6 +82,7 @@ mod plugin_records;
 #[cfg(test)]
 mod protected_function_tests;
 mod rate_limits;
+mod raw_records;
 mod record_projection;
 #[cfg(test)]
 mod root_join_contract_tests;

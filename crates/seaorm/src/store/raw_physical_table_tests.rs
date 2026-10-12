@@ -151,7 +151,6 @@ async fn crud<M: SeaOrmPluginModel>(role: EntityRole, model: &str, table: &str) 
                 .update_plugin_record::<M>(
                     &database,
                     role,
-                    model,
                     &id,
                     [("name".into(), input.into())].into(),
                 )

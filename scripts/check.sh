@@ -116,9 +116,9 @@ PY_CHECK
         ./compat-tests/reference-server/contracts/shared-column-server-capture.test.ts \
         ./compat-tests/reference-server/contracts/siwe-native-errors.test.ts || column_status=1
       cargo clippy --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm -p better-auth --features axum,seaorm2,redis-cache --lib -- -D warnings || column_status=1
-      cargo test --locked -p better-auth-core --features axum,redis-cache --lib -- shared_column_contract_tests:: error:: api_error:: middleware::csrf:: || column_status=1
+      cargo test --locked -p better-auth-core --features axum,redis-cache --lib -- shared_column_contract_tests:: store::ephemeral::raw_records::tests:: error:: api_error:: middleware::csrf:: || column_status=1
       cargo test --locked -p better-auth-api --lib -- plugins::siwe:: plugins::device_authorization:: || column_status=1
-      cargo test --locked -p better-auth-seaorm --lib -- shared_column_contract_tests:: store::db_error::tests:: --include-ignored --test-threads=1 || column_status=1
+      cargo test --locked -p better-auth-seaorm --lib -- shared_column_contract_tests:: store::record_write::tests:: store::plugin_records::tests:: store::db_error::tests:: --include-ignored --test-threads=1 || column_status=1
       cargo test --locked --features axum,seaorm2,redis-cache --test axum_session_tests --test axum_integration_tests || column_status=1
       return "$column_status"
       ;;

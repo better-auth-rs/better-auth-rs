@@ -179,14 +179,8 @@ where
         id: &better_auth_core::SchemaValue<String>,
         input: FieldMap,
     ) -> AuthResult<Option<FieldMap>> {
-        self.update_plugin_record::<P::ApiKey>(
-            self.connection(),
-            EntityRole::ApiKey,
-            "apikey",
-            id,
-            input,
-        )
-        .await
+        self.update_plugin_record::<P::ApiKey>(self.connection(), EntityRole::ApiKey, id, input)
+            .await
     }
 
     async fn write_api_key_usage(

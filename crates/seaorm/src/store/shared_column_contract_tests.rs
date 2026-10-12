@@ -1,7 +1,10 @@
 //! Replay bare SQL adapter operations through the production record engine.
 
-use super::{Entity, SeaOrmStore, map_db_err};
-use crate::{SeaOrmPluginModel, store::bundled_schema::BundledSchema};
+use super::SeaOrmStore;
+use crate::{
+    SeaOrmPluginModel,
+    store::{bundled_schema::BundledSchema, map_db_err, plugin_models::Entity},
+};
 use better_auth_core as auth_core;
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, FieldMap, FieldValue, store::schema::EntityRole,
@@ -102,46 +105,39 @@ struct Adapter<M> {
 
 #[auth_core::__private_async_trait::async_trait]
 impl<M: SeaOrmPluginModel> contract::Adapter for Adapter<M> {
-    async fn execute(&self, method: &str, input: FieldMap) -> AuthResult<FieldValue> {
-        assert_eq!(input.get("model"), Some(&self.model.clone().into()));
+    async fn execute(&self, method: &str, input: FieldValue) -> AuthResult<FieldValue> {
+        assert_eq!(input.model_property("model")?, self.model.clone().into());
         let connection = self.store.connection();
+        let model = self.store.plugin_record_model::<M>(self.role);
         match method {
             "create" => {
-                assert_eq!(input.get("forceAllowId"), Some(&true.into()));
-                self.store
-                    .create_plugin_record::<M>(
+                assert_eq!(input.model_property("forceAllowId")?, true.into());
+                model
+                    .create(
                         connection,
                         crate::store::create_readback::ReadbackScope::Direct(connection),
-                        self.role,
                         &self.model,
-                        contract::parameter(&input, "data")?,
+                        input.model_property("data")?,
+                        true,
                     )
                     .await
                     .map(|row| row.map_or(FieldValue::Null, Into::into))
             }
-            "findOne" => self
-                .store
-                .get_plugin_record::<M>(connection, self.role, &contract::identifier(&input)?)
+            "findOne" => model
+                .find_by_id(connection, &contract::identifier(&input)?)
                 .await
                 .map(|row| row.map_or(FieldValue::Null, Into::into)),
-            "update" => self
-                .store
-                .update_plugin_record::<M>(
+            "update" => model
+                .update_by_id(
                     connection,
-                    self.role,
-                    &self.model,
                     &contract::identifier(&input)?,
-                    contract::parameter(&input, "update")?,
+                    input.model_property("update")?,
                 )
                 .await
                 .map(|row| row.map_or(FieldValue::Null, Into::into)),
             "delete" => {
-                self.store
-                    .delete_plugin_record::<M>(
-                        connection,
-                        self.role,
-                        &contract::identifier(&input)?,
-                    )
+                model
+                    .delete_by_id(connection, &contract::identifier(&input)?)
                     .await?;
                 Ok(FieldValue::Undefined)
             }

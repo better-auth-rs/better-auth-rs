@@ -1,15 +1,12 @@
-use super::{
-    EphemeralStore,
-    rows::{RecordSource, RowRef},
-};
+use super::{EphemeralStore, raw_records::MemoryRecordModel, rows::RowRef};
 use crate::store::schema::EntityRole;
-use crate::{AuthError, AuthResult, FieldMap, FieldValue, SchemaValue};
-
-fn model(role: EntityRole) -> AuthResult<&'static str> {
-    crate::plugin_runtime::ModelFields::native_model_name(role)
-}
+use crate::{AuthResult, FieldMap, FieldValue, SchemaValue};
 
 impl EphemeralStore {
+    pub(super) fn plugin_record_model(&self, role: EntityRole) -> MemoryRecordModel<'_> {
+        MemoryRecordModel::new(self, role, self.model_fields.plugin_fields(role))
+    }
+
     pub(super) fn plugin_query_value(
         &self,
         role: EntityRole,
@@ -34,50 +31,18 @@ impl EphemeralStore {
         role: EntityRole,
         sources: Vec<RowRef<FieldMap>>,
     ) -> AuthResult<Vec<FieldMap>> {
-        self.project_record_sources(
-            role,
-            &self.model_fields.plugin_fields(role),
-            sources.into_iter().map(RecordSource::Live).collect(),
-        )
-        .await
+        self.plugin_record_model(role).project(sources).await
     }
 
     pub(super) async fn prepare_plugin_fields(
         &self,
         role: EntityRole,
-        mut input: FieldMap,
+        input: FieldMap,
         create: bool,
     ) -> AuthResult<FieldMap> {
-        let mut supplied = input.shift_remove("id");
-        let schema = self.model_fields.plugin_fields(role);
-        self.model_fields
-            .with_id_input(
-                role,
-                crate::id::AdapterIdInput {
-                    force_allow_id: create && supplied.is_some(),
-                    supports_native_uuid: false,
-                },
-                schema.storage_fields_with_bound_id(
-                    input,
-                    create,
-                    || {
-                        let Some(policy) = self.model_fields.id_input_policy(role)? else {
-                            return Ok(supplied.take());
-                        };
-                        let generation = self.config.advanced.database.generate_id();
-                        if create {
-                            self.memory_create_id_input(role, supplied.take(), policy)
-                        } else {
-                            supplied
-                                .take()
-                                .map(|value| generation.adapter_id_input(value, policy))
-                                .transpose()
-                                .map(Option::flatten)
-                        }
-                    },
-                    |name, field, value| self.memory_record_input(role, name, field, value, create),
-                ),
-            )
+        let force_allow_id = create && input.contains_key("id");
+        self.plugin_record_model(role)
+            .prepare(input.into(), create, force_allow_id)
             .await
     }
 
@@ -87,11 +52,10 @@ impl EphemeralStore {
         input: FieldMap,
         internal: FieldMap,
     ) -> AuthResult<FieldMap> {
-        let source = self.create_plugin_ref(role, input, internal).await?;
-        self.project_plugin_refs(role, vec![source])
-            .await?
-            .pop()
-            .ok_or_else(|| AuthError::internal("Created plugin record was not projected"))
+        let force_allow_id = input.contains_key("id");
+        self.plugin_record_model(role)
+            .create(input.into(), internal, force_allow_id)
+            .await
     }
 
     pub(super) async fn create_plugin_ref(
@@ -100,16 +64,10 @@ impl EphemeralStore {
         input: FieldMap,
         internal: FieldMap,
     ) -> AuthResult<RowRef<FieldMap>> {
-        let mut storage = self.prepare_plugin_fields(role, input, true).await?;
-        storage.extend(internal);
-        self.raw(model(role)?, "create", |op| {
-            let table = op.create_table(role)?;
-            if let Some(id) = self.next_serial_id(table.len()?) {
-                let _ = storage.insert("id".into(), id);
-            }
-            table.push(storage)
-        })
-        .await
+        let force_allow_id = input.contains_key("id");
+        self.plugin_record_model(role)
+            .create_ref(input.into(), internal, force_allow_id)
+            .await
     }
 
     pub(super) async fn get_plugin_record(
@@ -117,25 +75,9 @@ impl EphemeralStore {
         role: EntityRole,
         id: &SchemaValue<String>,
     ) -> AuthResult<Option<FieldMap>> {
-        let (column, id) = self.plugin_query_field(role, "id", id.field_value())?;
-        let selected = self
-            .raw(model(role)?, "findOne", |op| {
-                Ok(op
-                    .capture_table(role)?
-                    .select_refs(|row| {
-                        Ok(crate::query::field_matches_equality(
-                            &row.field(&column)?.unwrap_or_default(),
-                            &id,
-                        ))
-                    })?
-                    .into_iter()
-                    .next())
-            })
-            .await?;
-        Ok(self
-            .project_plugin_refs(role, selected.into_iter().collect())
-            .await?
-            .pop())
+        self.plugin_record_model(role)
+            .find_by_id(id.field_value())
+            .await
     }
 
     pub(super) async fn update_plugin_record(
@@ -145,11 +87,9 @@ impl EphemeralStore {
         input: FieldMap,
         internal: FieldMap,
     ) -> AuthResult<Option<FieldMap>> {
-        let selected = self.update_plugin_ref(role, id, input, internal).await?;
-        Ok(self
-            .project_plugin_refs(role, selected.into_iter().collect())
-            .await?
-            .pop())
+        self.plugin_record_model(role)
+            .update_by_id(id.field_value(), input.into(), internal)
+            .await
     }
 
     pub(super) async fn update_plugin_ref(
@@ -159,22 +99,9 @@ impl EphemeralStore {
         input: FieldMap,
         internal: FieldMap,
     ) -> AuthResult<Option<RowRef<FieldMap>>> {
-        let (column, id) = self.plugin_query_field(role, "id", id.field_value())?;
-        let mut patch = self.prepare_plugin_fields(role, input, false).await?;
-        patch.extend(internal);
-        self.raw(model(role)?, "update", |op| {
-            let matches = op.capture_table(role)?.select_refs(|row| {
-                Ok(crate::query::field_matches_equality(
-                    &row.field(&column)?.unwrap_or_default(),
-                    &id,
-                ))
-            })?;
-            for source in &matches {
-                source.apply_patch(patch.clone())?;
-            }
-            Ok(matches.into_iter().next())
-        })
-        .await
+        self.plugin_record_model(role)
+            .update_ref_by_id(id.field_value(), input.into(), internal)
+            .await
     }
 
     pub(super) async fn delete_plugin_records(
@@ -182,18 +109,9 @@ impl EphemeralStore {
         role: EntityRole,
         id: &SchemaValue<String>,
     ) -> AuthResult<()> {
-        let (column, id) = self.plugin_query_field(role, "id", id.field_value())?;
-        self.raw(model(role)?, "delete", |op| {
-            let table = op.capture_table(role)?;
-            let selected = table.select_refs(|row| {
-                Ok(crate::query::field_matches_equality(
-                    &row.field(&column)?.unwrap_or_default(),
-                    &id,
-                ))
-            })?;
-            op.replace_table(role, table.without_refs(&selected)?)
-        })
-        .await
+        self.plugin_record_model(role)
+            .delete_by_id(id.field_value())
+            .await
     }
 
     /// Observe complete physical records without invoking output callbacks.

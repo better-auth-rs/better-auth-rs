@@ -1,7 +1,6 @@
 use super::hooks::CommittedWrite;
 use super::rows::RowRef;
 use super::*;
-use crate::id::AdapterIdInput;
 use crate::store::database_hooks::{DatabaseHookControl, PreparedRecordWrite};
 use crate::store::schema::EntityRole;
 
@@ -123,31 +122,8 @@ impl EphemeralStore {
     }
 
     async fn prepare_user_update_fields(&self, fields: FieldMap) -> AuthResult<FieldMap> {
-        let schema = self.user_schema();
-        self.model_fields
-            .with_id_input(
-                EntityRole::User,
-                AdapterIdInput::default(),
-                schema.storage_fields_with_bound_id(
-                    fields.clone(),
-                    false,
-                    || match (
-                        self.model_fields.id_input_policy(EntityRole::User)?,
-                        fields.get("id"),
-                    ) {
-                        (Some(policy), Some(value)) => self
-                            .config
-                            .advanced
-                            .database
-                            .generate_id()
-                            .adapter_id_input(value.clone(), policy),
-                        (_, value) => Ok(value.cloned()),
-                    },
-                    |name, field, value| {
-                        self.memory_record_input(EntityRole::User, name, field, value, false)
-                    },
-                ),
-            )
+        super::raw_records::MemoryRecordModel::new(self, EntityRole::User, self.user_schema())
+            .prepare(fields.into(), false, false)
             .await
     }
 
@@ -232,41 +208,10 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             }
         }
         let input = prepared.into_fields();
-        let schema = self.user_schema();
-        let mut fields = self
-            .model_fields
-            .with_id_input(
-                EntityRole::User,
-                AdapterIdInput {
-                    force_allow_id: true,
-                    supports_native_uuid: false,
-                },
-                schema.storage_fields_with_bound_id(
-                    input.clone(),
-                    true,
-                    || {
-                        let supplied = input.get("id").cloned();
-                        let Some(policy) = self.model_fields.id_input_policy(EntityRole::User)?
-                        else {
-                            return Ok(supplied);
-                        };
-                        self.memory_create_id_input(EntityRole::User, supplied, policy)
-                    },
-                    |name, field, value| {
-                        self.memory_record_input(EntityRole::User, name, field, value, true)
-                    },
-                ),
-            )
-            .await?;
-        let user = self
-            .raw("user", "create", |op| {
-                let users = op.create_table(EntityRole::User)?;
-                if let Some(id) = self.next_serial_id(users.len()?) {
-                    let _ = fields.insert("id".into(), id);
-                }
-                users.push(fields)
-            })
-            .await?;
+        let user =
+            super::raw_records::MemoryRecordModel::new(self, EntityRole::User, self.user_schema())
+                .create_ref(input.into(), FieldMap::new(), true)
+                .await?;
         let user = self.output_user_refs(vec![user]).await?.remove(0);
         self.after(CommittedWrite::UserCreated(Some(user.clone())))
             .await?;

@@ -17,38 +17,30 @@ struct Adapter {
 
 #[crate::__private_async_trait::async_trait]
 impl contract::Adapter for Adapter {
-    async fn execute(&self, method: &str, input: FieldMap) -> AuthResult<FieldValue> {
+    async fn execute(&self, method: &str, input: FieldValue) -> AuthResult<FieldValue> {
+        let records = self.store.plugin_record_model(self.role);
         match method {
             "create" => {
-                assert_eq!(input.get("forceAllowId"), Some(&true.into()));
-                self.store
-                    .create_plugin_record(
-                        self.role,
-                        contract::parameter(&input, "data")?,
-                        FieldMap::new(),
-                    )
+                assert_eq!(input.model_property("forceAllowId")?, true.into());
+                records
+                    .create(input.model_property("data")?, FieldMap::new(), true)
                     .await
                     .map(Into::into)
             }
-            "findOne" => self
-                .store
-                .get_plugin_record(self.role, &contract::identifier(&input)?)
+            "findOne" => records
+                .find_by_id(contract::identifier(&input)?)
                 .await
                 .map(|row| row.map_or(FieldValue::Null, Into::into)),
-            "update" => self
-                .store
-                .update_plugin_record(
-                    self.role,
-                    &contract::identifier(&input)?,
-                    contract::parameter(&input, "update")?,
+            "update" => records
+                .update_by_id(
+                    contract::identifier(&input)?,
+                    input.model_property("update")?,
                     FieldMap::new(),
                 )
                 .await
                 .map(|row| row.map_or(FieldValue::Null, Into::into)),
             "delete" => {
-                self.store
-                    .delete_plugin_records(self.role, &contract::identifier(&input)?)
-                    .await?;
+                records.delete_by_id(contract::identifier(&input)?).await?;
                 Ok(FieldValue::Undefined)
             }
             _ => Err(AuthError::internal("Unknown captured adapter method")),
