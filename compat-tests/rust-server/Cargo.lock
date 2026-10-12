@@ -3733,8 +3733,6 @@ dependencies = [
 [[package]]
 name = "sea-orm"
 version = "2.0.0-rc.37"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b846dc1c7fefbea372c03765ff08307d68894bbad8c73b66176dcd53a3ee131"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -3830,8 +3828,6 @@ dependencies = [
 [[package]]
 name = "sea-query"
 version = "1.0.0-rc.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58decdaaaf2a698170af2fa1b2e8f7b43a970e7768bf18aebaab113bada46354"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -3861,8 +3857,6 @@ dependencies = [
 [[package]]
 name = "sea-query-sqlx"
 version = "0.8.0-rc.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4377164b09a11bb692dec6966eb0e6908d63d768defef0be689b39e02cf8544"
 dependencies = [
  "sea-query",
  "sqlx",

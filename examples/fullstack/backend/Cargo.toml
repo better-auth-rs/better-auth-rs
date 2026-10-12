@@ -16,4 +16,8 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [patch.crates-io]
+sea-query = { path = "../../../vendor/sea-query" }
+sea-query-sqlx = { path = "../../../vendor/sea-query-sqlx" }
+sea-orm = { path = "../../../vendor/sea-orm" }
+
 sqlx-postgres = { path = "../../../vendor/sqlx-postgres" }

@@ -140,10 +140,9 @@ fn native_parameter(value: Value, backend: DbBackend) -> AuthResult<SimpleExpr> 
 
 fn driver_parameter(value: FieldValue, backend: DbBackend) -> AuthResult<SimpleExpr> {
     if backend == DbBackend::Postgres {
-        // pg sends OID-unspecified text parameters. A quoted unknown literal preserves column inference.
-        return Ok(SimpleExpr::Constant(Value::String(postgres_parameter(
-            &value,
-        )?)));
+        return Ok(SimpleExpr::Value(Value::PostgresUnspecifiedText(
+            postgres_parameter(&value)?,
+        )));
     }
     let value = match value {
         FieldValue::Undefined | FieldValue::Null => Value::String(None),
@@ -328,6 +327,10 @@ pub(crate) fn sqlite_date(date: FieldDate) -> AuthResult<FieldValue> {
         value.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
     ))
 }
+
+#[cfg(test)]
+#[path = "record_postgres_protocol_tests.rs"]
+mod postgres_protocol_tests;
 
 #[cfg(test)]
 #[path = "record_function_tests.rs"]

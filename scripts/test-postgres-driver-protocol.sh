@@ -20,7 +20,7 @@ done
 protocol_packages=(sqlx-postgres sea-query sea-query-sqlx)
 protocol_features=(
   'sqlx/runtime-tokio'
-  'hashable-value,with-json,backend-postgres,backend-mysql,backend-sqlite'
+  'tests-cfg,hashable-value,with-json,backend-postgres,backend-mysql,backend-sqlite'
   'sqlx-postgres,sqlx-mysql,sqlx-sqlite,sqlx-any,postgres-array,with-bigdecimal,with-chrono,with-time,with-uuid,with-rust_decimal,with-json,with-ipnetwork,with-mac_address,postgres-vector'
 )
 for protocol_index in "${!protocol_packages[@]}"; do

@@ -22,7 +22,7 @@ run_stage() {
       cargo build --workspace --locked --tests --profile test --features axum,seaorm2,redis-cache --keep-going
       cargo test --workspace --locked --features axum,seaorm2,redis-cache --no-fail-fast
       cargo test --locked -p better-auth-seaorm --lib store::api_keys::cleanup_tests:: -- --ignored --test-threads=1
-      cargo test --locked -p better-auth-seaorm --lib -- store::plugin_records::shared_column_contract_tests:: store::db_error::tests:: --ignored --test-threads=1
+      cargo test --locked -p better-auth-seaorm --lib -- store::plugin_records::shared_column_contract_tests:: store::db_error::tests:: postgres_protocol_tests:: --ignored --test-threads=1
       ;;
     id-input)
       cargo fmt --all -- --check
@@ -53,10 +53,14 @@ run_stage() {
       ;;
     postgres-driver)
       cargo fmt --all -- --check
-      cargo clippy --locked -p better-auth-seaorm --lib -- -D warnings
+      local driver_status=0
+      DATABASE_URL="${BETTER_AUTH_TEST_POSTGRES_URL:?}" \
+        ./scripts/test-postgres-driver-protocol.sh "${RUNNER_TEMP:?}/postgres-driver-protocol" || driver_status=1
+      cargo clippy --locked -p better-auth-seaorm --lib -- -D warnings || driver_status=1
       cargo test --locked -p better-auth-seaorm --lib -- \
-        store::db_error::tests:: live_postgres_shared_column_contract \
-        --include-ignored --test-threads=1
+        store::db_error::tests:: live_postgres_shared_column_contract postgres_protocol_tests:: \
+        --include-ignored --test-threads=1 || driver_status=1
+      return "$driver_status"
       ;;
     shared-column)
       cargo fmt --all -- --check
