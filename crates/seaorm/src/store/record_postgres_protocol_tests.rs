@@ -1,6 +1,6 @@
 use super::*;
 use sea_orm::{
-    ConnectOptions, ConnectionTrait, Database, TransactionTrait,
+    ConnectOptions, ConnectionTrait, Database, TransactionSession, TransactionTrait,
     sea_query::{Alias, Expr, ExprTrait, Query},
 };
 
