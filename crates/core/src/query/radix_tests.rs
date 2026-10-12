@@ -1,7 +1,7 @@
 #![expect(
     clippy::panic_in_result_fn,
     clippy::unwrap_used,
-    reason = "Frozen numeric observations require exact values, signed zero, rendering and explicit NaN payload coverage."
+    reason = "Frozen numeric observations require exact values, signed zero, rendering and all IEEE-754 bits."
 )]
 
 use crate::{
@@ -44,7 +44,7 @@ fn query_bindings(input: &str, expected: &Json, path: &str) -> AuthResult<()> {
     Ok(())
 }
 
-fn replay_case(case: &Json, path: &str, unpaired: &mut Vec<Json>) -> AuthResult<()> {
+fn replay_case(case: &Json, path: &str) -> AuthResult<()> {
     let input = case["input"].as_str().unwrap();
     let operations = case["operations"].as_array().unwrap();
     assert_eq!(operations.len(), 3);
@@ -84,17 +84,11 @@ fn replay_case(case: &Json, path: &str, unpaired: &mut Vec<Json>) -> AuthResult<
             &expected["json"],
             &format!("{path}/json"),
         );
-        if number.is_nan() {
-            let source_bits = expected["bits"].as_str().unwrap();
-            assert!(f64::from_bits(u64::from_str_radix(source_bits, 16).unwrap()).is_nan());
-            unpaired.push(json!({"path":format!("{path}/bits"),"sourceBits":source_bits}));
-        } else {
-            assert_replay(
-                &json!(format!("{:016x}", number.to_bits())),
-                &expected["bits"],
-                &format!("{path}/bits"),
-            );
-        }
+        assert_replay(
+            &json!(format!("{:016x}", number.to_bits())),
+            &expected["bits"],
+            &format!("{path}/bits"),
+        );
         if name == "number" && case["boundary"] != "syntax" {
             query_bindings(input, &expected["result"], &path)?;
         }
@@ -123,14 +117,8 @@ fn shared_radix_parsing_matches_native_results_rendering_and_query_binding() -> 
         96
     );
     assert_eq!(coverage["pairedQueryBindingCases"], 96);
-    let mut unpaired = Vec::new();
     for (index, case) in cases.iter().enumerate() {
-        replay_case(case, &format!("/cases/{index}"), &mut unpaired)?;
+        replay_case(case, &format!("/cases/{index}"))?;
     }
-    assert_replay(
-        &json!(unpaired),
-        &coverage["unpairedNaNBits"],
-        "/coverage/unpairedNaNBits",
-    );
     Ok(())
 }

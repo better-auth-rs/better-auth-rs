@@ -271,6 +271,9 @@ mod tests {
     }
 }
 
+// Pinned JavaScriptCore parse failures return positive quiet NaN before applying any sign.
+const NUMERIC_PARSE_NAN: f64 = f64::from_bits(0x7ff8_0000_0000_0000);
+
 /// Apply ECMAScript `Number` conversion to a JSON endpoint value.
 pub fn number(value: &Value) -> AuthResult<f64> {
     field_number(&FieldValue::from_json(value.clone())?)
@@ -289,7 +292,7 @@ pub fn field_number(value: &FieldValue) -> AuthResult<f64> {
         | FieldValue::Function(_) => field_number(&value.number_primitive()?),
         value => {
             let Ok(text) = value.display_utf16()?.to_utf8() else {
-                return Ok(f64::NAN);
+                return Ok(NUMERIC_PARSE_NAN);
             };
             if text
                 .trim_matches(|ch: char| (ch.is_whitespace() && ch != '\u{85}') || ch == '\u{feff}')
@@ -297,7 +300,7 @@ pub fn field_number(value: &FieldValue) -> AuthResult<f64> {
             {
                 return Ok(0.0);
             }
-            Ok(crate::organization_fields::numeric_filter(&text).unwrap_or(f64::NAN))
+            Ok(crate::organization_fields::numeric_filter(&text).unwrap_or(NUMERIC_PARSE_NAN))
         }
     }
 }
@@ -385,7 +388,10 @@ pub fn parse_decimal_integer(value: &str) -> f64 {
 }
 
 fn signed_integer(negative: bool, value: Option<f64>) -> f64 {
-    value.map_or(f64::NAN, |value| if negative { -value } else { value })
+    value.map_or(
+        NUMERIC_PARSE_NAN,
+        |value| if negative { -value } else { value },
+    )
 }
 
 fn integer_start(value: &str) -> (bool, &str) {
