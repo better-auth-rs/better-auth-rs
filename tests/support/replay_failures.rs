@@ -58,10 +58,10 @@ mod tests {
         let mut failures = ReplayFailures::default();
         failures.record("first", || panic_any(thrown));
         failures.record("second", || {
-            completed.fetch_add(1, Ordering::Relaxed);
+            let _ = completed.fetch_add(1, Ordering::Relaxed);
         });
         failures.record("third", || {
-            completed.fetch_add(1, Ordering::Relaxed);
+            let _ = completed.fetch_add(1, Ordering::Relaxed);
             panic_any("third comparison failure");
         });
         assert_eq!(completed.load(Ordering::Relaxed), 2);

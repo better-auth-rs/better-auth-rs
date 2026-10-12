@@ -131,6 +131,10 @@ pub(super) async fn tables(
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
 mod tests {
     use super::*;
 

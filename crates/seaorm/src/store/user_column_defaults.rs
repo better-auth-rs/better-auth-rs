@@ -48,6 +48,11 @@ impl MigrationTrait for UserColumnDefaults {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::indexing_slicing,
+    clippy::unwrap_used,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
 mod tests {
     use super::*;
     use sea_orm::Database;

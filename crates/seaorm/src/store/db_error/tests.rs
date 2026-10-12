@@ -1,3 +1,8 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
+
 use super::*;
 use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection, DbBackend};
 use std::{error::Error, sync::Arc};

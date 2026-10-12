@@ -1,3 +1,8 @@
+#![expect(
+    clippy::indexing_slicing,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
+
 //! Replay bare SQL adapter operations through the production record engine.
 
 use super::SeaOrmStore;

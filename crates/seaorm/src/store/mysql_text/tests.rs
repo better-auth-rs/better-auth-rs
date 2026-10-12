@@ -1,3 +1,9 @@
+#![expect(
+    clippy::indexing_slicing,
+    clippy::panic_in_result_fn,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
+
 use super::*;
 use better_auth_core::{
     FieldDate, FieldFunction, FieldMap, FieldObject,

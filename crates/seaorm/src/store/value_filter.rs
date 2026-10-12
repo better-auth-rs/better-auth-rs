@@ -282,6 +282,10 @@ pub(super) fn predicate(
 mod core_query_tests;
 
 #[cfg(test)]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
 mod tests {
     use super::*;
     use crate::store::entities::api_key;

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
+
 use super::*;
 use crate::hooks::{HookControl, SeaOrmHookContext, SeaOrmHooks};
 use crate::store::{bundled_schema::BundledSchema, entities::session, migrator::run_migrations};

@@ -1014,6 +1014,10 @@ async fn create_device_codes(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
 mod tests {
     use super::*;
     use sea_orm::Database;

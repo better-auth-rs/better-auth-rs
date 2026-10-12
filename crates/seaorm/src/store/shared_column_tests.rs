@@ -1,3 +1,8 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
+
 use better_auth_core::{
     AuthRecordFields, FieldMap, FieldValue,
     user_fields::{UserConfig, UserFieldConfig},
@@ -14,6 +19,10 @@ mod user {
     #[derive(Clone, Debug, serde::Serialize, DeriveEntityModel, crate::AuthEntity)]
     #[sea_orm(table_name = "shared_user")]
     #[auth(role = "user")]
+    #[expect(
+        unreachable_pub,
+        reason = "SeaORM derives expose this type through public generated trait implementations inside the private fixture module."
+    )]
     pub struct Model {
         #[sea_orm(primary_key, auto_increment = false)]
         pub id: String,
@@ -27,6 +36,10 @@ mod user {
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    #[expect(
+        unreachable_pub,
+        reason = "SeaORM derives expose this type through public generated trait implementations inside the private fixture module."
+    )]
     pub enum Relation {}
     impl ActiveModelBehavior for ActiveModel {}
 }
@@ -37,6 +50,10 @@ mod session {
     #[derive(Clone, Debug, serde::Serialize, DeriveEntityModel, crate::AuthEntity)]
     #[sea_orm(table_name = "shared_session")]
     #[auth(role = "session")]
+    #[expect(
+        unreachable_pub,
+        reason = "SeaORM derives expose this type through public generated trait implementations inside the private fixture module."
+    )]
     pub struct Model {
         #[sea_orm(primary_key, auto_increment = false)]
         pub id: String,
@@ -52,6 +69,10 @@ mod session {
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    #[expect(
+        unreachable_pub,
+        reason = "SeaORM derives expose this type through public generated trait implementations inside the private fixture module."
+    )]
     pub enum Relation {}
     impl ActiveModelBehavior for ActiveModel {}
 }
@@ -62,6 +83,10 @@ mod verification {
     #[derive(Clone, Debug, serde::Serialize, DeriveEntityModel, crate::AuthEntity)]
     #[sea_orm(table_name = "shared_verification")]
     #[auth(role = "verification")]
+    #[expect(
+        unreachable_pub,
+        reason = "SeaORM derives expose this type through public generated trait implementations inside the private fixture module."
+    )]
     pub struct Model {
         #[sea_orm(primary_key, auto_increment = false, column_name = "id")]
         #[auth(alias = "id")]
@@ -75,6 +100,10 @@ mod verification {
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    #[expect(
+        unreachable_pub,
+        reason = "SeaORM derives expose this type through public generated trait implementations inside the private fixture module."
+    )]
     pub enum Relation {}
     impl ActiveModelBehavior for ActiveModel {}
 }
@@ -85,6 +114,10 @@ mod organization {
     #[derive(Clone, Debug, serde::Serialize, DeriveEntityModel, crate::AuthEntity)]
     #[sea_orm(table_name = "shared_organization")]
     #[auth(role = "organization")]
+    #[expect(
+        unreachable_pub,
+        reason = "SeaORM derives expose this type through public generated trait implementations inside the private fixture module."
+    )]
     pub struct Model {
         #[sea_orm(primary_key, auto_increment = false)]
         pub id: String,
@@ -97,6 +130,10 @@ mod organization {
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    #[expect(
+        unreachable_pub,
+        reason = "SeaORM derives expose this type through public generated trait implementations inside the private fixture module."
+    )]
     pub enum Relation {}
     impl ActiveModelBehavior for ActiveModel {}
 }

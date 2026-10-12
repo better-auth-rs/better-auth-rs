@@ -1,3 +1,10 @@
+#![expect(
+    clippy::expect_used,
+    clippy::panic_in_result_fn,
+    clippy::unwrap_used,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
+
 use super::*;
 use crate::store::{bundled_schema::BundledSchema, migrator::run_migrations};
 use better_auth_core::AuthConfig;

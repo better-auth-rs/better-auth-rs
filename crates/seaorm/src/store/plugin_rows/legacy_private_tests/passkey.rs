@@ -1,3 +1,9 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    clippy::unwrap_used,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
+
 use super::*;
 use better_auth_core::{
     CreatePasskey, Passkey, PasskeyCredentialState, PasskeyView, UpdatePasskey,

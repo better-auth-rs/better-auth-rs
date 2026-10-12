@@ -1,3 +1,8 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
+
 use super::*;
 
 fn shared_carrier(error: &AuthError) -> TestResult<Arc<sqlx::Error>> {

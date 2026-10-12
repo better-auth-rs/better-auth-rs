@@ -1,3 +1,10 @@
+#![expect(
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::unwrap_used,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
+
 use super::*;
 use better_auth_core::store::{AccountOwner, RuntimeStore, UserStore, VerificationStore};
 use better_auth_core::user_fields::{

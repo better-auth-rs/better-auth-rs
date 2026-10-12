@@ -1,3 +1,8 @@
+#![expect(
+    clippy::expect_used,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
+
 use super::*;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection, Statement};
 

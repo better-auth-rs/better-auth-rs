@@ -104,6 +104,10 @@ impl MigrationTrait for TeamMemberSchema {
 mod server_tests;
 
 #[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
 mod tests {
     use super::*;
     use sea_orm::{Database, Statement};

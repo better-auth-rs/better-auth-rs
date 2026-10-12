@@ -1,3 +1,8 @@
+#![expect(
+    clippy::indexing_slicing,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
+
 use better_auth_core::{AuthError, AuthResult, FieldArray, FieldFunction, FieldMap, FieldValue};
 use serde_json::{Value as Json, json};
 use std::sync::{

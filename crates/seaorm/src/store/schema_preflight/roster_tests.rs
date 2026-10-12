@@ -1,3 +1,8 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
+
 use super::*;
 use crate::store::{bundled_schema::BundledSchema, map_db_err, migrator};
 use better_auth_core::{

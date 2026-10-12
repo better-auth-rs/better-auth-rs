@@ -150,6 +150,10 @@ impl SqlWriter for Collector {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
 pub(super) fn materialize_for_test(statement: Statement) -> AuthResult<Statement> {
     statement.materialize_mysql_text().map_err(|error| {
         *error

@@ -51,6 +51,10 @@ impl MigrationTrait for TwoFactorSecurity {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
 mod tests {
     use super::*;
     use crate::store::{SeaOrmStore, bundled_schema::BundledSchema};

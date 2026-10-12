@@ -1,3 +1,9 @@
+#![expect(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::unwrap_used,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
 #![allow(
     unused_results,
     reason = "test setup intentionally discards created records"

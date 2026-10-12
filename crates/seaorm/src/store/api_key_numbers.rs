@@ -70,6 +70,11 @@ async fn rebuild_sqlite(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::panic,
+    clippy::unwrap_used,
+    reason = "Tests intentionally panic when fixture setup or adapter contract assertions fail."
+)]
 mod tests {
     use super::*;
     use crate::store::{SeaOrmStore, bundled_schema::BundledSchema};
