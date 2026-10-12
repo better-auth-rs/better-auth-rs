@@ -153,6 +153,8 @@ export async function withEmailConsumer(native, options, operation) {
     const result = await operation({ auth, context, injected });
     armed = false;
     const after = native.snapshot(stored());
+    const { response, ...serialized } = result;
+    options.diagnostics?.push({ phase: "storage", scenario: options.scenario, ...serialized, before, after });
     assert.deepEqual(after, before, "Native email read failures and read-only endpoints must preserve complete storage");
     return { ...result, before, after };
   } finally {
@@ -161,12 +163,20 @@ export async function withEmailConsumer(native, options, operation) {
   }
 }
 
-export async function nativeEndpoint(native, operation, original) {
+export async function nativeEndpoint(native, operation, original, diagnostics) {
   let response;
   let headers;
   let cookies;
   const outcome = await native.outcome(async () => {
-    const result = await operation();
+    let result;
+    try {
+      result = await operation();
+    } catch (error) {
+      diagnostics?.push({ phase: "endpoint-error", error: {
+        name: error?.name, message: error?.message, stack: error?.stack, snapshot: native.snapshot(error),
+      } });
+      throw error;
+    }
     assert.equal(result instanceof Response, false, "Observe the native API result before HTTP serialization");
     assert.ok(Object.hasOwn(result, "response") && result.headers instanceof Headers,
       "The native API call must return the response and Headers envelope");
