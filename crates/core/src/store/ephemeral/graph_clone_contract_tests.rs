@@ -621,7 +621,7 @@ fn clone_getter_failures_preserve_original_errors_and_live_writes_before_work() 
                 &[user(format!("Live side effect {fail_at}").into())],
                 &[named(key("target", 5.0), value.clone())],
             )?;
-            assert_eq!(probe.own_keys()?, ["value"]);
+            assert_eq!(required(value.as_object())?.own_keys()?, ["value"]);
             assert!(required(keys(&store)?.row_at(0)?)?.same_row(&target));
             assert!(required(users(&store)?.row_at(0)?)?.same_row(&owner));
             assert!(required(target.field("name")?)?.strict_equals(&value));

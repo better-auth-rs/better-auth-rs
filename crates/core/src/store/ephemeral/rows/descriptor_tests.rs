@@ -150,6 +150,9 @@ fn promoted_row_clone_captures_accessors_once_and_normalizes_descriptors() -> Au
     assert_eq!(reads.load(Ordering::SeqCst), 1);
     assert!(required(before.get("value"))?.strict_equals(&shared));
     assert!(!before.contains_key("hidden"));
+    let (_, first) = source.structured_clone(&mut context)?;
+    assert!(required(first.get("value"))?.strict_equals(&shared));
+    assert_eq!(reads.load(Ordering::SeqCst), 1);
     context.publish();
     let cloned = required(copy.field("value")?)?;
     assert!(!cloned.strict_equals(&shared));
@@ -163,8 +166,6 @@ fn promoted_row_clone_captures_accessors_once_and_normalizes_descriptors() -> Au
             .own_property_descriptor("hidden")?
             .is_none()
     );
-    let (_, first) = source.structured_clone(&mut context)?;
-    assert!(required(first.get("value"))?.strict_equals(&shared));
     assert_eq!(reads.load(Ordering::SeqCst), 1);
     copy.set_field("value".into(), false.into())?;
     assert!(!source_value.set_property("value", false.into())?);

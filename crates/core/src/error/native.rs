@@ -1,4 +1,4 @@
-use super::{AuthError, AuthResult};
+use super::AuthResult;
 use crate::{
     FieldFunction, FieldMap, FieldObject, FieldPropertyDefinition, FieldPropertyDescriptor,
     FieldValue,

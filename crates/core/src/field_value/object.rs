@@ -123,7 +123,7 @@ impl FieldObject {
 
     /// Capture property names without evaluating property values.
     pub fn own_keys(&self) -> AuthResult<Vec<String>> {
-        let mut keys = match &self.0 {
+        let mut keys: Vec<String> = match &self.0 {
             ObjectStorage::Owned(fields) => fields
                 .lock()
                 .map_err(|_| AuthError::internal("Field object lock poisoned"))?

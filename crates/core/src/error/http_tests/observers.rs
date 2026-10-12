@@ -61,7 +61,7 @@ impl FieldObjectSource for Probe {
     fn get_with_receiver(
         &self,
         name: &str,
-        receiver: &FieldValue,
+        _receiver: &FieldValue,
     ) -> AuthResult<Option<FieldValue>> {
         (self.read)(name)
     }
