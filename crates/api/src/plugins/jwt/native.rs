@@ -10,6 +10,7 @@ use serde_json::{Map, Value, json};
 pub struct JwtApi<'a, S: AuthSchema> {
     plugin: JwtPlugin,
     context: &'a AuthContext<S>,
+    caller: Option<&'a EndpointContext<'a, S>>,
     transaction: Option<&'a dyn AuthTransaction<S>>,
     source: NativeRequest<'a>,
     request: AuthRequest,
@@ -25,20 +26,23 @@ impl<'a, S: AuthSchema> JwtApi<'a, S> {
         Ok(Self {
             plugin: JwtPlugin::with_config(config.clone()),
             context,
+            caller: None,
             transaction: None,
             source: NativeRequest::default(),
             request: AuthRequest::new(HttpMethod::Post, "virtual:").with_optional_headers(None),
         })
     }
 
-    /// Keep key reads and writes inside the calling endpoint's transaction.
-    pub fn from_endpoint(endpoint: &EndpointContext<'a, S>) -> AuthResult<Self> {
+    /// Borrow the caller for direct helpers and retain its transaction for dispatched operations.
+    pub fn from_endpoint(endpoint: &'a EndpointContext<'a, S>) -> AuthResult<Self> {
         let mut api = Self::from_context(endpoint.auth)?;
+        api.caller = Some(endpoint);
         api.transaction = endpoint.transaction;
         Ok(api)
     }
 
-    /// Supply native Request and headers independently for dynamic URL and callback context.
+    /// Supply Request and headers for dispatched operations or standalone key provisioning.
+    /// Direct helpers bound to an endpoint retain that endpoint's original context.
     pub fn with_request(mut self, source: NativeRequest<'a>) -> Self {
         self.source = source;
         self.request = AuthRequest::new(HttpMethod::Post, "virtual:")
@@ -169,8 +173,14 @@ impl<'a, S: AuthSchema> JwtApi<'a, S> {
         response.body.field_value()?.model_property("token")
     }
 
-    /// Provision a key using the registered storage callbacks and encryption policy.
+    /// Provision a key using the caller's complete endpoint, or a standalone context when unbound.
     pub async fn create_key_pair(&self, parameters: JwtKeyPairConfig) -> AuthResult<Option<Jwk>> {
+        if let Some(endpoint) = self.caller {
+            return self
+                .plugin
+                .create_key_pair_in_endpoint(parameters, endpoint)
+                .await;
+        }
         self.context
             .with_native_context(self.source, |resolved| async move {
                 self.plugin

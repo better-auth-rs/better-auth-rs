@@ -9,6 +9,14 @@ impl<S: AuthSchema> SessionManager<S> {
         response: &mut AuthResponse,
     ) -> AuthResult<()> {
         response.initialize_endpoint_headers(req.take_response_headers()?);
+        self.finish_response_policy(req, response)
+    }
+
+    pub(crate) fn finish_response_policy(
+        &self,
+        req: &AuthRequest,
+        response: &mut AuthResponse,
+    ) -> AuthResult<()> {
         let session_cookie = response
             .headers
             .get_all("set-cookie")

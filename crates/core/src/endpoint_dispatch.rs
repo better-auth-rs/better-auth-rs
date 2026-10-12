@@ -140,11 +140,11 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
 
         // Build a request with the stripped path for all subsequent dispatch
         let mut internal_req = if stripped_path != req.path() {
-            let mut r = req.with_separate_response_status();
+            let mut r = req.with_separate_response_headers();
             r.path = stripped_path.to_string();
             r
         } else {
-            req.with_separate_response_status()
+            req.with_separate_response_headers()
         };
         internal_req.set_endpoint_body(internal_req.unvalidated_input()?);
         internal_req.set_endpoint_query(internal_req.unvalidated_query()?);
@@ -152,7 +152,7 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
 
         let mut input_patch = crate::endpoint_input::EndpointInputPatch::default();
         if let Some(hook) = &self.hooks.before {
-            let hook_request = internal_req.with_separate_response_status();
+            let hook_request = internal_req.with_separate_response_headers();
             let action = match crate::observability::instrumentation::with_endpoint_hook(
                 &context.config,
                 &hook_request,
@@ -165,6 +165,7 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
                 Ok(action) => action,
                 Err(error) => return Err(before_error(error, &hook_request, context)?),
             };
+            merge_before_headers(&internal_req, &hook_request)?;
             if let Some(response) =
                 apply_before_action(action, &mut internal_req, req, &mut input_patch, http)?
             {
@@ -179,11 +180,12 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
         // Run plugin before_request hooks (e.g. API-key → session emulation)
         // Plugins now see the normalised (base_path-stripped) path.
         for plugin in self.plugins.iter() {
-            let hook_request = internal_req.with_separate_response_status();
+            let hook_request = internal_req.with_separate_response_headers();
             let action = match plugin.before_request(&hook_request, context).await {
                 Ok(action) => action,
                 Err(error) => return Err(before_error(error, &hook_request, context)?),
             };
+            merge_before_headers(&internal_req, &hook_request)?;
             if let Some(response) =
                 apply_before_action(action, &mut internal_req, req, &mut input_patch, http)?
             {
@@ -196,7 +198,7 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
         }
 
         // The endpoint owns a fresh accumulator; before-hook headers survive only a short circuit.
-        let _ = internal_req.take_response_headers()?;
+        internal_req = internal_req.with_separate_response_headers();
         if http && internal_req.original_request().is_none() {
             internal_req = internal_req.with_original_request(req.clone());
         }
@@ -297,9 +299,10 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
             },
         )
         .await;
-        let endpoint_status = internal_req.take_response_status()?;
+        let endpoint_status = internal_req.response_status()?;
         let mut response = match result {
             Ok(mut response) => {
+                response.initialize_endpoint_headers(internal_req.snapshot_response_headers()?);
                 let status = endpoint_status.map_or(
                     response.native_status(),
                     crate::NativeResponseStatus::Present,
@@ -320,9 +323,9 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
         let native_status = response.native_status();
         context
             .session_manager()
-            .finish_response(&internal_req, &mut response)?;
+            .finish_response_policy(&internal_req, &mut response)?;
         if let Some(hook) = &self.hooks.after {
-            let hook_request = internal_req.with_separate_response_status();
+            let hook_request = internal_req.with_separate_response_headers();
             let result = crate::observability::instrumentation::with_endpoint_hook(
                 &context.config,
                 &hook_request,
@@ -335,7 +338,7 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
             response.set_native_status(native_status.clone());
         }
         for plugin in self.plugins.iter() {
-            let hook_request = internal_req.with_separate_response_status();
+            let hook_request = internal_req.with_separate_response_headers();
             let result = plugin
                 .after_request(&hook_request, &mut response, context)
                 .await;
@@ -362,7 +365,18 @@ pub(crate) fn endpoint_error(error: AuthError, request: &AuthRequest) -> AuthRes
     if !error.is_api_error()? {
         return Ok(error);
     }
-    Ok(error.capture_native_headers(request.take_response_headers_value()?))
+    Ok(error.capture_native_headers(request.response_headers_value()?))
+}
+
+fn merge_before_headers(internal: &AuthRequest, hook: &AuthRequest) -> AuthResult<()> {
+    for (name, value) in hook.snapshot_response_headers()? {
+        if name.eq_ignore_ascii_case("set-cookie") {
+            internal.append_response_header(&name, value)?;
+        } else {
+            internal.set_response_header(&name, value)?;
+        }
+    }
+    Ok(())
 }
 
 fn apply_before_action(
@@ -386,7 +400,7 @@ fn apply_before_action(
                 return Ok(None);
             }
             response.set_native_status(crate::NativeResponseStatus::Absent);
-            response.merge_endpoint_headers(internal.take_response_headers()?);
+            response.merge_endpoint_headers(internal.snapshot_response_headers()?);
             return Ok(Some(response));
         }
         Some(BeforeRequestAction::MergeContext(patch)) => input_patch.merge(patch)?,
@@ -471,7 +485,7 @@ fn apply_after_result<S: AuthSchema>(
     context: &AuthContext<S>,
 ) -> AuthResult<()> {
     match result {
-        Ok(()) => response.merge_endpoint_headers(request.take_response_headers()?),
+        Ok(()) => response.merge_endpoint_headers(request.snapshot_response_headers()?),
         Err(error) => {
             let error = match request.take_hook_error_stage() {
                 crate::types::HookErrorStage::Unhandled => endpoint_error(error, request)?,
@@ -647,3 +661,7 @@ mod logger_tests {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "endpoint_dispatch/phase_ownership_tests.rs"]
+mod phase_ownership_tests;

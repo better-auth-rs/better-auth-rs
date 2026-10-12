@@ -277,3 +277,6 @@ async fn registered_groups_retain_falsy_defaults_and_typed_callback_identity() -
     );
     Ok(())
 }
+
+#[path = "native_direct_root_tests.rs"]
+mod direct_root_tests;

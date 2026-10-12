@@ -128,8 +128,8 @@ impl<'a, S: AuthSchema> EndpointContext<'a, S> {
         super::phone_number::PhoneNumberApi::from_endpoint(self)
     }
 
-    /// Use the registered JWT key adapter within this endpoint's active transaction.
-    pub fn jwt(&self) -> AuthResult<super::jwt::JwtApi<'a, S>> {
+    /// Borrow this endpoint for direct JWT helpers and retain its transaction for dispatched operations.
+    pub fn jwt(&self) -> AuthResult<super::jwt::JwtApi<'_, S>> {
         super::jwt::JwtApi::from_endpoint(self)
     }
 

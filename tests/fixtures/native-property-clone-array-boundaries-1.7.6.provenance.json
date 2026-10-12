@@ -1,7 +1,7 @@
 {
   "contract": "native-property-clone-array-boundaries",
   "version": "1.7.6",
-  "status": "Two upstream captures are byte-identical. Rust replay is pending.",
+  "status": "Two upstream captures are byte-identical. Rust replay passed; current-commit gate acceptance remains pending.",
   "run": "38279254507",
   "runURL": "https://github.com/better-auth-rs/better-auth-rs/actions/runs/38279254507",
   "commit": "e0bfe7e55e096a6931894d97045205b109cd4991",
@@ -46,6 +46,15 @@
     "path": "tests/fixtures/native-property-clone-array-boundaries-1.7.6.coverage.json",
     "cases": 4,
     "unpairedReflectionPaths": 109,
-    "status": "Rust replay is pending. The coverage ledger retains exact unpaired function reflection paths."
+    "status": "Rust replay passed for the paired observations. The coverage ledger retains exact unpaired function reflection paths."
+  },
+  "rustReplay": {
+    "run": "38282790634",
+    "runURL": "https://github.com/better-auth-rs/better-auth-rs/actions/runs/38282790634",
+    "commit": "fd40292c6fe47a357f1696cbfcaf3b8fcf543e53",
+    "test": "field_value::native_property_clone::property_clone_matches_frozen_source_array_boundaries",
+    "testConclusion": "success",
+    "runConclusion": "failure",
+    "gateFailure": "Core test lint diagnostics; no selected runtime test failed."
   }
 }

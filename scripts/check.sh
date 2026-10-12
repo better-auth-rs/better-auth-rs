@@ -930,7 +930,7 @@ PY_CHECK
         --test dynamic_runtime_tests --test http_api_error_logging_tests -- -D warnings || json_status=1
       cargo test --locked -p better-auth-core --lib -- \
         error:: field_value:: schema_value:: session:: endpoint_input:: http_body:: utils::defu:: utils::jwt:: utils::jwe:: utils::url:: wire:: \
-        request_runtime:: query:: plugin::tests::async_body_dispatch:: \
+        request_runtime:: query:: plugin::tests::async_body_dispatch:: endpoint_dispatch::phase_ownership_tests:: \
         store::ephemeral::id_slot_tests::organization_query_alias_tests::selector_values:: \
         observability::logger:: observability::telemetry:: \
         store::secondary::sessions::logging_tests:: store::secondary::users::tests:: \

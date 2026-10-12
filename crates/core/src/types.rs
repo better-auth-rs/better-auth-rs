@@ -817,14 +817,6 @@ impl AuthRequest {
         }
     }
 
-    pub(crate) fn with_separate_response_status(&self) -> Self {
-        Self {
-            response_status: Default::default(),
-            hook_error_stage: Default::default(),
-            ..self.clone()
-        }
-    }
-
     pub(crate) fn mark_hook_error_handled(&self) {
         *self.hook_error_stage.lock() = HookErrorStage::Handler;
     }
@@ -850,14 +842,12 @@ impl AuthRequest {
         Ok(())
     }
 
-    pub(crate) fn take_response_status(
-        &self,
-    ) -> crate::AuthResult<Option<crate::SchemaValue<u16>>> {
+    pub(crate) fn response_status(&self) -> crate::AuthResult<Option<crate::SchemaValue<u16>>> {
         Ok(self
             .response_status
             .lock()
             .map_err(|_| crate::AuthError::internal("Endpoint response status lock poisoned"))?
-            .take())
+            .clone())
     }
 
     pub fn body_as_json<T: for<'de> Deserialize<'de>>(&self) -> Result<T, serde_json::Error> {

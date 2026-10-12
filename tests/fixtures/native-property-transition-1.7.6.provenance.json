@@ -1,7 +1,7 @@
 {
   "contract": "native-property-transition",
   "version": "1.7.6",
-  "status": "Two upstream captures are byte-identical. Rust replay is pending.",
+  "status": "Two upstream captures are byte-identical. Rust replay passed; current-commit gate acceptance remains pending.",
   "run": "38276170680",
   "runURL": "https://github.com/better-auth-rs/better-auth-rs/actions/runs/38276170680",
   "commit": "a1a7bff37c33d3d38ad7b77d857aa5f4206de134",
@@ -42,6 +42,15 @@
     "ordinaryTransitions": 10,
     "recordedStates": 25,
     "unpairedReflectionPaths": 43,
-    "status": "Rust replay is pending. The coverage ledger retains exact unpaired function reflection paths."
+    "status": "Rust replay passed for the paired observations. The coverage ledger retains exact unpaired function reflection paths."
+  },
+  "rustReplay": {
+    "run": "38282790634",
+    "runURL": "https://github.com/better-auth-rs/better-auth-rs/actions/runs/38282790634",
+    "commit": "fd40292c6fe47a357f1696cbfcaf3b8fcf543e53",
+    "test": "field_value::native_property_transition::property_transitions_match_frozen_source_descriptors_events_and_native_identities",
+    "testConclusion": "success",
+    "runConclusion": "failure",
+    "gateFailure": "Core test lint diagnostics; no selected runtime test failed."
   }
 }

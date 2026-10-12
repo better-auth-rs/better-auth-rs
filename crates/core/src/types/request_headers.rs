@@ -79,6 +79,11 @@ impl AuthRequest {
         })
     }
 
+    /// Snapshot the phase's response headers without replacing its live binding.
+    pub(crate) fn snapshot_response_headers(&self) -> AuthResult<Headers> {
+        self.with_response_headers(|headers| headers.clone())
+    }
+
     /// Take the current response headers without draining retained native handles.
     pub fn take_response_headers(&self) -> AuthResult<Headers> {
         let binding = self.take_response_header_binding()?;
