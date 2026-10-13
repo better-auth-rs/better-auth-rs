@@ -29,8 +29,12 @@ Builds require OpenSSL 3.0 or newer, including its development headers. OIDC ML-
 | `axum` | Route mounting and session extractors |
 | `seaorm2` | SeaORM store and entity derives |
 | `redis-cache` | Standalone asynchronous Redis cache adapter |
+| `two-factor` | Default; `TwoFactorPlugin` and its `totp-rs` dependency |
+| `passkey` | Default; `PasskeyPlugin` and its WebAuthn dependencies |
+| `device-authorization` | Default; `DeviceAuthorizationPlugin` |
+| `scripts` | Default; dependencies of the maintenance binaries in `scripts/` |
 
-Select exactly one TLS backend. For Rustls:
+Select exactly one TLS backend. `default-features = false` also turns off the optional plugins; name the ones the application mounts. For Rustls:
 
 ```toml
 better-auth = { version = "1.0.0-alpha.3", git = "https://github.com/better-auth-rs/better-auth-rs", branch = "master", default-features = false, features = ["rustls", "axum", "seaorm2"] }

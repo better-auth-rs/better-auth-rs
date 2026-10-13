@@ -84,6 +84,8 @@ Configure Generic OAuth or OIDC with `OAuthPlugin::add_generic_provider` and `Ge
 | `axum` | Routes and session extractors |
 | `seaorm2` | SeaORM store and entity derives |
 | `redis-cache` | Standalone asynchronous Redis cache adapter; not a session storage backend |
+| `two-factor`, `passkey`, `device-authorization` | Default; each compiles its plugin |
+| `scripts` | Default; dependencies of the maintenance binaries in `scripts/` |
 
 ## Documentation and development
 

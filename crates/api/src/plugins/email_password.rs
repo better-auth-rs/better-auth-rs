@@ -11,7 +11,9 @@ use better_auth_core::{
     HttpMethod, RequestMeta,
 };
 
-use super::{email_verification::EmailVerificationPlugin, two_factor};
+use super::email_verification::EmailVerificationPlugin;
+#[cfg(feature = "two-factor")]
+use super::two_factor;
 use better_auth_core::utils::cookie_utils::{
     create_session_cookie, create_session_cookie_with_max_age, create_session_like_cookie,
     related_cookie_name, sign_cookie_value,
@@ -179,6 +181,7 @@ pub(crate) enum SignInCoreResult<U: Serialize> {
         token: String,
         set_cookie_headers: Vec<String>,
     },
+    #[cfg(feature = "two-factor")]
     TwoFactorRedirect {
         response: two_factor::TwoFactorRedirectResponse,
         set_cookie_headers: Vec<String>,
@@ -377,6 +380,7 @@ impl EmailPasswordPlugin {
                 }
                 Ok(auth_response)
             }
+            #[cfg(feature = "two-factor")]
             SignInCoreResult::TwoFactorRedirect {
                 response,
                 set_cookie_headers,
@@ -468,6 +472,7 @@ impl EmailPasswordPlugin {
                 }
                 Ok(auth_response)
             }
+            #[cfg(feature = "two-factor")]
             Ok(SignInCoreResult::TwoFactorRedirect {
                 response,
                 set_cookie_headers,
@@ -677,6 +682,13 @@ async fn verify_user_password(
 
 /// Shared sign-in finalization logic after user lookup and credential verification.
 async fn finalize_sign_in_with_user_core(
+    #[cfg_attr(
+        not(feature = "two-factor"),
+        expect(
+            unused_variables,
+            reason = "only the two-factor check reads the request"
+        )
+    )]
     req: &AuthRequest,
     user: impl AuthUser,
     remember_me: Option<bool>,
@@ -686,6 +698,7 @@ async fn finalize_sign_in_with_user_core(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SignInCoreResult<UserView>> {
     let mut set_cookie_headers = Vec::new();
+    #[cfg(feature = "two-factor")]
     if two_factor::is_enabled(ctx) && user.two_factor_enabled() {
         let trusted_device = two_factor::inspect_trusted_device(req, &user, ctx).await?;
         if trusted_device.trusted {

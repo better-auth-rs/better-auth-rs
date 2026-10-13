@@ -39,7 +39,7 @@ hkdf = { workspace = true }
 hmac = { workspace = true }
 rand = { workspace = true }
 base64 = { workspace = true }
-totp-rs = { workspace = true }
+totp-rs = { workspace = true, optional = true }
 
 # Logging
 tracing = { workspace = true }
@@ -55,9 +55,9 @@ nonzero_ext = "0.3.0"
 axum = { workspace = true, optional = true }
 jsonwebtoken.workspace = true
 serde_with = "3.18.0"
-serde_cbor_2 = "0.13.0"
+serde_cbor_2 = { version = "0.13.0", optional = true }
 serde_path_to_error = "0.1.20"
-webauthn-rs-core = "0.5.4"
+webauthn-rs-core = { version = "0.5.4", optional = true }
 tokio.workspace = true
 thiserror.workspace = true
 josekit = "0.10.3"
@@ -72,7 +72,11 @@ tokio = { workspace = true }
 better-auth-seaorm = { path = "../seaorm" }
 
 [features]
-default = ["native-tls"]
+default = ["native-tls", "two-factor", "passkey", "device-authorization"]
+# Plugins an app can leave out with their dependencies.
+two-factor = ["dep:totp-rs"]
+passkey = ["dep:webauthn-rs-core", "dep:serde_cbor_2"]
+device-authorization = []
 native-tls = ["reqwest/default-tls"]
 rustls = ["reqwest/rustls-tls"]
 axum = ["dep:axum", "better-auth-core/axum"]
