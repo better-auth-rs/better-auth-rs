@@ -12,11 +12,16 @@
 
 mod compat;
 
+use better_auth::AuthConfig;
 use better_auth::BetterAuth;
+use better_auth::middleware::{BodyLimitConfig, RateLimitConfig};
+use better_auth::plugins::EmailPasswordPlugin;
 use better_auth_core::entity::AuthUser;
 use better_auth_core::store::UserStore;
+use better_auth_seaorm::{Database, SeaOrmStore};
 use compat::helpers::*;
 use std::sync::Arc;
+use std::time::Duration;
 
 type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 
@@ -85,6 +90,100 @@ async fn test_sign_out_integration() {
         send_request(&auth, get_with_auth("/get-session", &session_token)).await;
     assert_eq!(status2, 200);
     assert_eq!(response2, serde_json::Value::Null);
+}
+
+/// A malformed JSON body is refused before the origin check
+// Upstream source: better-call src/utils.ts :: `getBody` parses the body in the router,
+// before endpoint middleware, and throws 400 `BAD_REQUEST` "Invalid JSON in request body".
+#[tokio::test]
+async fn test_malformed_json_is_refused_before_origin_check() {
+    let auth = create_test_auth_memory().await;
+
+    let mut req = post_json("/sign-in/email", serde_json::json!({}));
+    req.body = Some(b"{\"email\":".to_vec());
+    req.headers.insert(
+        "origin".to_string(),
+        "https://untrusted.example".to_string(),
+    );
+    let (status, body) = send_request(&auth, req).await;
+    assert_eq!(status, 400);
+    assert_eq!(body["code"], "BAD_REQUEST");
+    assert_eq!(body["message"], "Invalid JSON in request body");
+}
+
+/// Only content types better-call both allows and JSON-parses are refused before the origin check
+// Upstream source: better-call src/utils.ts :: `getBody` throws 415 unless the media type
+// contains the router's allowed `application/json`, then JSON-parses when
+// `/^application\/([a-z0-9.+-]*\+)?json/i` matches, throwing 400 "Invalid JSON in request body".
+#[tokio::test]
+async fn test_malformed_json_content_types() {
+    let auth = create_test_auth_memory().await;
+    let cases = [
+        ("application/json; charset=utf-8", true),
+        ("Application/JSON", true),
+        ("application/jsonp", true),
+        ("application/json-seq", true),
+        ("application/vnd.api+json", false),
+        ("text/plain", false),
+    ];
+    for (content_type, refused) in cases {
+        let mut req = post_json("/sign-in/email", serde_json::json!({}));
+        req.body = Some(b"{\"email\":".to_vec());
+        req.headers
+            .insert("content-type".to_string(), content_type.to_string());
+        req.headers.insert(
+            "origin".to_string(),
+            "https://untrusted.example".to_string(),
+        );
+        let (status, body) = send_request(&auth, req).await;
+        if refused {
+            assert_eq!(status, 400, "{content_type}");
+            assert_eq!(body["code"], "BAD_REQUEST", "{content_type}");
+            assert_eq!(
+                body["message"], "Invalid JSON in request body",
+                "{content_type}"
+            );
+        } else {
+            // Upstream answers 415 here; the endpoints own that check.
+            assert_ne!(status, 400, "{content_type}");
+        }
+    }
+}
+
+/// Malformed JSON is refused after the body limit and rate limit, which run before parsing
+// Upstream source: better-call src/router.ts :: `handler` runs `onRequest` (better-auth's rate
+// limiter) before `getBody`; the body limit is Rust-specific and also guards parsing.
+#[tokio::test]
+async fn test_malformed_json_is_refused_after_request_guards() {
+    let config = AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
+        .base_url("http://localhost:3000");
+    let database = Database::connect("sqlite::memory:").await.unwrap();
+    better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database)
+        .await
+        .unwrap();
+    let auth = BetterAuth::<TestSchema>::new(config.clone())
+        .store(SeaOrmStore::<TestSchema>::new(config, database))
+        .plugin(EmailPasswordPlugin::new())
+        .body_limit(BodyLimitConfig::new().max_bytes(16))
+        .rate_limit(RateLimitConfig::new().endpoint("/sign-in/email", Duration::from_secs(60), 2))
+        .build()
+        .await
+        .unwrap();
+
+    let malformed = |body: &[u8]| {
+        let mut req = post_json("/sign-in/email", serde_json::json!({}));
+        req.body = Some(body.to_vec());
+        req
+    };
+    let (status, body) =
+        send_request(&auth, malformed(b"{\"email\":\"oversize@example.com\"")).await;
+    assert_eq!(status, 413);
+    assert_eq!(body["code"], "BODY_TOO_LARGE");
+
+    for status in [400, 400, 429] {
+        let (actual, _) = send_request(&auth, malformed(b"{")).await;
+        assert_eq!(actual, status);
+    }
 }
 
 /// Integration test for list-sessions endpoint
