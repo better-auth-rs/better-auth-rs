@@ -7,7 +7,9 @@
 #![allow(unreachable_pub, reason = "SeaORM derive requires public entity types")]
 
 use better_auth::plugin::AuthPlugin;
-use better_auth::plugins::{AdminPlugin, EmailPasswordPlugin, OrganizationPlugin, TwoFactorPlugin};
+#[cfg(feature = "two-factor")]
+use better_auth::plugins::TwoFactorPlugin;
+use better_auth::plugins::{AdminPlugin, EmailPasswordPlugin, OrganizationPlugin};
 use better_auth::seaorm::sea_orm::entity::prelude::*;
 use better_auth::seaorm::{AuthEntity, Database, SeaOrmStore, sea_orm};
 use better_auth::{AuthConfig, AuthError, AuthSchema, BetterAuth};
@@ -84,6 +86,7 @@ fn config() -> AuthConfig {
 async fn plugins_reject_missing_user_fields_before_serving_requests()
 -> Result<(), Box<dyn std::error::Error>> {
     let cases: Vec<(Box<dyn AuthPlugin<CoreSchema>>, &str, &str)> = vec![
+        #[cfg(feature = "two-factor")]
         (
             Box::new(TwoFactorPlugin::new()),
             "two-factor",

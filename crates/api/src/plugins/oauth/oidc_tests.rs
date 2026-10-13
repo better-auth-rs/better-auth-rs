@@ -301,7 +301,7 @@ async fn discovery_signing_metadata_does_not_discard_usable_endpoints() {
         *server.body.lock().unwrap() = json!({
             "issuer":"https://issuer.example",
             "authorization_endpoint":"https://issuer.example/authorize",
-            "jwks_uri":server.url,
+            "jwks_uri":server.url.as_str(),
             "id_token_signing_alg_values_supported":algorithms
         });
         let document = fetch_discovery(server.url.as_str(), &HeaderMap::new())
