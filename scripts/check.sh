@@ -9,6 +9,7 @@ cargo clippy --workspace --locked -- -D warnings
 cargo clippy --workspace --locked --features axum,seaorm2,redis-cache -- -D warnings
 cargo test --workspace --locked --features axum,seaorm2,redis-cache
 cargo check -p better-auth --locked --no-default-features --features rustls,axum,seaorm2,redis-cache
+cargo check -p better-auth --locked --no-default-features --features rustls-no-provider,axum,seaorm2,redis-cache
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --locked --no-deps --features axum,seaorm2,redis-cache
 ./scripts/consumer-check.sh
 bun scripts/quick-start-check.ts
