@@ -113,6 +113,43 @@ async fn test_sign_out_expires_received_session_data_twice() {
     assert_eq!(expiries[0], expiries[1]);
 }
 
+/// Get-session expires each received `session_data` cookie once while caching is off
+// Upstream source: packages/better-auth/src/api/routes/session.ts :: `getSession`
+// expires a received cache only through `createSessionStore(...).clean()` when cookie
+// caching is disabled, so only the received cookies are expired, each exactly once.
+#[tokio::test]
+async fn test_get_session_expires_received_session_data_once_without_cache() {
+    let auth = create_test_auth_memory().await;
+    let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
+
+    for (received, expected) in [
+        (
+            "better-auth.session_data=stale",
+            vec!["better-auth.session_data="],
+        ),
+        (
+            "better-auth.session_data.0=stale",
+            vec!["better-auth.session_data.0="],
+        ),
+    ] {
+        let mut req = get_with_auth("/get-session", &session_token);
+        req.headers
+            .insert("cookie".to_string(), received.to_string());
+        let resp = auth.handle_request(req).await.unwrap();
+        assert_eq!(resp.status, 200);
+
+        let expiries: Vec<_> = resp
+            .headers
+            .get_all("set-cookie")
+            .filter(|cookie| cookie.starts_with("better-auth.session_data"))
+            .collect();
+        assert_eq!(expiries.len(), expected.len(), "{received}: {expiries:?}");
+        for (expiry, prefix) in expiries.iter().zip(&expected) {
+            assert!(expiry.starts_with(prefix), "{received}: {expiries:?}");
+        }
+    }
+}
+
 /// Integration test for list-sessions endpoint
 // Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
