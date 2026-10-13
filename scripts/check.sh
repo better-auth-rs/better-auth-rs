@@ -8,7 +8,8 @@ cargo fmt --all -- --check
 cargo clippy --workspace --locked -- -D warnings
 cargo clippy --workspace --locked --features axum,seaorm2,redis-cache -- -D warnings
 cargo test --workspace --locked --features axum,seaorm2,redis-cache
-cargo check -p better-auth --locked --no-default-features --features rustls,axum,seaorm2,redis-cache
+cargo check -p better-auth --locked --no-default-features --features rustls,jwt-rust-crypto,axum,seaorm2,redis-cache
+cargo test -p better-auth-core -p better-auth-api --locked --no-default-features --features better-auth-api/rustls,better-auth-api/jwt-aws-lc-rs
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --locked --no-deps --features axum,seaorm2,redis-cache
 ./scripts/consumer-check.sh
 bun scripts/quick-start-check.ts

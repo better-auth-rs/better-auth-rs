@@ -54,6 +54,10 @@ josekit = "0.10.3"
 percent-encoding = "2.3.2"
 
 [features]
-default = []
+default = ["jwt-rust-crypto"]
+# The JWT crypto backend. aws-lc-rs suits apps that already use it, and leaves out `rsa`
+# (RUSTSEC-2023-0071) with the rest of RustCrypto.
+jwt-rust-crypto = ["jsonwebtoken/rust_crypto"]
+jwt-aws-lc-rs = ["jsonwebtoken/aws_lc_rs"]
 redis-cache = ["dep:redis"]
 axum = ["dep:axum"]
