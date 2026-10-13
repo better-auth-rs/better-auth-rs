@@ -87,6 +87,7 @@ syn = { version = "2", features = ["full"] }
 default = ["native-tls"]
 native-tls = ["better-auth-api/native-tls"]
 rustls = ["better-auth-api/rustls"]
+rustls-no-provider = ["better-auth-api/rustls-no-provider"]
 axum = [
     "dep:axum",
     "dep:tower",

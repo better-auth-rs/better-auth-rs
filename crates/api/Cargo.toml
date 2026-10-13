@@ -75,4 +75,7 @@ better-auth-seaorm = { path = "../seaorm" }
 default = ["native-tls"]
 native-tls = ["reqwest/default-tls"]
 rustls = ["reqwest/rustls-tls"]
+# rustls with the process-default crypto provider and webpki roots, for apps that install
+# their own provider (aws-lc-rs) and must not pull in ring.
+rustls-no-provider = ["reqwest/rustls-tls-webpki-roots-no-provider"]
 axum = ["dep:axum", "better-auth-core/axum"]

@@ -19,10 +19,32 @@ compile_error!(
      for `rustls`, set `default-features = false, features = [\"rustls\"]`."
 );
 
-#[cfg(not(any(feature = "native-tls", feature = "rustls")))]
+#[cfg(all(feature = "native-tls", feature = "rustls-no-provider"))]
+compile_error!(
+    "features `native-tls` and `rustls-no-provider` are mutually exclusive. \
+     Enable exactly one of them: \
+     for `native-tls` (default), remove the `rustls-no-provider` feature; \
+     for `rustls-no-provider`, set \
+     `default-features = false, features = [\"rustls-no-provider\"]`."
+);
+
+#[cfg(all(feature = "rustls", feature = "rustls-no-provider"))]
+compile_error!(
+    "features `rustls` and `rustls-no-provider` are mutually exclusive: \
+     `rustls` bundles the ring crypto provider. \
+     Enable exactly one of them: \
+     for `rustls`, remove the `rustls-no-provider` feature; \
+     for `rustls-no-provider`, remove the `rustls` feature."
+);
+
+#[cfg(not(any(
+    feature = "native-tls",
+    feature = "rustls",
+    feature = "rustls-no-provider"
+)))]
 compile_error!(
     "one of the TLS backends must be enabled: \
-     enable either the `native-tls` (default) or `rustls` feature."
+     enable `native-tls` (default), `rustls`, or `rustls-no-provider`."
 );
 
 pub mod plugins;
