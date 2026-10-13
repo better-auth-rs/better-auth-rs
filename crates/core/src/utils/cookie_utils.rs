@@ -134,6 +134,12 @@ pub fn create_clear_cookie(name: &str, config: &AuthConfig) -> String {
 /// Serialize a cookie as better-call's `serializeCookie` does: `Max-Age`, `Path`,
 /// `HttpOnly`, `Secure`, then `SameSite`, in that order. Better Auth sets no `Expires`
 /// on these cookies; browsers apply `Max-Age`.
+///
+/// A negative `max_age_seconds` is dropped, not clamped, so the cookie becomes a
+/// browser-session cookie. That matches better-call, which only writes `Max-Age` when
+/// `maxAge >= 0`; upstream's max ages all come from options (`session.expiresIn`,
+/// `cookieCache.maxAge`, `trustDeviceMaxAge`, ...), so a negative option yields the same
+/// session cookie there. Expire a cookie with `create_clear_cookie` (`Max-Age=0`).
 fn serialize_cookie(
     name: &str,
     value: &str,
@@ -191,6 +197,17 @@ mod tests {
         assert_eq!(
             create_clear_cookie("better-auth.state", &config),
             "better-auth.state=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax"
+        );
+    }
+
+    // Upstream source: better-call src/cookies.ts :: `serializeCookie` only writes
+    // `Max-Age` when `maxAge >= 0`, so a negative max age leaves a session cookie.
+    #[test]
+    fn negative_max_age_is_dropped_like_better_call() {
+        let config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
+        assert_eq!(
+            create_cookie("better-auth.state", "abc", -1, &config),
+            "better-auth.state=abc; Path=/; HttpOnly; SameSite=Lax"
         );
     }
 }
