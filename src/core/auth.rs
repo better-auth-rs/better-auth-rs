@@ -27,7 +27,13 @@ fn username_error_response(status: u16, code: &str, message: &str) -> AuthResult
     .map_err(AuthError::from)
 }
 
-/// Whether the body claims JSON (better-call's `application/(...+)?json`) and isn't.
+/// Whether better-call's `getBody` would refuse the body as invalid JSON.
+///
+/// Upstream first requires the media type before `;` to contain the router-wide allowed
+/// `application/json` (otherwise 415, left to the endpoints here), then JSON-parses when
+/// `/^application\/([a-z0-9.+-]*\+)?json/i` matches. Both checks are as loose as upstream:
+/// `application/jsonp` and `application/json-seq` are parsed as JSON, while
+/// `application/vnd.api+json` never reaches the parse.
 fn malformed_json(req: &AuthRequest) -> bool {
     let Some(body) = req.body.as_deref().filter(|body| !body.is_empty()) else {
         return false;
@@ -38,6 +44,12 @@ fn malformed_json(req: &AuthRequest) -> bool {
         .find(|(name, _)| name.eq_ignore_ascii_case("content-type"))
         .map(|(_, value)| value.to_ascii_lowercase())
         .unwrap_or_default();
+    let allowed = content_type
+        .split(';')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .contains("application/json");
     let Some(subtype) = content_type.strip_prefix("application/") else {
         return false;
     };
@@ -47,8 +59,12 @@ fn malformed_json(req: &AuthRequest) -> bool {
                 .bytes()
                 .all(|b| b.is_ascii_alphanumeric() || b"+.-".contains(&b))
         });
-    json && serde_json::from_slice::<serde::de::IgnoredAny>(body).is_err()
+    allowed && json && serde_json::from_slice::<serde::de::IgnoredAny>(body).is_err()
 }
+
+/// Middlewares that run before the body is parsed: body limit and rate limit, matching the
+/// rate limiter in better-auth's router `onRequest`, which better-call runs before `getBody`.
+const REQUEST_GUARDS: usize = 2;
 
 pub struct BetterAuth<S: AuthSchema> {
     config: Arc<AuthConfig>,
@@ -185,7 +201,8 @@ impl<S: AuthSchema> AuthBuilder<S> {
                 .or_insert(limit);
         }
 
-        // Build middleware chain (order matters: body limit → rate limit → CSRF → CORS → custom)
+        // Build middleware chain (order matters: body limit → rate limit → CSRF → CORS → custom).
+        // The first `REQUEST_GUARDS` entries run before the body is parsed.
         let mut middlewares: Vec<Box<dyn Middleware>> = vec![
             Box::new(BodyLimitMiddleware::new(body_limit.clone())),
             Box::new(RateLimitMiddleware::new(rate_limit_config)),
@@ -249,8 +266,13 @@ impl<S: AuthSchema> BetterAuth<S> {
 
     /// Inner request handler that may return errors.
     async fn handle_request_inner(&self, req: &mut AuthRequest) -> AuthResult<AuthResponse> {
-        // better-call parses the body in its router, before any endpoint middleware, so a
-        // malformed JSON body is refused before the origin and CSRF checks.
+        let (guards, middlewares) = self.middlewares.split_at(REQUEST_GUARDS);
+        if let Some(response) = middleware::run_before(guards, req).await? {
+            return Ok(response);
+        }
+
+        // better-call parses the body after `onRequest` but before the router middleware, so a
+        // malformed JSON body is refused after rate limiting and before the origin check.
         if malformed_json(req) {
             return Err(AuthError::Upstream {
                 status: 400,
@@ -259,8 +281,7 @@ impl<S: AuthSchema> BetterAuth<S> {
             });
         }
 
-        // Run before-request middleware chain
-        if let Some(response) = middleware::run_before(&self.middlewares, req).await? {
+        if let Some(response) = middleware::run_before(middlewares, req).await? {
             return Ok(response);
         }
 
