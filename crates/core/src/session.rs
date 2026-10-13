@@ -170,7 +170,7 @@ impl<S: AuthSchema> SessionManager<S> {
         let cache_value =
             cookie_cache::read(req, &related_cookie_name(&self.config, "session_data"));
         if cache.is_none() && cache_value.is_some() {
-            cookie_cache::clear(req, &self.config)?;
+            cookie_cache::clean(req, &self.config)?;
         }
         let Some(token) = token else {
             return Ok(none());
@@ -276,7 +276,16 @@ impl<S: AuthSchema> SessionManager<S> {
             "Set-Cookie",
             create_clear_cookie(&self.config.session.cookie_name, &self.config),
         )?;
-        cookie_cache::clear(req, &self.config)?;
+        // As `deleteSessionCookie` does, expire `session_data` unconditionally and then
+        // clean the received cache cookies, so a received unchunked one is expired twice.
+        req.append_response_header(
+            "Set-Cookie",
+            create_clear_cookie(
+                &related_cookie_name(&self.config, "session_data"),
+                &self.config,
+            ),
+        )?;
+        cookie_cache::clean(req, &self.config)?;
         for suffix in ["dont_remember", "oauth_state", "account_data"] {
             if suffix == "account_data" && !self.config.account.store_account_cookie {
                 continue;

@@ -233,6 +233,16 @@ pub(super) fn clear(req: &AuthRequest, config: &AuthConfig) -> AuthResult<()> {
     Ok(())
 }
 
+/// Expire every received cookie of the cache, the unchunked one included, as the
+/// session store's `clean()` does.
+pub(super) fn clean(req: &AuthRequest, config: &AuthConfig) -> AuthResult<()> {
+    let name = related_cookie_name(config, "session_data");
+    for chunk in existing_names(req, &name) {
+        req.append_response_header("Set-Cookie", create_clear_cookie(&chunk, config))?;
+    }
+    Ok(())
+}
+
 pub(super) fn write(
     req: &AuthRequest,
     data: &SessionData,

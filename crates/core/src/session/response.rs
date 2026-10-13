@@ -127,12 +127,14 @@ impl<S: AuthSchema> SessionManager<S> {
         }
         // Send only the final value for each cookie. A 2FA redirect must never expose
         // an earlier credential cookie that the same response subsequently expires.
+        // An identical repeat stays where it is, as upstream sends it (sign-out expires
+        // `session_data` once unconditionally and again as a received cache cookie).
         let mut cookies = Vec::<(String, String)>::new();
         for value in response.headers.get_all("set-cookie") {
             let Some((name, _)) = value.split_once('=') else {
                 continue;
             };
-            cookies.retain(|(existing, _)| existing != name);
+            cookies.retain(|(existing, earlier)| existing != name || earlier == value);
             cookies.push((name.to_string(), value.clone()));
         }
         response.headers.remove("set-cookie");
