@@ -3,6 +3,898 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [1.0.0-alpha.4](https://github.com/better-auth-rs/better-auth-rs/compare/v1.0.0-alpha.3...v1.0.0-alpha.4) - 2026-10-20
+
+### Bug Fixes
+
+- merge identical schema field conversions
+
+- consume the wallet insert statement builder
+
+- remove unused JWK clock import
+
+- delete locked MySQL rows by primary key
+
+- resolve native value integration lints
+
+- remove redundant connection trait import
+
+- align Organization filter values and fixture references
+
+- match upstream Microsoft photo URL encoding
+
+- complete API and SQL value boundaries
+
+- retain validated role selector strings
+
+- remove redundant ID comparison borrow
+
+- exclude invalid dates from scalar sets
+
+- preserve native Serial user and session ownership
+
+- preserve explicit User ID projection
+
+- store Account and Verification Serial primary IDs
+
+- retain mapped session owner updates
+
+- include native User fields in cache ordering
+
+- enforce session and plugin persistence invariants
+
+- generate complete usable auth schemas
+
+- repair async Redis feature integration
+
+- align session and credential security with upstream
+
+- align lookup and invitation lifecycle
+
+- support RP-initiated logout
+
+- close parity gaps and enforce upstream contracts
+
+- preserve transport URLs for proxy origin resolution
+
+- align field projections and cookie lifetimes
+
+- preserve cookie errors and joined field order
+
+- align live organization reads and fractional lifetimes
+
+- align duration configuration and cookie field presence
+
+- preserve fractional TOTP periods and URI values
+
+- align explicit cookie expiration and cleanup
+
+- preserve plugin duration precision and device intervals
+
+- align organization references and lockout timing
+
+- align empty aliases and device persistence behavior
+
+- resolve empty model names to upstream defaults
+
+- align Memory field representations
+
+- align Memory JSON and user queries
+
+- align nullable user queries and OpenAPI fields
+
+- align User projection and declaration order
+
+- align SQLite output and generated schemas
+
+- preserve scalar fields and runtime model declarations
+
+- align SQLite JSON fields and OpenAPI model ordering
+
+- align SQLite verification schema and empty field mappings
+
+- align SQLite user, account, JWK, and rate-limit schemas
+
+- align native SQLite session and organization schemas
+
+- align SQLite timestamps, teams, and invitations
+
+- align provider contracts and move acceptance to CI
+
+- update async-trait for current Clippy
+
+- align OAuth options and pin the CI environment
+
+- align PostgreSQL and MySQL User and Account columns
+
+- support non-exhaustive database backends
+
+- preserve native MySQL timestamp defaults
+
+- align server Verification columns
+
+- order endpoint keys before assigning IDs
+
+- align server JWK columns
+
+- align RateLimit metadata and server columns
+
+- align server Member columns
+
+- align server OrganizationRole text storage
+
+- align server team and counter storage
+
+- align fresh server session storage
+
+- include privately attached verification options
+
+- preserve session presence and catalog identity
+
+- retain MySQL team member date precision
+
+- align native WalletAddress catalogs and storage
+
+- update backup codes by loaded record ID
+
+- use native user email unique constraints
+
+- read memory display fields at projection time
+
+- return the active internal user schema on redemption
+
+- resolve logical models before table aliases
+
+- align mapped display field policies
+
+- resolve empty Device scope aliases consistently
+
+- align unknown reference errors and scan order
+
+- honor API Key and derived physical column aliases
+
+- validate selected join reference fields
+
+- preserve schema history across operation boundaries
+
+- preserve driver JSON and inferred postgres operands
+
+- generate IDs in adapter field order
+
+- assign serial ID at memory insertion
+
+- complete runtime conversion boundaries
+
+- migrate runtime value consumers
+
+- retain native session option values
+
+- serialize the complete TimeClip date range
+
+- preserve native endpoint and session values
+
+- pair native Memory predicates and transaction guards
+
+- retain native values in hook contexts
+
+- pair native Device query values across databases
+
+- complete root JSON and test boundaries
+
+- bound error layout and consumer conversions
+
+- unify native number JSON projections
+
+- collect test compilation failures through cargo build
+
+- migrate plugin output observations to native values
+
+- migrate typed models to native field contracts
+
+- migrate lifecycle and compatibility value boundaries
+
+- migrate Device and plugin native observations
+
+- retain SQL contract observations with native values
+
+- migrate user query and join native values
+
+- retain SQL null and encoded JSON parameters
+
+- preserve native JSON driver input and output behavior
+
+- restore field omission and public SQL model conversions
+
+- export native SQL conversion through the facade
+
+- preserve native Serial IDs for sessions and auxiliary records
+
+- preserve native wallet owner references
+
+- dispatch focused stages through the check runner
+
+- preserve native serial IDs for credential models
+
+- align native serial boundaries and live session output
+
+- preserve native serial team member owners
+
+- retain ordered adapter ID policies across callbacks
+
+- bind session IDs at their schema position
+
+- preserve awaited session adapter lookup
+
+- align session ID binding and adapter continuation
+
+- preserve organization SQL output representation
+
+- honor creation ID slots and forced session IDs
+
+- apply defaults before creation hooks
+
+- bind transformed fields before omission
+
+- resolve initial defaults with input precedence
+
+- align native creation hooks and secondary writes
+
+- preserve dynamic display values through cache reads
+
+- project Account IDs in Memory joins
+
+- accept Enum display field declarations
+
+- consume optional storage guard result
+
+- retain sort bounds and independent Session timestamps
+
+- preserve object conversion errors at comparison boundaries
+
+- migrate runtime field and date observations
+
+- inspect nested runtime request objects
+
+- isolate list contracts and import JSON macro
+
+- expose factory API and repair focused test setup
+
+- execute schema-selected member user joins
+
+- reconstruct native joined user fields before output
+
+- generate native API Key table and column names
+
+- execute selected Account and User relationships through sign-in
+
+- preserve native API Key date precision
+
+- expose relationship and session result types
+
+- preserve native identities during Admin admission
+
+- resolve cache signing keys before subject validation
+
+- preserve upstream attribute serialization order
+
+- preserve native User updates and callback errors
+
+- align native schema catalog and nullable flags
+
+- resolve focused schema and cookie lint failures
+
+- preserve User updates after cache refresh failures
+
+- preserve native cache values and User field order
+
+- preserve array-owner verification delivery errors
+
+- retain active User plugin fields in joins
+
+- preserve unique field declarations
+
+- preserve native pure-secondary Session fields and User lookups
+
+- align fractional JWT expiration and verification errors
+
+- separate JWT validation from business payload parsing
+
+- align Session projection and API Key metadata creation
+
+- align Cookie mutation and shared chunk ordering
+
+- complete Session bounds and defer nullish name coercion
+
+- align fractional OAuth token expiry and hook presence
+
+- preserve numeric cookie name enumeration order
+
+- preserve selected session user relationships
+
+- match upstream TOTP NaN period defaults
+
+- align OAuth proxy non-finite age limits
+
+- compare Memory API Key names without eager coercion
+
+- align Device reference sets and empty SQL predicates
+
+- preserve Device reference query operands
+
+- bound field projection future types
+
+- validate Device membership before adapter conversion
+
+- align TOTP counter wrapping and verification windows
+
+- preserve omitted fields in Memory User joins
+
+- align credential hashing deadlines and polling guards
+
+- preserve stable Member ordering and independent Session timestamps
+
+- preserve API Key signed-zero sort ties
+
+- align Session schema projection and SQL date predicates
+
+- remove unused Session import after module split
+
+- compare stored Member JSON and align invitation date transforms
+
+- align API Key usage date binding and precision
+
+
+### CI
+
+- capture new provider fixtures in GitHub Actions
+
+- isolate independent provider captures
+
+- preserve dependency build caches after failed checks
+
+- expose focused stages and capture Google contracts
+
+- capture Generic profile result contracts
+
+- capture PostgreSQL and MySQL schemas
+
+- capture Device request validation contracts
+
+- select captured provider option contracts
+
+- capture ordinary upstream Device grant flows
+
+- capture upstream Device grant OpenAPI metadata
+
+- capture issuer and schema contracts together
+
+- validate the issuer and schema slices
+
+- capture endpoint order and JWK columns
+
+- validate endpoint order and JWK schemas
+
+- capture Social refresh request context
+
+- check refresh callback consumers
+
+- capture RateLimit metadata and server columns
+
+- capture verifier context and Member columns
+
+- capture OrganizationRole text storage
+
+- reuse focused build caches and skip unused database services
+
+- collect independent workspace compilation failures
+
+- record resources during consumer diagnosis
+
+- separate Rust dependency caches by check stage
+
+- accumulate Rust cache artifacts across focused runs
+
+- preserve running acceptance jobs
+
+- reuse stage caches across Cargo manifest changes
+
+- focus Account User HTTP contract acceptance
+
+- add focused OAuth duration checks with shared cache
+
+- collect failures across independent acceptance stages
+
+- batch selected configuration profiles
+
+- keep batch concurrency names within GitHub limits
+
+
+### Chores
+
+- add reproducible devenv environment
+
+- unify verification and document working setup
+
+- configure tooling and repair frontend checks
+
+
+### Documentation
+
+- record RateLimit CI acceptance
+
+- record passkey and backup-code acceptance
+
+- separate open capabilities from acceptance gaps
+
+- record non-JSON query fidelity requirements
+
+- record terminal consumer runner failure
+
+- specify manual column conversion boundaries
+
+- record complete generated consumer acceptance
+
+- refresh active alignment acceptance status
+
+- distinguish accepted alignment from historical failures
+
+- record focused compatibility acceptance checkpoint
+
+- record Device and telemetry acceptance
+
+- record credential timing acceptance
+
+- record Memory numeric sorting acceptance
+
+- record API Key date and Organization acceptance
+
+
+### Features
+
+- align machine credentials with better-auth 1.7.6
+
+- add typed server operations
+
+- align generic OAuth and OIDC with upstream
+
+- implement remaining upstream HTTP routes
+
+- integrate organization, user fields, JWT and proxy alignment
+
+- expose resolved provider availability
+
+- align lifecycle hooks and typed field schemas
+
+- align typed built-in field policies
+
+- align upstream storage, callbacks, and schemas
+
+- align session, factor, and callback behavior
+
+- align upstream security and callback behavior
+
+- align upstream runtime and storage behavior
+
+- align JWT callbacks and request runtime
+
+- align error routing and lifecycle contracts
+
+- align adapter fields and request validation
+
+- align logging hooks and adapter tracing
+
+- align endpoint inputs and adapter behavior
+
+- align transaction effects and notification dispatch
+
+- align native endpoint validation and credential hooks
+
+- align adapter projections and initialization options
+
+- await field policies and align initialization metadata
+
+- align upstream field and provider execution
+
+- align plugin field policies and OAuth profiles
+
+- align provider flows and profile field semantics
+
+- add Atlassian Reddit Salesforce and Kakao providers
+
+- add Zoom and preserve model declarations
+
+- add Twitter and VK and preserve verification fields
+
+- add Cognito and WeChat provider flows
+
+- apply scope field policies at adapter boundaries
+
+- add Facebook Paybin and PayPal providers
+
+- align native join and live row projections
+
+- add transactional device code redemption
+
+- align device fields and memory serial references
+
+- align JWK and wallet field policies
+
+- add provider options and profile result contracts
+
+- validate configured request fields before dispatch
+
+- add typed grant authorization and redemption policy
+
+- align grant OpenAPI metadata
+
+- align GitLab issuer endpoints
+
+- document declared request schemas
+
+- pass request context to refresh callbacks
+
+- pass request context to custom token verifiers
+
+- align fresh DeviceCode database schemas
+
+- support native upstream credential storage
+
+- align native storage and nullable enrollment behavior
+
+- align additional fields and callback persistence
+
+- support declared ownership equality with transaction guards
+
+- support native scope ownership equality
+
+- expose typed endpoint context to ID token verifiers
+
+- support declared additional field policies
+
+- align plugin fields and schema reference checks
+
+- align ownership membership predicates
+
+- align ownership comparison operators
+
+- bind serial ownership references consistently
+
+- preserve runtime field values before JSON conversion
+
+- export shared runtime field values from facade
+
+- support JSON plugin fields and fallible field factories
+
+- align numeric API Key names and shared Passkey columns
+
+- align Session and Device schema reference boundaries
+
+- register custom models for schema reference resolution
+
+- align telemetry Docker detection
+
+- align Linux release and WSL telemetry
+
+- align Linux CPU and memory telemetry
+
+- generate and renew Sign in with Apple client secrets
+
+- add typed Admin permission checks for application code
+
+
+### Refactoring
+
+- name the synchronous body callback type
+
+- trim unused member join metadata
+
+- preserve runtime values across adapters
+
+
+### Style
+
+- order Session imports
+
+
+### Tests
+
+- decode Apple callback form before direct dispatch
+
+- verify native credentials after database reopen
+
+- register TwoFactor schema in enrollment fixture
+
+- keep TimeClip checks compatible with strict lints
+
+- import native invitation expiration values
+
+- compare factory failures at the same read boundary
+
+- verify integer query limits on PostgreSQL
+
+- run MySQL schema preflight in CI
+
+- capture server team and counter storage
+
+- capture server session storage
+
+- capture DeviceCode database catalogs
+
+- capture WalletAddress catalogs and storage
+
+- capture TwoFactor and Passkey catalogs
+
+- retain creation-order checks with nullable dates
+
+- isolate upstream captures and fix provider inputs
+
+- import verified provider and isolated schema fixtures
+
+- capture nullable SQL storage behavior
+
+- preserve legacy assertions and fresh session setup
+
+- pair generated storage with upstream SQL observations
+
+- capture additional field policy lifecycle
+
+- capture lock callback and null guard boundaries
+
+- capture ownership and transaction predicates
+
+- parse fixed fixture dates explicitly
+
+- capture native scope ownership predicates
+
+- capture live display field projection
+
+- capture ordinary additional field policies
+
+- preserve captured additional field contracts
+
+- retain rejection coverage for native credentials
+
+- capture additional fields across guarded usage writes
+
+- reject both credential identifier aliases
+
+- preserve legacy boolean fixture type
+
+- capture live API key fields and join references
+
+- capture model aliases in schema joins
+
+- capture plugin output conversion capabilities
+
+- capture logical model precedence in joins
+
+- capture mapped Passkey display fields
+
+- preserve contract assertions under Clippy
+
+- retain join assertions with fallible setup
+
+- capture unknown joins and Device set predicates
+
+- capture native reference scan order
+
+- gate ownership sets and reference errors
+
+- capture field mappings and device query operators
+
+- correct primary field and portable date fixtures
+
+- collect JSON field maps through iterators
+
+- collect all backend failures in one run
+
+- capture persistent join schema history
+
+- isolate fixtures and preserve fallible assertions
+
+- remove inactive lint expectations
+
+- capture user ID generation callback order
+
+- isolate API key name mapping helpers
+
+- separate runtime ID policies from physical schema
+
+- satisfy history contract lint checks
+
+- capture non-JSON ownership across transactions
+
+- retain complete upstream transaction value contracts
+
+- capture transaction value aliases and merge equality
+
+- import runtime configuration trait
+
+- capture serial creation across nested callbacks
+
+- retain nested serial creation observations
+
+- retain native field values in fixtures
+
+- migrate remaining public fixture inputs
+
+- cover Serial ownership and join regression paths
+
+- capture Serial primary IDs and native JSON drivers
+
+- collect Serial regression failures in one CI run
+
+- import verified Serial and JSON driver captures
+
+- pair Serial creation with complete upstream observations
+
+- align legacy assertions with native field contracts
+
+- include native JSON in full database acceptance
+
+- propagate fixture errors through focused checks
+
+- capture remaining session and auxiliary Serial IDs
+
+- add focused Serial primary ID acceptance
+
+- check plugin fixtures without unchecked setup panics
+
+- capture explicit adapter ID slot behavior
+
+- pair complete adapter ID slot observations
+
+- match the Session User projection boundary
+
+- reject unstable upstream fixture captures
+
+- preserve deterministic native capture values
+
+- import replay-verified ID fixtures
+
+- retain forced-ID contract assertions under Clippy
+
+- capture ordered creation ID aliases
+
+- fix ID contract imports and lint expectations
+
+- retain full ID fixture and consistent user input
+
+- keep session ID fixtures within timestamp range
+
+- capture undefined reference ID aliases
+
+- install hooks through the runtime adapter
+
+- provide the required SQL owner name
+
+- split generated schema compilation targets
+
+- preserve numeric input and assert JSON output
+
+- capture native JSON display fields across adapters
+
+- record JSON display contracts and capture memory sorting
+
+- capture schema-selected member user joins
+
+- record schema-selected member user join evidence
+
+- cover member join aliases and native limit boundaries
+
+- import user store operations for factory regressions
+
+- lint complete join regression coverage
+
+- capture selected Account and User relations
+
+- retain verified Account and User relation oracle
+
+- capture authentication consumers of selected relations
+
+- retain verified relation authentication boundary
+
+- pair selected Account and User sign-in boundaries
+
+- capture OAuth array-owner profile overrides
+
+- fix native session contract observation types
+
+- retain verified OAuth profile override observations
+
+- retain expanded native API Key catalog observations
+
+- capture User cache refresh failure boundaries
+
+- preserve upstream transaction initialization diagnostics
+
+- capture native User refresh cache values
+
+- correct secondary store and JSON macro imports
+
+- capture array-owner OAuth email verification boundaries
+
+- attach verification policy to paired provider
+
+- capture remaining field and secondary storage contracts
+
+- initialize Two Factor hooks and accept JSON display policies
+
+- retain captured contracts and sample email token durations
+
+- keep focused auth and telemetry checks warning free
+
+- gate paired display and secondary contracts in focused CI
+
+- pair numeric name ordering and retain contract assertions
+
+- capture Cookie mutation and schema reference boundaries
+
+- document synchronous Cookie contract assertions
+
+- fix Session Device and Cookie contract lint
+
+- pair Email payload failures and wire focused contracts
+
+- observe every OAuth database lifecycle hook
+
+- preserve contracts with checked JSON lookups
+
+- compare Device owner reads at the same projection layer
+
+- preserve explicit null OAuth Session seed metadata
+
+- bind OAuth update timestamps before normalization
+
+- capture remaining cookie session and duration boundaries
+
+- gate session and non-finite option alignment
+
+- restore shared upstream schemas after captures
+
+- document strict TOTP fixture indexing
+
+- capture Device reference candidate sets on four backends
+
+- clone Device candidate slices directly
+
+- preserve real telemetry initialization observations
+
+- capture raw Device reference value binding
+
+- check Device fixture guard access
+
+- capture default Device reference operands
+
+- capture Device scalar membership rejection
+
+- capture TOTP counter conversion boundaries
+
+- distinguish Number and integer TOTP windows
+
+- collect independent compatibility profile failures
+
+- document deliberate harness aborts
+
+- capture credential hashing and polling boundaries
+
+- use established credential timing lint targets
+
+- capture stable Member sort order
+
+- capture API Key numeric sort ties
+
+- capture API Key usage date boundaries
+
+- remove unused async contract lint expectation
+
+
+### merge
+
+- integrate OIDC with proxy and identity routes
+
+- integrate provider availability from master
+
 ## [1.0.0-alpha.3](https://github.com/better-auth-rs/better-auth-rs/compare/v1.0.0-alpha.2...v1.0.0-alpha.3) - 2026-09-26
 
 ### Bug Fixes
