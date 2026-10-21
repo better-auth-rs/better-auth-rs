@@ -46,6 +46,24 @@ jobs:
           persist-credentials: false
           token: ${{ steps.app-token.outputs.token }}
 
+      # better-auth-core builds rust_icu with `icu_version_in_env`. The semver
+      # check compiles it, so provide the ICU 78 that devenv.nix uses.
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: cachix/cachix-action@v17
+        with:
+          name: devenv
+          skipPush: true
+
+      - name: Provide ICU 78 from the locked devenv nixpkgs revision
+        run: |
+          nixpkgs_rev=$(python3 -c 'import json; print(json.load(open("devenv.lock"))["nodes"]["nixpkgs"]["locked"]["rev"])')
+          icu=$(nix build --no-link --print-out-paths "github:cachix/devenv-nixpkgs/${nixpkgs_rev}#icu78^out")
+          echo "RUST_ICU_MAJOR_VERSION_NUMBER=78" >> "$GITHUB_ENV"
+          echo "RUST_ICU_LINK_SEARCH_DIR=${icu}/lib" >> "$GITHUB_ENV"
+
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: release-plz/action@v0.5
@@ -71,6 +89,24 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           token: ${{ steps.app-token.outputs.token }}
+
+      # `cargo publish` verifies each crate with a build, and better-auth-cli
+      # links ICU. Provide the same ICU 78 as the release-pr job.
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: cachix/cachix-action@v17
+        with:
+          name: devenv
+          skipPush: true
+
+      - name: Provide ICU 78 from the locked devenv nixpkgs revision
+        run: |
+          nixpkgs_rev=$(python3 -c 'import json; print(json.load(open("devenv.lock"))["nodes"]["nixpkgs"]["locked"]["rev"])')
+          icu=$(nix build --no-link --print-out-paths "github:cachix/devenv-nixpkgs/${nixpkgs_rev}#icu78^out")
+          echo "RUST_ICU_MAJOR_VERSION_NUMBER=78" >> "$GITHUB_ENV"
+          echo "RUST_ICU_LINK_SEARCH_DIR=${icu}/lib" >> "$GITHUB_ENV"
 
       - uses: dtolnay/rust-toolchain@stable
 
