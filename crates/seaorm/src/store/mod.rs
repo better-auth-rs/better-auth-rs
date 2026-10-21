@@ -647,12 +647,25 @@ where
         id: &str,
         delete_database_sessions: bool,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
+        self.delete_user_optional_value(&id.into(), delete_database_sessions)
+            .await
+    }
+
+    async fn delete_user_value(&self, id: &better_auth_core::FieldValue) -> AuthResult<()> {
+        self.delete_user_optional_value(id, true).await.map(|_| ())
+    }
+
+    async fn delete_user_optional_value(
+        &self,
+        id: &better_auth_core::FieldValue,
+        delete_database_sessions: bool,
+    ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         let record = self
             .store
             .delete_user_with_connection(
                 &self.tx,
                 Some((&self.tx, self)),
-                &id.into(),
+                id,
                 delete_database_sessions,
             )
             .await?;
@@ -660,6 +673,37 @@ where
             self.queue(transaction_hooks::Effect::UserDeleted(record.clone()))?;
         }
         Ok(record)
+    }
+
+    async fn delete_user_sessions_optional_value(
+        &self,
+        user_id: &better_auth_core::FieldValue,
+        preserve: bool,
+    ) -> AuthResult<Option<usize>> {
+        let backend = sea_orm::ConnectionTrait::get_database_backend(&self.tx);
+        self.store
+            .delete_sessions_with_connection(
+                &self.tx,
+                Some((&self.tx, self)),
+                || {
+                    self.store
+                        .bind_session_query_field("userId", user_id, backend)
+                },
+                better_auth_core::WhereOperator::Eq,
+                None,
+                preserve,
+            )
+            .await
+    }
+
+    async fn delete_user_accounts_value(
+        &self,
+        user_id: &better_auth_core::FieldValue,
+    ) -> AuthResult<()> {
+        self.store
+            .delete_user_accounts_with_connection(&self.tx, Some((&self.tx, self)), user_id)
+            .await
+            .map(|_| ())
     }
     fn passkey_storage(&self) -> better_auth_core::PasskeyStorage {
         <P::Passkey as crate::SeaOrmPluginModel>::passkey_storage()

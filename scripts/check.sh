@@ -565,13 +565,14 @@ run_stage() {
           --test memory_user_live_reads_tests --test api_key_number_name_tests \
           --test plugin_display_json_tests --test plugin_model_fields_tests \
           --test nullable_user_update_tests --test sql_user_string_output_tests --test sql_user_extra_output_tests \
-          --test username_runtime_tests --test email_normalization_tests --test user_native_delete_tests \
+          --test username_runtime_tests --test email_normalization_tests --test user_native_delete_tests --test user_delete_transaction_tests \
           --test email_verification_duration_tests --test email_verification_payload_tests --test email_verification_claims_tests \
           --test lifecycle_notification_tests || create_status=1
         cargo test --locked --features axum,seaorm2,redis-cache --test mysql_create_readback_tests -- --ignored || create_status=1
         cargo test --locked --features axum,seaorm2,redis-cache --test user_account_raw_column_tests -- --ignored || create_status=1
         cargo test --locked --features axum,seaorm2,redis-cache --test account_verification_update_fields_tests -- --ignored || create_status=1
         cargo test --locked --features axum,seaorm2,redis-cache --test verification_transaction_delete_tests -- --ignored || create_status=1
+        cargo test --locked --features axum,seaorm2,redis-cache --test user_delete_transaction_tests -- --ignored || create_status=1
         cargo test --locked --features axum,seaorm2,redis-cache --test query_binding_order_tests -- --ignored || create_status=1
         cargo test --locked -p better-auth-cli --test generate || create_status=1
         ./scripts/consumer-check.sh --lib --test 'generated_core_*' --test session_native_values --test user_session_fields || create_status=1

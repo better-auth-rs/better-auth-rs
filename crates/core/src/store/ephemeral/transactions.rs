@@ -359,6 +359,33 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
             .delete_user_optional(id, delete_database_sessions)
             .await
     }
+    async fn delete_user_value(&self, id: &Value) -> AuthResult<()> {
+        self.store.delete_user_value(id).await
+    }
+    async fn delete_user_optional_value(
+        &self,
+        id: &Value,
+        delete_database_sessions: bool,
+    ) -> AuthResult<Option<UserView>> {
+        self.store
+            .delete_user_optional_value(id, delete_database_sessions)
+            .await
+    }
+    async fn delete_user_sessions_by_user_value(&self, user_id: &Value) -> AuthResult<()> {
+        self.store.delete_user_sessions_by_user_value(user_id).await
+    }
+    async fn delete_user_sessions_optional_value(
+        &self,
+        user_id: &Value,
+        preserve: bool,
+    ) -> AuthResult<Option<usize>> {
+        self.store
+            .delete_user_sessions_optional_value(user_id, preserve)
+            .await
+    }
+    async fn delete_user_accounts_value(&self, user_id: &Value) -> AuthResult<()> {
+        self.store.delete_user_accounts_value(user_id).await
+    }
 
     fn passkey_storage(&self) -> crate::PasskeyStorage {
         self.store.passkey_storage()

@@ -371,11 +371,21 @@ async fn perform_user_deletion(
         hook.before_delete(&data.user_value()?, Some(req)).await?;
     }
     let id = data.user_property("id")?;
-    ctx.database.delete_user_value(&id).await?;
-    ctx.database.delete_user_sessions_by_user_value(&id).await?;
-    if confirmed {
-        ctx.database.delete_user_accounts_value(&id).await?;
-    }
+    // Intentional divergence: upstream runs these writes without a transaction, so a write
+    // failure after the child deletions leaves a User without sessions or credentials. One
+    // transaction rolls back every row instead. Database after hooks and secondary-storage
+    // cleanup run after the commit, and the application hooks stay outside the transaction.
+    better_auth_core::store::transaction(ctx.database.as_ref(), move |tx| {
+        Box::pin(async move {
+            tx.delete_user_value(&id).await?;
+            tx.delete_user_sessions_by_user_value(&id).await?;
+            if confirmed {
+                tx.delete_user_accounts_value(&id).await?;
+            }
+            Ok(())
+        })
+    })
+    .await?;
     // Queue revocation before the application hook so error responses also clear credentials.
     ctx.session_manager().clear_cookies(req)?;
     if let Some(hook) = &config.delete_user.after_delete {

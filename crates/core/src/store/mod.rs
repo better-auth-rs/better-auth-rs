@@ -455,6 +455,50 @@ pub trait AuthTransaction<S: AuthSchema>:
             "The store must preserve user deletion cancellation",
         ))
     }
+    /// Delete owned records and the User with the original native selector.
+    async fn delete_user_value(&self, id: &crate::FieldValue) -> AuthResult<()> {
+        let id = id.as_str().ok_or_else(|| {
+            AuthError::config("The store must support native transactional user deletion selectors")
+        })?;
+        self.delete_user(id).await
+    }
+    /// Preserve a native deletion selector and cancellation before secondary cleanup.
+    async fn delete_user_optional_value(
+        &self,
+        id: &crate::FieldValue,
+        delete_database_sessions: bool,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
+        let id = id.as_str().ok_or_else(|| {
+            AuthError::config("The store must support native transactional user deletion selectors")
+        })?;
+        self.delete_user_optional(id, delete_database_sessions)
+            .await
+    }
+    /// Delete every Session of a User with its native selector inside the transaction.
+    async fn delete_user_sessions_by_user_value(
+        &self,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<()> {
+        self.delete_user_sessions_optional_value(user_id, false)
+            .await
+            .map(|_| ())
+    }
+    /// Return None when a before hook cancels the transactional Session batch.
+    async fn delete_user_sessions_optional_value(
+        &self,
+        _user_id: &crate::FieldValue,
+        _preserve: bool,
+    ) -> AuthResult<Option<usize>> {
+        Err(AuthError::config(
+            "The store must support transactional user session deletion",
+        ))
+    }
+    /// Delete every Account of a User with its native selector inside the transaction.
+    async fn delete_user_accounts_value(&self, _user_id: &crate::FieldValue) -> AuthResult<()> {
+        Err(AuthError::config(
+            "The store must support transactional Account batch deletion",
+        ))
+    }
 
     /// Select the representation accepted by transactional passkey creation.
     fn passkey_storage(&self) -> crate::PasskeyStorage {

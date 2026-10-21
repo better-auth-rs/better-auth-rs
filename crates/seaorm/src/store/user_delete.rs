@@ -151,23 +151,26 @@ where
                 return Ok(None);
             }
         }
-        // Retain the existing polymorphic API-key cleanup before the user write.
-        let _ = database_operation::<<P::ApiKey as crate::SeaOrmPluginModel>::Entity, _>(
-            self.config(),
-            "deleteMany",
-            async {
-                <P::ApiKey as crate::SeaOrmPluginModel>::Entity::delete_many()
-                    .filter(super::value_filter::equals(
-                        <P::ApiKey as crate::SeaOrmPluginModel>::column("reference_id")?,
-                        id,
-                        db.get_database_backend(),
-                    )?)
-                    .exec(db)
-                    .await
-                    .map_err(map_db_err)
-            },
-        )
-        .await?;
+        // Retain the existing polymorphic API-key cleanup before the user write. A typed
+        // binding does not activate the model, and an inactive model may have no table.
+        if self.api_key_model_active() {
+            let _ = database_operation::<<P::ApiKey as crate::SeaOrmPluginModel>::Entity, _>(
+                self.config(),
+                "deleteMany",
+                async {
+                    <P::ApiKey as crate::SeaOrmPluginModel>::Entity::delete_many()
+                        .filter(super::value_filter::equals(
+                            <P::ApiKey as crate::SeaOrmPluginModel>::column("reference_id")?,
+                            id,
+                            db.get_database_backend(),
+                        )?)
+                        .exec(db)
+                        .await
+                        .map_err(map_db_err)
+                },
+            )
+            .await?;
+        }
         let (column, value) = self.query_field_binding(
             better_auth_core::store::schema::EntityRole::User,
             &self.user_field_schema(),
@@ -204,5 +207,13 @@ where
             }
         }
         Ok(Some(user))
+    }
+
+    /// Report whether a plugin declared the API-key model for this runtime.
+    fn api_key_model_active(&self) -> bool {
+        self.model_fields
+            .active_models()
+            .iter()
+            .any(|(role, _)| *role == better_auth_core::store::schema::EntityRole::ApiKey)
     }
 }

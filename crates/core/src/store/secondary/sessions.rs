@@ -125,10 +125,6 @@ impl<S: AuthSchema> SecondaryStore<S> {
         Ok(())
     }
 
-    pub(super) async fn references(&self, user_id: &str) -> AuthResult<FieldValue> {
-        self.references_value(&user_id.into()).await
-    }
-
     pub(super) async fn references_value(&self, user_id: &FieldValue) -> AuthResult<FieldValue> {
         Ok(cache::decode(
             self.secondary()?
@@ -272,16 +268,6 @@ impl<S: AuthSchema> SecondaryStore<S> {
         })
     }
 
-    pub(super) async fn queue_cached_user_session_deletion(
-        &self,
-        user_id: String,
-        references: FieldValue,
-        transaction: Option<&dyn crate::store::AuthTransaction<S>>,
-    ) -> AuthResult<()> {
-        self.queue_cached_user_session_deletion_value(user_id.into(), references, transaction)
-            .await
-    }
-
     pub(super) async fn queue_cached_user_session_deletion_value(
         &self,
         user_id: FieldValue,
@@ -290,22 +276,54 @@ impl<S: AuthSchema> SecondaryStore<S> {
     ) -> AuthResult<()> {
         let runtime = self.clone();
         let effect = Box::pin(async move {
-            // Upstream applies this onError policy both after commit and without a transaction.
-            if let Err(error) = runtime
-                .delete_cached_sessions_value(&user_id, &references)
+            runtime
+                .delete_committed_cached_sessions(&user_id, &references)
                 .await
-            {
-                runtime.config.logger()?.error(
-                    "Failed to delete committed user sessions from secondary storage",
-                    &[crate::observability::LogArgument::Error(&error)],
-                )?;
-            }
-            Ok(())
         });
         match transaction {
             Some(transaction) => transaction.queue_after_commit(effect),
             None => effect.await,
         }
+    }
+
+    /// Queue the cached-session removal before a transactional deletion queues its after hooks.
+    ///
+    /// The commit runs its effects in order and stops at the first error. Queued first, the
+    /// removal still runs when a later after hook fails. It does nothing unless the caller
+    /// sets the returned flag, so a cancelled deletion keeps its cached sessions.
+    pub(super) fn queue_armed_cached_user_session_deletion(
+        &self,
+        user_id: FieldValue,
+        references: FieldValue,
+        transaction: &dyn crate::store::AuthTransaction<S>,
+    ) -> AuthResult<std::sync::Arc<std::sync::atomic::AtomicBool>> {
+        let armed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let runtime = self.clone();
+        let deleted = armed.clone();
+        transaction.queue_after_commit(Box::pin(async move {
+            if !deleted.load(std::sync::atomic::Ordering::Acquire) {
+                return Ok(());
+            }
+            runtime
+                .delete_committed_cached_sessions(&user_id, &references)
+                .await
+        }))?;
+        Ok(armed)
+    }
+
+    async fn delete_committed_cached_sessions(
+        &self,
+        user_id: &FieldValue,
+        references: &FieldValue,
+    ) -> AuthResult<()> {
+        // Upstream applies this onError policy both after commit and without a transaction.
+        if let Err(error) = self.delete_cached_sessions_value(user_id, references).await {
+            self.config.logger()?.error(
+                "Failed to delete committed user sessions from secondary storage",
+                &[crate::observability::LogArgument::Error(&error)],
+            )?;
+        }
+        Ok(())
     }
 
     async fn delete_cached_sessions_value(
