@@ -3,7 +3,7 @@
 Authentication for Rust with Axum integration and application-owned SeaORM entities. The compatibility target is `better-auth@1.7.6`: routes, payloads, cookies, and errors follow the upstream TypeScript runtime.
 
 > [!WARNING]
-> Version `1.0.0-alpha.4` is in development. Public Rust APIs and database schemas can change between alpha releases.
+> Version `1.0.0-alpha.5` is in development. Public Rust APIs and database schemas can change between alpha releases.
 
 Configure model IDs and application-owned defaults through [database ID generation](docs/content/docs/concepts/database.mdx#model-ids). User creation evaluates the ID generator at the ID field's schema position among input callbacks.
 
@@ -87,7 +87,7 @@ These examples use the current `master` branch. The DX changes are not yet publi
 
 ```toml
 [dependencies]
-better-auth = { version = "1.0.0-alpha.4", git = "https://github.com/better-auth-rs/better-auth-rs", branch = "master", features = ["axum", "seaorm2"] }
+better-auth = { version = "1.0.0-alpha.5", git = "https://github.com/better-auth-rs/better-auth-rs", branch = "master", features = ["axum", "seaorm2"] }
 axum = "0.8"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
 serde = { version = "1", features = ["derive"] }

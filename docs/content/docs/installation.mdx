@@ -9,7 +9,7 @@ These examples target the current `master` branch. The DX changes are not yet pu
 
 ```toml title="Cargo.toml"
 [dependencies]
-better-auth = { version = "1.0.0-alpha.4", git = "https://github.com/better-auth-rs/better-auth-rs", branch = "master", features = ["axum", "seaorm2"] }
+better-auth = { version = "1.0.0-alpha.5", git = "https://github.com/better-auth-rs/better-auth-rs", branch = "master", features = ["axum", "seaorm2"] }
 axum = "0.8"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
 serde = { version = "1", features = ["derive"] }
@@ -35,7 +35,7 @@ Memory string sorting uses ICU 78.3 through the pre-generated `rust_icu` binding
 Select exactly one TLS backend. For Rustls:
 
 ```toml
-better-auth = { version = "1.0.0-alpha.4", git = "https://github.com/better-auth-rs/better-auth-rs", branch = "master", default-features = false, features = ["rustls", "axum", "seaorm2"] }
+better-auth = { version = "1.0.0-alpha.5", git = "https://github.com/better-auth-rs/better-auth-rs", branch = "master", default-features = false, features = ["rustls", "axum", "seaorm2"] }
 ```
 
 The cache adapters are standalone utilities. Enabling `redis-cache` does not change session persistence or register a session cache.
