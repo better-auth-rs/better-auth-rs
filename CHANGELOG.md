@@ -3,6 +3,830 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [1.0.0-alpha.5](https://github.com/better-auth-rs/better-auth-rs/compare/v1.0.0-alpha.4...v1.0.0-alpha.5) - 2026-10-21
+
+### Bug Fixes
+
+- decode User email through the declared SQL field type
+
+- preserve registered native Session column catalogs
+
+- complete shared plugin field conversion callers
+
+- repair SQL expression and reference lock compilation
+
+- migrate reference callbacks to nullable native records
+
+- restore shared schema and plugin trait imports
+
+- stabilize passkey trace capture and narrow API key helpers
+
+- retain native password response values until output
+
+- finish native Passkey and TwoFactor value migration
+
+- preserve symbolic API errors and consumer contract boundaries
+
+- retain native errors through verification and replay
+
+- adapt the Admin permission API and Apple tests to aligned values
+
+- remove obsolete typed API Key import
+
+- remove obsolete Memory helpers and repair test imports
+
+- explicitly discard completed clone materialization values
+
+- complete native verification consumer type boundaries
+
+- complete native consumer compile migration
+
+- bind complete JSON values in Member filters
+
+- preserve Memory Member membership errors
+
+- accept scalar Member exclusion filters
+
+- preserve Memory API Key refill Date identity
+
+- preserve Memory API Key NaN sort ties
+
+- share ICU collation across Memory queries
+
+- preserve shared plugin field order and usage semantics
+
+- preserve SQL field equality and update return boundaries
+
+- preserve field policy state and projected session admission
+
+- preserve native dates and atomic increment targets
+
+- preserve reference replacement and JWT header boundaries
+
+- complete shared field preflight and JWT boundaries
+
+- align shared SQL values and contract boundaries
+
+- reject empty atomic writes and retain projected passkey IDs
+
+- preserve native API Key reference cache values
+
+- align MySQL numeric bindings and contract initialization
+
+- share native cache projection and first-error handling
+
+- preserve native creation consumers and secondary cache records
+
+- resolve user input through ordered plugin declarations
+
+- preserve shared public field boundaries and repair contract checks
+
+- preserve source values in readback and email verification
+
+- repair native session migration build and test callers
+
+- preserve SQL query binding phases across models
+
+- bind verification consumption to projected IDs
+
+- propagate fallible API key views and repair field registration callers
+
+- complete ordered organization projections and nullable invitation updates
+
+- borrow native verification selector after shared property reads
+
+- complete transaction acceptance fixtures and remove obsolete paths
+
+- preserve SQL child projection fields and order
+
+- preserve Team deletion scope across lifecycle hooks
+
+- share Member operand validation and repair Team contracts
+
+- derive schema preflight from effective field declarations
+
+- retain owned projection peers and transaction schema scope
+
+- retain Account continuations and preserve native API error bodies
+
+- share native validation error construction
+
+- retain Session and Team projection continuations
+
+- remove unfulfilled Organization test lint expectation
+
+- preserve Organization errors and RateLimit declaration priority
+
+- retain projection tracing and align contract observation boundaries
+
+- share effective model declarations across adapters
+
+- use shared declarations in OpenAPI and physical SQL reads
+
+- preserve declared fields in typed credentials and native joins
+
+- share typed field presence and sparse SQL consumption
+
+- repair typed record acceptance compilation
+
+- share rate limit field storage and runtime mappings
+
+- share SQL query binding and materialize HTTP responses
+
+- preserve atomic status and explicit rate-limit responses
+
+- repair atomic contract setup and diagnostics
+
+- preserve Organization feature boundaries and consumer contracts
+
+- preserve native errors through JSON and API key consumers
+
+- preserve numeric property order in direct map boundaries
+
+- validate active models and preserve native contract observations
+
+- publish captured Team deletion and enable native join contracts
+
+- route plugin timestamps through shared field policies
+
+- preserve native values through JSON and signing boundaries
+
+- complete native projection consumers and contract setup
+
+- use public schema types in remaining shared consumers
+
+- share native HTTP JSON and response header conversion
+
+- complete native error caller migration and request validation
+
+- complete error observation and OAuth result migrations
+
+- preserve OAuth linking errors and refresh cookie timing
+
+- preserve native OAuth records through provider and Account flows
+
+- consume Generic OAuth nonce metadata at the provider boundary
+
+- preserve original OAuth tokens for account subject resolution
+
+- share native Memory parent grouping across core joins
+
+- preserve native error identity and descriptor read semantics
+
+- preserve OAuth link response order and capture environment
+
+- preserve logger lifetimes and HTTP contract reason phrases
+
+- retain native errors through plugin response boundaries
+
+- preserve the API key update write error boundary
+
+- preserve shared runtime and HTTP error logging semantics
+
+- preserve caller logger scopes across nested HTTP handlers
+
+- resolve shared logger policy at auth initialization
+
+- retain bound plugin ID fields across shared and atomic queries
+
+- preserve query conversion and global callback diagnostic boundaries
+
+- complete shared Memory query consumers and claim field policies
+
+- share native claim guards and retain coded error assertions
+
+- apply shared field policies to SQL API key cleanup
+
+- share physical column aliases across derived models
+
+- preserve verification retry order and transaction clock
+
+- preserve native method argument order and consumer dispatch
+
+- preserve synchronous adapter ID conversion across threads
+
+- preserve shared logger failure and task ownership
+
+- preserve missing API key cache update outcomes
+
+- complete logger consumer and contract migration
+
+- preserve native background completion values
+
+- share cleanup clock across adapter calls
+
+- share native method and nullable update boundaries
+
+- preserve key discovery and authentication validation order
+
+- share cache invocation and completion ownership
+
+- preserve authoritative native password sessions
+
+- share native fallible sorting across consumers
+
+- retain native User properties during session issuance
+
+- resolve registered plugin declarations in order
+
+- preserve native memory row accessors and identity
+
+- preserve native BetterAuthError messages and identity
+
+- share native catalog index naming across backends
+
+- retain native backup generation through shared encoding
+
+- share native challenge and verification boundaries
+
+- default Memory storage to native credential records
+
+- retain native database errors across shared boundaries
+
+- preserve observed delegated-key errors and module access
+
+- update docs and nested lockfiles for 1.0.0-alpha.4
+
+- keep /delete-user atomic and skip inactive API key cleanup ([#130](https://github.com/better-auth-rs/better-auth-rs/pull/130))
+
+
+### Build
+
+- prepare original PostgreSQL error metadata patch
+
+- align locked CLI and schema prerelease dependencies
+
+- resolve the prerelease dependency family together
+
+- restore manifests after joint dependency resolution
+
+
+### CI
+
+- include existing backend and host contracts in full acceptance
+
+- isolate acceptance queues by tested commit
+
+- select upstream contract files without Rust reruns
+
+- add focused JWT and native error acceptance
+
+- isolate shared-column acceptance across backends
+
+- cache Rust dependencies through devenv
+
+- provide ICU 78 to the release-plz jobs ([#131](https://github.com/better-auth-rs/better-auth-rs/pull/131))
+
+
+### Chores
+
+- resolve Memory gate dependency with Cargo
+
+- merge master into the pre-vendor upstream alignment
+
+- merge the alpha.4 docs and lockfile fixes
+
+
+### Documentation
+
+- record Member JSON filter acceptance
+
+- record Member Date and NaN acceptance
+
+- record passing full acceptance checkpoint
+
+- record verified JSON source replay and batch acceptance scope
+
+- record successful isolated verification replays
+
+- record native option evidence and remaining error boundaries
+
+
+### Features
+
+- expose native API key expiration cleanup
+
+- retain native callbacks across awaited and borrowed calls
+
+
+### Refactoring
+
+- share raw projection policies with public helpers
+
+- share native API Key and Passkey field policies
+
+- preserve complete field metadata and native passkey boundaries
+
+- retain complete field validator declarations
+
+- unify device fields and preserve atomic ownership
+
+- unify two-factor records and native session boundaries
+
+- unify JWK and wallet field policies
+
+- remove obsolete typed increment path
+
+- preserve nullable creation and native session field policies
+
+- preserve native user values through shared field policies
+
+- unify user hooks and raw SQL field projection
+
+- preserve native user input and credential ownership
+
+- retain callable fields through shared output boundaries
+
+- share native access cleanup and session declarations
+
+- carry native sessions through shared consumers
+
+- share native session consumers and update readback
+
+- preserve native admin and organization consumers
+
+- preserve native organization mutations and verification lifecycle
+
+- align native batch mutations and endpoint callbacks
+
+- share native update hooks and trusted session dispatch
+
+- share session updates and organization field policies
+
+- preserve physical records and shared transport bindings
+
+- preserve native session records and endpoint status
+
+- share verification fields and native response boundaries
+
+- share session queries and raw output projection
+
+- share live output and multi-field SQL binding
+
+- share account output and pending invitation queries
+
+- share account input ID policy across writes
+
+- unify memory query field binding
+
+- share organization ID slots and row projection
+
+- share verification reservation field and ID policies
+
+- share team membership fields and preserve adapter await boundaries
+
+- share model aliases and scoped team projections
+
+- preserve live objects through shared field projection
+
+- share native relation and organization response projections
+
+- share organization list relations and public value projection
+
+- share transactional team projection and ordered invitation writes
+
+- share mutable relation objects across adapter projections
+
+- share full organization projection and public consumption
+
+- share invitation session transaction writes
+
+- run session cookie effects inside adapter transactions
+
+- preserve complete Member output through shared projections
+
+- share Organization raw output and ordered record projections
+
+- preserve live Organization records through shared field boundaries
+
+- share Memory predicate evaluation across User Member and Device
+
+- share retained concurrency for independent Member queries
+
+- close memory row reads and retain field call context
+
+- share SQL predicate planning and adapter counts
+
+- unify ordinary SQL update phases
+
+- share guarded SQL update lifecycle
+
+- share reentrant Memory ownership and primitive conversion
+
+- preserve graph identity in Memory snapshots
+
+- route memory users through shared raw record policies
+
+- share live array identity across fields and Memory snapshots
+
+- collect schemas before initialization and share Memory roots
+
+- restore native records through one reversible clone graph
+
+- publish pure field-map clones once
+
+- preserve native API errors through shared dispatch boundaries
+
+- share ordered OAuth inputs and preserve sign-in side effects
+
+- preserve complete Account values through token refresh
+
+- preserve native OAuth profiles through shared field semantics
+
+- share native route context and raw Memory initialization
+
+- construct Social default profiles from native values
+
+- retain native values at the logger callback boundary
+
+- share native HTTP profiles and retained cache batches
+
+- preserve native headers and Google GitHub profile values
+
+- preserve builtin native error declarations and member results
+
+- preserve native session consumption and error provenance
+
+- preserve input error provenance across validation
+
+- share native endpoint input through API key callbacks
+
+- share native hook matcher input and error boundaries
+
+- mutate OAuth proxy input through shared native values
+
+- keep organization projection at endpoint boundaries
+
+- share mutable runtime URLs across endpoint consumers
+
+- share Device query policies and bind secondary logs to instances
+
+- share Memory field binding across core and organization queries
+
+- share native body and query validation boundaries
+
+- share native error conversion for callback values
+
+- retain native properties through OAuth consumers
+
+- share native cache collection and date consumers
+
+- preserve native cache writes and logout date consumers
+
+- preserve native verification reads and shared JSON diagnostics
+
+- preserve native verification values through authentication consumers
+
+- share private column ownership and native catalogs
+
+- share cache invocation across remaining consumers
+
+- share logical bindings for adapter columns
+
+- preserve native password values across consumers
+
+- unify core model bindings and generated shared columns
+
+- share record field preparation and projection
+
+- retain native keyring values through consumers
+
+- retain native backup code methods and cipher inputs
+
+- retain native identity across consumers
+
+- retain native option groups across signing and key storage
+
+
+### Style
+
+- format OAuth contract imports
+
+- order Admin trait imports
+
+
+### Tests
+
+- fix SQL cleanup fixture model compilation
+
+- propagate SQL fixture setup failures
+
+- compare native responses at the JSON boundary
+
+- import secondary store from its public module
+
+- repair native boundary assertions and imports
+
+- repair native consumer context and record bindings
+
+- resolve selected user replay from its parent module
+
+- retain native error and plugin runtime boundaries
+
+- retain exact URI and SQLite type assertions
+
+- use native request header types in replay
+
+- retain owned native values in log observations
+
+- remove inapplicable async panic lint expectations
+
+- use the standard HTTP error test module layout
+
+- register verification contracts at their module root
+
+- retain native row handles in sorting replay
+
+- use public types in database error assertions
+
+- capture Member JSON membership filters
+
+- capture scalar Member exclusion filters
+
+- capture native replacements and server grant usage
+
+- extend UTF-16 sorting and PostgreSQL Date capture
+
+- pair server Device grants and API Key Date usage
+
+- capture MySQL nullable create lifecycles
+
+- repair native cache contract error and serialization checks
+
+- capture protected function field lifecycles
+
+- preserve raw storage and signed contract boundaries
+
+- capture native session consumers
+
+- observe only registered OAuth storage models
+
+- capture native session management contracts
+
+- preserve native session response status observations
+
+- repair native session contract setup
+
+- repair native value and ID contract callers
+
+- capture upstream team membership catalogs across databases
+
+- preserve server catalog sessions and backend constraints
+
+- restrict Organization fixture helper visibility
+
+- repair plugin contract checks without weakening assertions
+
+- propagate required-header trace errors
+
+- initialize native plugins and surface callback failures
+
+- match declared plugin models in consumer fixtures
+
+- cover upstream Memory root lifecycle and ordered commits
+
+- bind physical Memory observers and finish shared caller migration
+
+- initialize physical roots before relation seeding
+
+- finish native clone fixture compilation
+
+- share plugin initialization in actor contracts
+
+- repair native JSON contract prerequisites and lint
+
+- repair native HTTP contract compilation and extend focused checks
+
+- repair native HTTP signer setup and observer errors
+
+- reuse captured OAuth contracts and fix native observers
+
+- capture explicit OAuth linking at native and HTTP boundaries
+
+- select native invocation explicitly in linking capture
+
+- compare complete native Account storage without projection
+
+- align native error and admission observation boundaries
+
+- import UserStore for native Account query setup
+
+- repair native OAuth checks and Account output observation
+
+- fix native OAuth fixture setup and collect provider failures
+
+- replay complete upstream Memory join grouping contracts
+
+- repair Memory observers and capture native OAuth profiles
+
+- assert native OAuth database query redirect semantics
+
+- replay native OAuth helper values and property operations
+
+- restrict native OAuth date replacement to generated fields
+
+- initialize native OAuth helpers from upstream physical tables
+
+- verify stored Google profiles and replay native OAuth sessions
+
+- retain expected OAuth router error diagnostics
+
+- preserve plugin declaration precedence in phone contracts
+
+- exercise native plugin rejection entry points
+
+- observe native request bodies across plugin callbacks
+
+- observe API key getter mutations through native validation
+
+- compare API key metadata at the physical storage boundary
+
+- capture OAuth proxy native input mutations
+
+- compare organization projection and after hook boundaries
+
+- capture request runtime URL mutation boundaries
+
+- capture mutable URL routing and failed proxy assignments
+
+- compare OAuth proxy runtime URL consumers
+
+- capture invalid proxy redirects at the HTTP error boundary
+
+- capture native HTTP error logging and property failures
+
+- observe dynamic database diagnostic methods in HTTP errors
+
+- retain tracing observations around HTTP logger callbacks
+
+- compare HTTP log message conversion and status text
+
+- compare API error logger scopes across nested handlers
+
+- capture upstream logger color policy and initialization
+
+- capture replaced Device ownership reference declarations
+
+- repair native error contracts and capture secondary logger ownership
+
+- capture Device redemption through non-ID references
+
+- capture first-query Device ID alias behavior
+
+- isolate logger checks and capture live sink ownership
+
+- capture shared and atomic plugin ID query ordering
+
+- flush complete plugin query observations before exit
+
+- repair logger contract cache and table setup
+
+- capture native OAuth proxy callback boundaries
+
+- retain established Core lint scope in focused checks
+
+- capture shared core query binding and exact proxy redirects
+
+- freeze core ID query contracts and capture sort binding order
+
+- capture organization alias consumers and freeze User sorting
+
+- preserve Organization alias observations and capture claim boundaries
+
+- capture Invitation claim status declaration policies
+
+- freeze Organization boundaries and capture dynamic claim compensation
+
+- freeze OAuth callback replay and capture SQL cleanup policies
+
+- await complete contract observation output
+
+- pair native invitation selectors with adapter transactions
+
+- capture native OAuth tokens and preserve SQL cleanup evidence
+
+- capture native property semantics and format query callers
+
+- share strict OAuth and SQL source replay
+
+- capture native method coercion and Date JSON order
+
+- retain SQL cleanup execution after lint failures
+
+- repair native consumer and SQL fixture acceptance
+
+- capture native API key reference method boundaries
+
+- capture Session cache records and native method chains
+
+- preserve source audits and capture strict cache runtime values
+
+- capture native JSON revival and preserve Session source audit
+
+- pair native cache and JSON consumers with upstream observations
+
+- capture native logout ordering and fix shared contract imports
+
+- capture native cache writes and freeze logout observations
+
+- capture native verification hydration and atomic consumption
+
+- freeze native verification consumption and capture JSON parser contracts
+
+- capture native verification consumers and freeze JSON parser observations
+
+- integrate native consumer dispatch and collect replay failures
+
+- isolate JSON error host metadata under garbage collection
+
+- constrain JSON host GC replay with captured evidence
+
+- repair native contract setup and downstream acceptance
+
+- replay native verification captures in their source process
+
+- split generated consumer compilation by model family
+
+- capture upstream logger background failure ownership
+
+- freeze logger background ownership observations
+
+- observe detached API error and telemetry ownership
+
+- activate generated organization declarations in consumers
+
+- distinguish native middleware and endpoint paths
+
+- capture native background completion values
+
+- capture retained API key usage results
+
+- capture shared declaration and native method boundaries
+
+- freeze native method and declaration evidence
+
+- capture native password consumer boundaries
+
+- capture shared physical columns across core and organization models
+
+- capture comparison schedules across native sort consumers
+
+- repair native capture and cache invocation checks
+
+- verify generated shared columns across model boundaries
+
+- capture native sorting on ordinary data records
+
+- replay shared record operations and freeze password query contracts
+
+- replay frozen password query contracts
+
+- replay native password boundaries and retain host gaps
+
+- share strict observation replay across record contracts
+
+- freeze complete user plugin catalogs
+
+- compare generated user plugin catalogs across databases
+
+- repair trusted native session fixture setup
+
+- replay complete selected user property observations
+
+- replay every frozen native getter sorting case
+
+- capture native backup code method consumption
+
+- freeze native methods and capture undefined encoding
+
+- capture native errors and verification order
+
+- capture native generation business consumers
+
+- align adapter observations and explicit fixture dates
+
+- capture shared-column server operations
+
+- freeze native endpoint errors and signed inputs
+
+- freeze and replay server shared-column contracts
+
+- keep callback assertions in infallible test bodies
+
+- replay frozen native errors through shared Store forwarding
+
+- match the observed incomplete-object parser error
+
+- verify Native and Legacy storage contracts
+
+- consume the callback counter update result
+
+- capture native option replacement and consumption boundaries
+
+- preserve contract failures without panic suppressions
+
+- observe dynamic delegated signing key failures
+
 ## [1.0.0-alpha.4](https://github.com/better-auth-rs/better-auth-rs/compare/v1.0.0-alpha.3...v1.0.0-alpha.4) - 2026-10-20
 
 ### Bug Fixes
